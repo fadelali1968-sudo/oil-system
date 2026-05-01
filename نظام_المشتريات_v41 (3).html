@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام المشتريات النفطية v40.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAEQ4T5W2sddGkrVkbq2KroZPmFy6BPPgU",
+    authDomain: "oil-system-df212.firebaseapp.com",
+    projectId: "oil-system-df212",
+    storageBucket: "oil-system-df212.firebasestorage.app",
+    messagingSenderId: "825587214922",
+    appId: "1:825587214922:web:aa249893dde01f6dcd14b3"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // Expose to global scope
+  window._fb = { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy };
+  window._fbReady = true;
+  document.dispatchEvent(new Event('fb-ready'));
+</script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Cairo', sans-serif; background: #f1f5f9; }
+  .inp { width:100%; border:1.5px solid #e2e8f0; border-radius:10px; padding:9px 12px; font-family:'Cairo',sans-serif; font-size:13px; font-weight:700; text-align:right; background:#fff; color:#0f172a; outline:none; transition:border .15s; }
+  .inp:focus { border-color:#2563eb; }
+  .inp[readonly] { background:#f8fafc; color:#94a3b8; }
+  .btn { padding:9px 20px; border-radius:10px; font-family:'Cairo',sans-serif; font-weight:700; font-size:13px; cursor:pointer; border:none; transition:opacity .15s, transform .1s; }
+  .btn:hover { opacity:.88; } .btn:active { transform:scale(.97); }
+  .btn-blue  { background:#2563eb; color:#fff; }
+  .btn-green { background:#059669; color:#fff; }
+  .btn-red   { background:#dc2626; color:#fff; }
+  .btn-amber { background:#d97706; color:#fff; }
+  .btn-purple{ background:#7c3aed; color:#fff; }
+  .btn-gray  { background:#f1f5f9; color:#334155; border:1px solid #e2e8f0; }
+  .nav-item { display:block; padding:7px 10px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:700; color:#94a3b8; transition:background .15s; margin-bottom:2px; }
+  .nav-item:hover { background:rgba(255,255,255,.08); }
+  .nav-item.active { background:#2563eb; color:#fff; }
+  .nav-item.active-purple { background:#7c3aed; color:#fff; }
+  .card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; }
+  .th  { background:#0f172a; color:#94a3b8; padding:10px 8px; font-size:11px; font-weight:700; text-align:center; white-space:nowrap; }
+  .th-p{ background:#4c1d95; color:#c4b5fd; padding:10px 8px; font-size:11px; font-weight:700; text-align:center; white-space:nowrap; }
+  .td  { padding:8px 6px; font-size:12px; font-weight:700; text-align:center; border-bottom:1px solid #f1f5f9; color:#334155; }
+  tr:hover .td { background:#eff6ff; }
+  tr:hover .td-p { background:#f5f3ff; }
+  .td-p { padding:8px 6px; font-size:12px; font-weight:700; text-align:center; border-bottom:1px solid #f5f3ff; color:#334155; }
+  .lbl { display:block; font-size:11px; color:#64748b; font-weight:700; margin-bottom:5px; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+  .no-scrollbar::-webkit-scrollbar { display:none; }
+  #sidebar-nav::-webkit-scrollbar { width:3px; }
+  #sidebar-nav::-webkit-scrollbar-track { background:transparent; }
+  #sidebar-nav::-webkit-scrollbar-thumb { background:#334155; border-radius:3px; }
+  #sidebar-nav::-webkit-scrollbar-thumb:hover { background:#475569; }
+  @media print {
+    aside, header, .no-print { display:none !important; }
+    main { margin:0 !important; padding:0 !important; width:100% !important; }
+    .print-header { display:block !important; }
+  }
+  .print-header { display:none; }
+  select.inp option { color:#0f172a; }
+  .section-divider { border-top:1px solid #1e293b; margin-top:10px; padding-top:10px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ===== قاعدة البيانات (Firebase + localStorage للنسخ الاحتياطي) =====
+const DB = {
+  get(key, def) { try { const v=localStorage.getItem('oil_'+key); return v?JSON.parse(v):(def!==undefined?def:[]); } catch { return (def!==undefined?def:[]); } },
+  set(key, val) { try { localStorage.setItem('oil_'+key, JSON.stringify(val)); } catch {} }
+};
+
+// Firebase Cloud DB
+const FDB = {
+  async save(collection, id, data) {
+    try {
+      if (!window._fbReady) return;
+      const {db, doc, setDoc} = window._fb;
+      await setDoc(doc(db, collection, id), {...data, _updated: Date.now()});
+    } catch(e) { console.warn('FDB.save error:', e); }
+  },
+  async delete(collection, id) {
+    try {
+      if (!window._fbReady) return;
+      const {db, doc, deleteDoc} = window._fb;
+      await deleteDoc(doc(db, collection, id));
+    } catch(e) { console.warn('FDB.delete error:', e); }
+  },
+  async getAll(col) {
+    try {
+      if (!window._fbReady) return null;
+      const {db, collection, getDocs} = window._fb;
+      const snap = await getDocs(collection(db, col));
+      return snap.docs.map(d => d.data());
+    } catch(e) { console.warn('FDB.getAll error:', e); return null; }
+  },
+  listen(col, callback) {
+    try {
+      if (!window._fbReady) { setTimeout(()=>this.listen(col,callback), 1000); return; }
+      const {db, collection, onSnapshot} = window._fb;
+      return onSnapshot(collection(db, col), snap => {
+        callback(snap.docs.map(d => d.data()));
+      });
+    } catch(e) { console.warn('FDB.listen error:', e); }
+  }
+};
+
+// Sync from Firebase to localStorage on load
+async function syncFromCloud() {
+  try {
+    const [entries, sales, drivers] = await Promise.all([
+      FDB.getAll('entries'), FDB.getAll('sales'),
+      FDB.getAll('drivers')
+    ]);
+    if (entries && entries.length) DB.set('entries', entries);
+    if (sales && sales.length) DB.set('sales', sales);
+    if (drivers && drivers.length) {
+      const driversObj = {};
+      drivers.forEach(d => { if(d.name) driversObj[d.name] = d; });
+      DB.set('drivers', driversObj);
+    }
+    console.log('✅ Synced from Firebase');
+    return true;
+  } catch(e) { console.warn('Sync error:', e); return false; }
+}
+
+let FACTORIES = DB.get('factories', ["الذهب الأسود","عطاء الذهب الأسود","معمل الفهد","معمل الوطنية","روعة المشرق"]);
+const ADMIN_UID = 'fadel_manger_gmail_com';
+
+(function initAdmin() {
+  let u = DB.get('users',{});
+  if (!u[ADMIN_UID]) {
+    u[ADMIN_UID]={email:'fadel.manger@gmail.com',password:'admin123',role:'manager',factory:'الكل'};
+    DB.set('users',u);
+  }
+  // Save admin to Firebase when ready
+  document.addEventListener('fb-ready', function() {
+    FDB.save('users', ADMIN_UID, u[ADMIN_UID]);
+    // Also save any existing users to Firebase
+    const allUsers = DB.get('users', {});
+    Object.entries(allUsers).forEach(([k,v]) => FDB.save('users', k, v));
+    console.log('✅ Users synced to Firebase');
+  });
+})();
+
+let currentUser = null;
+let S = { view:'dashboard', selectedFactory:'الكل', filterFrom:'', filterTo:'', editEntry:null, editSale:null };
+
+// ===== مساعدات =====
+// دوال العرض مع تصحيح تلقائي للوحدات
+function sc(v){ var n=parseFloat(v)||0; return (n>0&&n<1000)?n*1000:n; }
+function fmtTon(v)  { return fmt(sc(v)); }
+function fmtLiter(v){ return fmt(sc(v)); }
+function fmtKg(v)   { return fmt(sc(v)); }
+
+function fmtKaban(v){
+  const n = parseFloat(v);
+  if (!n || isNaN(n)) return '0';
+  if (n >= 1000) return Math.round(n).toLocaleString('en-US'); // after ×1000, whole number
+  return n.toLocaleString('en-US', {minimumFractionDigits:3, maximumFractionDigits:3});
+}
+function fmt(v,d=3){
+  const n=parseFloat(v); if(!n||isNaN(n))return'0';
+  const fixed=n.toFixed(d);
+  const parts=fixed.split('.');
+  parts[0]=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  const dec=parts[1]?parts[1].replace(/0+$/,''):'';
+  return dec?parts[0]+'.'+dec:parts[0];
+}
+function fmtM(v){ var n=Math.round(parseFloat(v)||0); return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+function today(){ return new Date().toISOString().split('T')[0]; }
+function uid(e){ return e.replace(/[\.\@\+]/g,'_'); }
+function el(id){ return document.getElementById(id); }
+function gv(id){ return el(id)?.value?.trim()||''; }
+function isManager(){ return currentUser?.role==='manager'; }
+
+// ===== تصحيح القيم تلقائياً =====
+function fixEntry(e) {
+  if (e.qty_tons      > 0 && e.qty_tons      < 1000) e.qty_tons      = e.qty_tons      * 1000;
+  if (e.natural_liters> 0 && e.natural_liters< 1000) e.natural_liters= e.natural_liters* 1000;
+  if (e.weight_kg     > 0 && e.weight_kg     < 1000) e.weight_kg     = e.weight_kg     * 1000;
+  // Keep stored refinery_price - don't recalculate
+  return e;
+}
+function fixSale(s) {
+  // kaban values are stored as-is (already in correct units)
+  if (s.qty_liters> 0 && s.qty_liters< 1000) s.qty_liters= s.qty_liters* 1000;
+  return s;
+}
+function loadEntries() { return DB.get('entries',[]).map(fixEntry); }
+function loadSales()   { return DB.get('sales',[]).map(fixSale);   }
+
+// ===== تحليل =====
+function getAnalysis() {
+  const entries=loadEntries(), t=today(), res={};
+  for (const f of FACTORIES) {
+    const ft=entries.filter(e=>e.factory===f), fd=ft.filter(e=>e.date===t);
+    const agg=arr=>({cars:arr.length,tons:arr.reduce((s,e)=>s+sc(e.qty_tons),0),liters:arr.reduce((s,e)=>s+sc(e.natural_liters),0),kg:arr.reduce((s,e)=>s+sc(e.weight_kg),0),money:arr.reduce((s,e)=>s+parseFloat(e.refinery_price||0),0)});
+    res[f]={today:agg(fd),total:agg(ft)};
+  }
+  return res;
+}
+function getSaleAnalysis() {
+  const sales=loadSales(), t=today(), res={};
+  for (const f of FACTORIES) {
+    const ft=sales.filter(s=>s.factory===f), fd=ft.filter(s=>s.date===t);
+    const agg=arr=>({cars:arr.length,kaban:arr.reduce((s,e)=>s+parseFloat(e.kaban||0),0),liters:arr.reduce((s,e)=>s+parseFloat(e.qty_liters||0),0)});
+    res[f]={today:agg(fd),total:agg(ft)};
+  }
+  return res;
+}
+
+function getList() {
+  const sf=S.selectedFactory;
+  let list=loadEntries();
+  if(sf!=='الكل') list=list.filter(e=>e.factory===sf);
+  if(S.filterFrom) list=list.filter(e=>e.date>=S.filterFrom);
+  if(S.filterTo) list=list.filter(e=>e.date<=S.filterTo);
+  return list.reverse();
+}
+function getSaleList() {
+  const sf=S.selectedFactory;
+  let list=loadSales();
+  if(sf!=='الكل') list=list.filter(s=>s.factory===sf);
+  if(S.filterFrom) list=list.filter(s=>s.date>=S.filterFrom);
+  if(S.filterTo) list=list.filter(s=>s.date<=S.filterTo);
+  return list.reverse();
+}
+
+// ===== العرض الرئيسي =====
+function render() {
+  if(!currentUser){renderLogin();return;}
+  const sf=S.selectedFactory, isM=isManager();
+  const factOpts=FACTORIES.map(f=>`<option value="${f}" ${sf===f?'selected':''}>${f}</option>`).join('');
+
+  // Build nav items as plain strings to avoid nested template literal issues
+  const nav = [
+    navItem('dashboard','اللوحة الرئيسية',''),
+    // الموقف الإجمالي للمدير فقط
+    isM ? navItem('whatsapp','الموقف الإجمالي 📱','color:#34d399') : '',
+    '<div style="border-top:1px solid #1e293b;margin-top:6px;padding-top:6px">',
+    '<p style="font-size:9px;color:#475569;font-weight:900;padding:2px 4px 4px;letter-spacing:1px">المشتريات</p>',
+    navItem('form','مشتريات منتوج',''),
+    navItem('table','سجل بيانات المشتريات',''),
+    // استيراد للمدير فقط
+    isM ? navItem('import_p','📥 استيراد مشتريات','color:#34d399',"goImport('purchases')") : '',
+    '</div>',
+    '<div style="border-top:1px solid #1e293b;margin-top:6px;padding-top:6px">',
+    '<p style="font-size:9px;color:#a78bfa;font-weight:900;padding:2px 4px 4px;letter-spacing:1px">المبيعات</p>',
+    navItem('sale_form','مبيعات منتوج','color:#a78bfa'),
+    navItem('sale_table','سجل بيانات مبيعات','color:#a78bfa'),
+    // استيراد للمدير فقط
+    isM ? navItem('import_s','📥 استيراد مبيعات','color:#c4b5fd',"goImport('sales')") : '',
+    '</div>',
+    '<div style="border-top:1px solid #1e293b;margin-top:6px;padding-top:6px">',
+    // التقارير للمدير فقط
+    isM ? navItem('reports','التقارير والطباعة','color:#fbbf24') : '',
+    isM ? navItem('admin','⚙️ إدارة النظام','color:#93c5fd') : '',
+    '</div>',
+  ].join('');
+
+  // Build factory selector
+  const factSel = isM
+    ? '<select class="inp" style="width:160px;padding:5px 10px" onchange="setFactory(this.value)"><option value="الكل" '+(sf==='الكل'?'selected':'')+'>كل المعامل</option>'+factOpts+'</select>'
+    : '<span style="background:#eff6ff;color:#2563eb;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:900">'+sf+'</span>';
+
+  document.getElementById('app').innerHTML =
+    '<div style="display:flex;height:100vh;overflow:hidden">' +
+      '<aside style="width:225px;background:#0f172a;display:flex;flex-direction:column;flex-shrink:0;z-index:50">' +
+        '<div style="padding:10px;background:#020617;border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
+          '<div style="width:44px;height:44px;background:#2563eb;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px;margin:0 auto 8px">OIL</div>' +
+          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v40.5</p>' +
+          '<p style="font-size:10px;color:#475569;margin-top:2px">'+(isM?'المدير العام':'محاسب: '+currentUser.factory)+'</p>' +
+        '</div>' +
+        '<nav id="sidebar-nav" style="flex:1;padding:8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
+        '<div style="padding:10px;flex-shrink:0">' +
+          '<button class="btn btn-red" style="width:100%;font-size:12px" onclick="logout()">خروج نهائي</button>' +
+        '</div>' +
+      '</aside>' +
+      '<div style="flex:1;display:flex;flex-direction:column;overflow:hidden">' +
+        '<header class="no-print" style="height:54px;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">' +
+          '<div style="display:flex;align-items:center;gap:10px">' +
+            '<span style="font-size:11px;color:#64748b;font-weight:700">المعمل:</span>' +
+            factSel +
+          '</div>' +
+          '<div id="clock" style="background:#0f172a;color:#34d399;padding:5px 14px;border-radius:8px;font-size:13px;font-weight:900;font-family:monospace;letter-spacing:2px">00:00:00</div>' +
+          '<div style="font-size:11px;color:#94a3b8;font-weight:700">'+currentUser.email+'</div>' +
+        '</header>' +
+        '<div id="main-content" style="flex:1;overflow-y:auto;padding:18px" class="no-scrollbar"></div>' +
+      '</div>' +
+    '</div>';
+
+  setInterval(()=>{ const c=el('clock'); if(c){const n=new Date();c.textContent=[n.getHours(),n.getMinutes(),n.getSeconds()].map(v=>String(v).padStart(2,'0')).join(':');} },1000);
+  renderContent();
+}
+
+function navItem(view, label, color, action) {
+  const isActive = S.view === view;
+  const onclick = action || "go('"+view+"')";
+  const activeClass = view.startsWith('sale')||view==='import_s' ? (isActive?'active-purple active':'') : (isActive?'active':'');
+  const style = (isActive ? '' : (color ? 'color:'+color.replace('color:','') : ''));
+  return '<div class="nav-item '+activeClass+'" '+(style?'style="'+style+'"':'')+' onclick="'+onclick+'">'+label+'</div>';
+}
+
+
+function renderContent() {
+  const c=el('main-content'); if(!c)return;
+  
+  // تصحيح تلقائي للقيم الصغيرة في كل عرض
+  (function() {
+    var raw = localStorage.getItem('oil_entries');
+    if (!raw) return;
+    var entries = JSON.parse(raw);
+    var dirty = false;
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (e.qty_tons > 0 && e.qty_tons < 1000) { entries[i].qty_tons = e.qty_tons * 1000; dirty = true; }
+      if (e.natural_liters > 0 && e.natural_liters < 1000) { entries[i].natural_liters = e.natural_liters * 1000; dirty = true; }
+      if (e.weight_kg > 0 && e.weight_kg < 1000) { entries[i].weight_kg = e.weight_kg * 1000; dirty = true; }
+      // Keep original refinery_price from Excel
+    }
+    if (dirty) localStorage.setItem('oil_entries', JSON.stringify(entries));
+
+    var rawS = localStorage.getItem('oil_sales');
+    if (!rawS) return;
+    var sales = JSON.parse(rawS);
+    var dirtyS = false;
+    for (var j = 0; j < sales.length; j++) {
+      var s = sales[j];
+      if (s.qty_liters > 0 && s.qty_liters < 1000) { sales[j].qty_liters = s.qty_liters * 1000; dirtyS = true; }
+      // kaban is stored correctly, do not multiply
+    }
+    if (dirtyS) localStorage.setItem('oil_sales', JSON.stringify(sales));
+  })();
+
+  const v=S.view;
+  if(v==='dashboard')   c.innerHTML=viewDashboard();
+  else if(v==='whatsapp')   c.innerHTML=viewWhatsapp();
+  else if(v==='form')       c.innerHTML=viewForm();
+  else if(v==='table')      c.innerHTML=viewTable();
+  else if(v==='sale_form')  c.innerHTML=viewSaleForm();
+  else if(v==='sale_table') c.innerHTML=viewSaleTable();
+  else if(v==='reports')    c.innerHTML=viewReports();
+  else if(v==='import')     c.innerHTML=viewImport('both');
+  else if(v==='import_p')   c.innerHTML=viewImport('purchases');
+  else if(v==='import_s')   c.innerHTML=viewImport('sales');
+  else if(v==='admin')      c.innerHTML=viewAdmin();
+}
+
+// ===== اللوحة الرئيسية =====
+function viewDashboard() {
+  const analysis=getAnalysis(), saleAn=getSaleAnalysis(), t=today();
+  const facts=isManager()?FACTORIES:[currentUser.factory];
+  return `
+  <h2 style="font-size:15px;font-weight:900;margin-bottom:16px">تحليل أداء المعامل</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:16px">
+  ${facts.map(f=>{
+    const d=analysis[f], sd=saleAn[f];
+    return `<div class="card" style="border-right:5px solid #2563eb">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #f1f5f9">
+        <span style="font-weight:900;color:#2563eb;font-size:13px">${f}</span>
+        <span class="badge" style="background:#ecfdf5;color:#059669">مُراقب</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div style="background:#f8fafc;border-radius:8px;padding:10px">
+          <p style="font-size:10px;color:#64748b;font-weight:700;text-align:center;margin-bottom:6px;border-bottom:1px solid #e2e8f0;padding-bottom:3px">مشتريات اليوم</p>
+          ${sr('السيارات',d.today.cars)} ${sr('أطنان',fmt(d.today.tons),'#2563eb')} ${sr('لتر',fmt(d.today.liters),'#059669')}
+        </div>
+        <div style="background:#eff6ff;border-radius:8px;padding:10px">
+          <p style="font-size:10px;color:#2563eb;font-weight:700;text-align:center;margin-bottom:6px;border-bottom:1px solid #bfdbfe;padding-bottom:3px">إجمالي المشتريات</p>
+          ${sr('السيارات',d.total.cars)} ${sr('أطنان',fmt(d.total.tons),'#2563eb')} ${sr('لتر',fmt(d.total.liters),'#059669')}
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:#fdf4ff;border-radius:8px;padding:10px">
+          <p style="font-size:10px;color:#7c3aed;font-weight:700;text-align:center;margin-bottom:6px;border-bottom:1px solid #e9d5ff;padding-bottom:3px">مبيعات اليوم</p>
+          ${sr('السيارات',sd.today.cars)} ${sr('كبان',fmtKaban(sd.today.kaban),'#7c3aed')} ${sr('لتر',fmt(sd.today.liters),'#059669')}
+        </div>
+        <div style="background:#f5f3ff;border-radius:8px;padding:10px">
+          <p style="font-size:10px;color:#7c3aed;font-weight:700;text-align:center;margin-bottom:6px;border-bottom:1px solid #ddd6fe;padding-bottom:3px">إجمالي المبيعات</p>
+          ${sr('السيارات',sd.total.cars)} ${sr('كبان',fmtKaban(sd.total.kaban),'#7c3aed')} ${sr('لتر',fmt(sd.total.liters),'#059669')}
+        </div>
+      </div>
+    </div>`;
+  }).join('')}
+  </div>`;
+}
+function sr(l,v,c=''){return`<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:#64748b">${l}:</span><span style="font-weight:900;color:${c||'#0f172a'}">${v}</span></div>`;}
+
+// ===== الموقف الإجمالي =====
+function viewWhatsapp() {
+  const analysis=getAnalysis(), saleAn=getSaleAnalysis(), sf=S.selectedFactory;
+  const facts=sf==='الكل'?FACTORIES:[sf];
+  const pRows=facts.map((f,i)=>{const d=analysis[f].total;return`<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900">${f}</td><td class="td">${d.cars}</td><td class="td" style="color:#2563eb;font-weight:900">${fmt(d.tons)}</td><td class="td" style="color:#059669;font-weight:900">${fmt(d.liters)}</td><td class="td" style="color:#d97706;font-weight:900">${fmt(d.kg)}</td><td class="td" style="font-weight:900">${fmtM(d.money)}</td></tr>`;}).join('');
+  const sRows=facts.map((f,i)=>{const d=saleAn[f].total;return`<tr><td class="td-p" style="color:#94a3b8">${i+1}</td><td class="td-p" style="font-weight:900">${f}</td><td class="td-p">${d.cars}</td><td class="td-p" style="color:#7c3aed;font-weight:900">${fmtKaban(d.kaban)}</td><td class="td-p" style="color:#059669;font-weight:900">${fmt(d.liters)}</td></tr>`;}).join('');
+  return`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px" class="no-print">
+    <h2 style="font-size:15px;font-weight:900">الموقف الإجمالي للمدير المفوض</h2>
+    <button class="btn btn-green" onclick="copyWhatsapp()">نسخ للواتساب 📱</button>
+  </div>
+  <h3 style="font-size:13px;font-weight:900;margin-bottom:8px;color:#1e40af">المشتريات</h3>
+  <div class="card" style="overflow:hidden;padding:0;margin-bottom:16px">
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:500px">
+      <thead><tr><th class="th">ت</th><th class="th">المعمل</th><th class="th">السيارات</th><th class="th">أطنان</th><th class="th">لتر</th><th class="th">كغم</th><th class="th">المبالغ (د.ع)</th></tr></thead>
+      <tbody>${pRows}</tbody>
+    </table></div>
+  </div>
+  <h3 style="font-size:13px;font-weight:900;margin-bottom:8px;color:#6d28d9">المبيعات</h3>
+  <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px">
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:400px">
+      <thead><tr><th class="th-p">ت</th><th class="th-p">المعمل</th><th class="th-p">السيارات</th><th class="th-p">كبان</th><th class="th-p">لتر</th></tr></thead>
+      <tbody>${sRows}</tbody>
+    </table></div>
+  </div>
+  <div id="copy-ok" style="display:none;background:#ecfdf5;border:1px solid #6ee7b7;color:#059669;padding:10px;border-radius:10px;font-size:12px;text-align:center">✅ تم النسخ!</div>`;
+}
+
+function copyWhatsapp() {
+  const analysis=getAnalysis(), saleAn=getSaleAnalysis(), sf=S.selectedFactory;
+  const facts=sf==='الكل'?FACTORIES:[sf];
+  let txt=`*📊 الموقف الإجمالي — ${sf}*\n*التاريخ:* ${today()}\n================================\n\n`;
+  txt+=`*🛢️ المشتريات:*\n`;
+  for(const f of facts){const d=analysis[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmtM(d.money)} د.ع\n`;}
+  txt+=`\n*📦 المبيعات:*\n`;
+  for(const f of facts){const d=saleAn[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان | ${fmt(d.liters)} لتر\n`;}
+  txt+=`\n✅ نظام المراقبة v40.0`;
+  navigator.clipboard.writeText(txt).catch(()=>{});
+  const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}
+}
+
+// ===== نموذج المشتريات =====
+function viewForm() {
+  const sf=S.selectedFactory, e=S.editEntry||{};
+  const drivers=DB.get('drivers',{});
+  const dlist=Object.values(drivers).map(d=>`<option value="${d.name}">`).join('');
+  return`
+  <div class="card" style="max-width:720px;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid #f1f5f9">
+      <span style="background:#2563eb;color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:900">مشتريات</span>
+      <h2 style="font-size:15px;font-weight:900">${e.id?'تعديل':'إدخال'} مشتريات منتوج — <span style="color:#2563eb">${sf}</span></h2>
+    </div>
+    <datalist id="dlist">${dlist}</datalist>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      <div><label class="lbl">رقم البوجر *</label><input class="inp" id="f_voucher" value="${e.voucher_no||''}"></div>
+      <div><label class="lbl">التاريخ *</label><input class="inp" id="f_date" type="date" value="${e.date||today()}"></div>
+      <div><label class="lbl">المصفى *</label>
+        <select class="inp" id="f_ref" onchange="updateProduct()">
+          <option value="">اختر...</option>
+          <option value="مصفى كربلاء" ${(e.refinery||'')==='مصفى كربلاء'?'selected':''}>مصفى كربلاء</option>
+          <option value="مصفى صلاح الدين" ${(e.refinery||'')==='مصفى صلاح الدين'?'selected':''}>مصفى صلاح الدين</option>
+        </select>
+      </div>
+      <div><label class="lbl">نوع المنتج (تلقائي)</label><input class="inp" id="f_pt" value="${e.product_type||''}" readonly style="background:#f8fafc;color:#2563eb;font-style:italic"></div>
+      <div style="grid-column:span 2"><label class="lbl">اسم السائق الرباعي *</label><input class="inp" id="f_driver" list="dlist" value="${e.driver_name||''}" oninput="autoFillDriver(this.value)"></div>
+      <div><label class="lbl">رقم السيارة *</label><input class="inp" id="f_car" value="${e.car_no||''}"></div>
+      <div><label class="lbl">العائدية *</label><input class="inp" id="f_loc" value="${e.location||''}"></div>
+      <div><label class="lbl">أمر الشراء (PO) *</label><input class="inp" id="f_po" value="${e.po_no||''}"></div>
+      <div><label class="lbl">الطن *</label><input class="inp" id="f_tons" type="number" step="0.001" value="${e.qty_tons||''}"></div>
+      <div><label class="lbl">طبيعي / لتر *</label><input class="inp" id="f_liters" type="number" step="0.001" value="${e.natural_liters||''}" oninput="calcTotal()"></div>
+      <div><label class="lbl">وزن كغم *</label><input class="inp" id="f_kg" type="number" step="0.001" value="${e.weight_kg||''}"></div>
+      <div><label class="lbl">السعر (ثابت)</label><input class="inp" value="150" readonly></div>
+      <div><label class="lbl">أجور النقل (ثابت)</label><input class="inp" value="42" readonly></div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;font-weight:900;color:#1e3a8a">إجمالي سعر المصفى:</span>
+        <span id="f_tot" style="font-size:18px;font-weight:900;color:#2563eb">0 د.ع</span>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+      ${e.id?`<button class="btn btn-gray" onclick="go('table')">إلغاء</button>`:''}
+      <button class="btn btn-blue" style="padding:11px 32px" onclick="saveEntry()">حفظ وتأكيد</button>
+    </div>
+    <div id="form-msg" style="display:none;margin-top:10px;padding:10px;border-radius:8px;text-align:center;font-size:12px"></div>
+  </div>`;
+}
+
+function updateProduct(){const r=gv('f_ref'),pt=el('f_pt');if(pt)pt.value=r==='مصفى كربلاء'?'HFO':r==='مصفى صلاح الدين'?'VR':'';}
+function calcTotal(){const l=parseFloat(el('f_liters')?.value||0),t=el('f_tot');if(t)t.textContent=fmtM(l*150)+' د.ع';}
+function autoFillDriver(name){const d=DB.get('drivers',{});if(d[name]){const c=el('f_car'),l=el('f_loc');if(c)c.value=d[name].car_no||'';if(l)l.value=d[name].location||'';}}
+
+function saveEntry(){
+  const sf=S.selectedFactory, e=S.editEntry||{};
+  const v=gv('f_voucher'),date=gv('f_date'),ref=gv('f_ref'),pt=gv('f_pt');
+  const driver=gv('f_driver'),car=gv('f_car'),loc=gv('f_loc'),po=gv('f_po');
+  const tons=parseFloat(el('f_tons')?.value||0),liters=parseFloat(el('f_liters')?.value||0),kg=parseFloat(el('f_kg')?.value||0);
+  if(!v||!date||!ref||!driver||!car||!loc||!po||!liters){const m=el('form-msg');if(m){m.style.display='block';m.style.background='#fef2f2';m.style.color='#dc2626';m.textContent='يرجى ملء جميع الحقول (*)'}return;}
+  const entry={id:e.id||('e_'+Date.now()),voucher_no:v,refinery:ref,date,product_type:pt,driver_name:driver,car_no:car,location:loc,qty_tons:tons,natural_liters:liters,weight_kg:kg,po_no:po,price:150,transport_fee:42,refinery_price:150*liters,factory:sf,accountant:currentUser.email,time:Date.now()};
+  let entries=DB.get('entries',[]);
+  if(e.id){const idx=entries.findIndex(x=>x.id===e.id);if(idx>=0)entries[idx]=entry;else entries.push(entry);}
+  else entries.push(entry);
+  DB.set('entries',entries);
+  // Save to Firebase
+  FDB.save('entries', entry.id, entry);
+  let drivers=DB.get('drivers',{});drivers[driver]={name:driver,car_no:car,location:loc};DB.set('drivers',drivers);
+  FDB.save('drivers', driver.replace(/\s+/g,'_'), drivers[driver]);
+  S.editEntry=null;S.view='table';render();
+}
+
+// ===== نموذج المبيعات =====
+function viewSaleForm() {
+  const sf=S.selectedFactory, e=S.editSale||{};
+  const drivers=DB.get('drivers',{});
+  const dlist=Object.values(drivers).map(d=>`<option value="${d.name}">`).join('');
+  return`
+  <div class="card" style="max-width:720px;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid #f5f3ff">
+      <span style="background:#7c3aed;color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:900">مبيعات</span>
+      <h2 style="font-size:15px;font-weight:900">${e.id?'تعديل':'إدخال'} مبيعات منتوج — <span style="color:#7c3aed">${sf}</span></h2>
+    </div>
+    <datalist id="dlist2">${dlist}</datalist>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      <div style="grid-column:span 2"><label class="lbl">اسم السائق *</label><input class="inp" id="s_driver" list="dlist2" value="${e.driver_name||''}" oninput="autoFillSaleDriver(this.value)"></div>
+      <div><label class="lbl">رقم السيارة *</label><input class="inp" id="s_car" value="${e.car_no||''}"></div>
+      <div><label class="lbl">التاريخ *</label><input class="inp" id="s_date" type="date" value="${e.date||today()}"></div>
+      <div><label class="lbl">العائدية *</label><input class="inp" id="s_loc" value="${e.location||''}"></div>
+      <div><label class="lbl">العنوان *</label><input class="inp" id="s_addr" value="${e.address||'ميناء الخور'}"></div>
+      <div><label class="lbl">النوع *</label><input class="inp" id="s_type" list="s_types" value="${e.product_type||'فلانكوت'}">
+        <datalist id="s_types"><option value="فلانكوت"><option value="HFO"><option value="VR"><option value="زيت خام"></datalist>
+      </div>
+      <div><label class="lbl">الكبان *</label><input class="inp" id="s_kaban" type="number" step="0.001" value="${e.kaban||''}"></div>
+      <div><label class="lbl">كمية اللتر</label><input class="inp" id="s_liters" type="number" step="0.001" value="${e.qty_liters||''}"></div>
+      <div><label class="lbl">السلفة</label><input class="inp" id="s_advance" type="number" step="0.001" value="${e.advance||''}"></div>
+      <div><label class="lbl">الواصل</label><input class="inp" id="s_received" type="number" step="0.001" value="${e.received||''}"></div>
+      <div><label class="lbl">مصدر السيارة</label><input class="inp" id="s_source" value="${e.car_source||''}"></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+      ${e.id?`<button class="btn btn-gray" onclick="go('sale_table')">إلغاء</button>`:''}
+      <button class="btn btn-purple" style="padding:11px 32px" onclick="saveSale()">حفظ وتأكيد</button>
+    </div>
+    <div id="sale-msg" style="display:none;margin-top:10px;padding:10px;border-radius:8px;text-align:center;font-size:12px"></div>
+  </div>`;
+}
+
+function autoFillSaleDriver(name){const d=DB.get('drivers',{});if(d[name]){const c=el('s_car'),l=el('s_loc');if(c)c.value=d[name].car_no||'';if(l)l.value=d[name].location||'';}}
+
+function saveSale(){
+  const sf=S.selectedFactory, e=S.editSale||{};
+  const driver=gv('s_driver'),car=gv('s_car'),date=gv('s_date'),loc=gv('s_loc');
+  const addr=gv('s_addr'),type=gv('s_type');
+  const kaban=parseFloat(el('s_kaban')?.value||0),liters=parseFloat(el('s_liters')?.value||0);
+  const advance=parseFloat(el('s_advance')?.value||0),received=parseFloat(el('s_received')?.value||0);
+  const source=gv('s_source');
+  if(!driver||!car||!date||!kaban){const m=el('sale-msg');if(m){m.style.display='block';m.style.background='#faf5ff';m.style.color='#7c3aed';m.textContent='يرجى ملء الحقول الإلزامية (*)'}return;}
+  const sale={id:e.id||('s_'+Date.now()),driver_name:driver,car_no:car,date,location:loc,address:addr,product_type:type,kaban,qty_liters:liters,advance,received,car_source:source,factory:sf,accountant:currentUser.email,time:Date.now()};
+  let sales=DB.get('sales',[]);
+  if(e.id){const idx=sales.findIndex(x=>x.id===e.id);if(idx>=0)sales[idx]=sale;else sales.push(sale);}
+  else sales.push(sale);
+  DB.set('sales',sales);
+  FDB.save('sales', sale.id, sale);
+  let drivers=DB.get('drivers',{});drivers[driver]={name:driver,car_no:car,location:loc};DB.set('drivers',drivers);
+  FDB.save('drivers', driver.replace(/\s+/g,'_'), drivers[driver]);
+  S.editSale=null;S.view='sale_table';render();
+}
+
+// ===== سجل المشتريات =====
+function viewTable(){
+  const sf=S.selectedFactory, list=getList(), isM=isManager();
+  const rows=list.map((e,i)=>`<tr>
+    <td class="td" style="color:#94a3b8">${i+1}</td>
+    <td class="td" style="font-weight:900">${e.voucher_no}</td>
+    <td class="td">${e.refinery}</td>
+    <td class="td" style="color:#94a3b8;font-size:11px">${e.date}</td>
+    <td class="td" style="color:#2563eb;font-size:10px">${e.product_type}</td>
+    <td class="td">${e.driver_name}</td>
+    <td class="td">${e.car_no}</td>
+    <td class="td" style="font-size:11px">${e.location}</td>
+    <td class="td">${fmtTon(e.qty_tons)}</td>
+    <td class="td">${fmtLiter(e.natural_liters)}</td>
+    <td class="td">${fmtKg(e.weight_kg)}</td>
+    <td class="td" style="color:#94a3b8">${e.po_no}</td>
+    <td class="td">${fmtM(e.price)}</td>
+    <td class="td">${fmtM(e.transport_fee||42)}</td>
+    <td class="td" style="color:#1d4ed8;font-weight:900">${fmtM(e.refinery_price)}</td>
+    ${isM?`<td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 8px;font-size:10px;margin-left:3px" onclick="editEntry('${e.id}')">تعديل</button><button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteEntry('${e.id}')">حذف</button></td>`:''}
+  </tr>`).join('');
+  return`
+  <div class="card" style="overflow:hidden;padding:0">
+    <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border-bottom:1px solid #e2e8f0">
+      <span style="font-weight:900;font-size:14px;color:#1e40af">سجل بيانات المشتريات — ${sf}
+        <span class="badge" style="background:#eff6ff;color:#2563eb;margin-right:6px">${list.length} سجل</span>
+      </span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-green no-print" style="font-size:11px;padding:7px 12px" onclick="exportCSV('purchases')">تصدير CSV</button>
+        <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="window.print()">طباعة</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;max-height:calc(100vh-200px);overflow-y:auto">
+      <table style="width:100%;border-collapse:collapse;min-width:1000px">
+        <thead style="position:sticky;top:0;z-index:1"><tr>
+          <th class="th">ت</th><th class="th">البوجر</th><th class="th">المصفى</th><th class="th">التاريخ</th><th class="th">النوع</th>
+          <th class="th">السائق</th><th class="th">السيارة</th><th class="th">العائدية</th><th class="th">طن</th>
+          <th class="th">لتر</th><th class="th">كغم</th><th class="th">PO</th><th class="th">السعر</th>
+          <th class="th">نقل</th><th class="th">الإجمالي</th>${isM?'<th class="th">إجراء</th>':''}
+        </tr></thead>
+        <tbody>${rows||`<tr><td colspan="${isM?16:15}" class="td" style="padding:30px;color:#94a3b8">لا توجد بيانات</td></tr>`}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function editEntry(id){const e=DB.get('entries',[]);S.editEntry=e.find(x=>x.id===id)||null;S.view='form';render();}
+function deleteEntry(id){if(!confirm('حذف هذا السجل؟'))return;let e=DB.get('entries',[]);DB.set('entries',e.filter(x=>x.id!==id));FDB.delete('entries',id);renderContent();}
+
+// ===== سجل المبيعات =====
+function viewSaleTable(){
+  const sf=S.selectedFactory, list=getSaleList(), isM=isManager();
+  const rows=list.map((e,i)=>`<tr>
+    <td class="td-p" style="color:#94a3b8">${i+1}</td>
+    <td class="td-p">${e.driver_name}</td>
+    <td class="td-p">${e.car_no}</td>
+    <td class="td-p" style="color:#94a3b8;font-size:11px">${e.date}</td>
+    <td class="td-p" style="font-size:11px">${e.location}</td>
+    <td class="td-p" style="font-size:11px">${e.address||''}</td>
+    <td class="td-p" style="color:#7c3aed;font-weight:900">${e.product_type}</td>
+    <td class="td-p" style="color:#7c3aed;font-weight:900">${fmtKaban(e.kaban)}</td>
+    <td class="td-p" style="color:#059669">${fmt(e.qty_liters)}</td>
+    <td class="td-p">${fmtM(e.advance||0)}</td>
+    <td class="td-p">${fmtM(e.received||0)}</td>
+    <td class="td-p" style="font-size:11px">${e.car_source||''}</td>
+    ${isM?`<td class="td-p" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 8px;font-size:10px;margin-left:3px" onclick="editSale('${e.id}')">تعديل</button><button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteSale('${e.id}')">حذف</button></td>`:''}
+  </tr>`).join('');
+  const totKaban=list.reduce((s,e)=>s+parseFloat(e.kaban||0),0);
+  return`
+  <div class="card" style="overflow:hidden;padding:0">
+    <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;background:#faf5ff;border-bottom:1px solid #e9d5ff">
+      <span style="font-weight:900;font-size:14px;color:#6d28d9">سجل بيانات مبيعات — ${sf}
+        <span class="badge" style="background:#f5f3ff;color:#7c3aed;margin-right:6px">${list.length} سجل</span>
+        <span class="badge" style="background:#f5f3ff;color:#7c3aed;margin-right:4px">مجموع الكبان: ${fmtKaban(totKaban)}</span>
+      </span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-purple no-print" style="font-size:11px;padding:7px 12px" onclick="exportCSV('sales')">تصدير CSV</button>
+        <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="window.print()">طباعة</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;max-height:calc(100vh-200px);overflow-y:auto">
+      <table style="width:100%;border-collapse:collapse;min-width:900px">
+        <thead style="position:sticky;top:0;z-index:1"><tr>
+          <th class="th-p">ت</th><th class="th-p">السائق</th><th class="th-p">السيارة</th><th class="th-p">التاريخ</th>
+          <th class="th-p">العائدية</th><th class="th-p">العنوان</th><th class="th-p">النوع</th><th class="th-p">الكبان</th>
+          <th class="th-p">لتر</th><th class="th-p">السلفة</th><th class="th-p">الواصل</th><th class="th-p">مصدر السيارة</th>
+          ${isM?'<th class="th-p">إجراء</th>':''}
+        </tr></thead>
+        <tbody>${rows||`<tr><td colspan="${isM?13:12}" class="td-p" style="padding:30px;color:#94a3b8">لا توجد بيانات مبيعات</td></tr>`}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function editSale(id){const s=DB.get('sales',[]);S.editSale=s.find(x=>x.id===id)||null;S.view='sale_form';render();}
+function deleteSale(id){if(!confirm('حذف هذا السجل؟'))return;let s=DB.get('sales',[]);DB.set('sales',s.filter(x=>x.id!==id));FDB.delete('sales',id);renderContent();}
+
+// ===== تصدير CSV =====
+function exportCSV(type){
+  let list, headers, row2csv, fname;
+  if(type==='purchases'){
+    list=getList();
+    headers='ت,المعمل,البوجر,المصفى,التاريخ,النوع,السائق,السيارة,العائدية,طن,لتر,كغم,PO,السعر,نقل,الإجمالي\n';
+    row2csv=(e,i)=>`${i+1},"${e.factory}","${e.voucher_no}","${e.refinery}","${e.date}","${e.product_type}","${e.driver_name}","${e.car_no}","${e.location}",${e.qty_tons},${e.natural_liters},${e.weight_kg},"${e.po_no}",${e.price},${e.transport_fee||42},${e.refinery_price}\n`;
+    fname=`مشتريات_${today()}.csv`;
+  } else {
+    list=getSaleList();
+    headers='ت,المعمل,السائق,السيارة,التاريخ,العائدية,العنوان,النوع,الكبان,كمية لتر,السلفة,الواصل,مصدر السيارة\n';
+    row2csv=(e,i)=>`${i+1},"${e.factory}","${e.driver_name}","${e.car_no}","${e.date}","${e.location}","${e.address||''}","${e.product_type}",${e.kaban},${e.qty_liters||0},${e.advance||0},${e.received||0},"${e.car_source||''}"\n`;
+    fname=`مبيعات_${today()}.csv`;
+  }
+  let csv='\ufeff'+headers;
+  list.forEach((e,i)=>csv+=row2csv(e,i));
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=fname; a.click();
+}
+
+// ===== التقارير =====
+function viewReports(){
+  const list=getList(), slist=getSaleList(), sf=S.selectedFactory;
+  const pt={cars:list.length,tons:list.reduce((s,e)=>s+sc(e.qty_tons),0),liters:list.reduce((s,e)=>s+sc(e.natural_liters),0),money:list.reduce((s,e)=>s+parseFloat(e.refinery_price||0),0)};
+  const st={cars:slist.length,kaban:slist.reduce((s,e)=>s+parseFloat(e.kaban||0),0),liters:slist.reduce((s,e)=>s+parseFloat(e.qty_liters||0),0)};
+  const pRows=list.map((e,i)=>`<tr><td class="td">${i+1}</td><td class="td">${e.factory}</td><td class="td">${e.voucher_no}</td><td class="td">${e.refinery}</td><td class="td" style="font-size:10px">${e.date}</td><td class="td">${e.product_type}</td><td class="td">${e.driver_name}</td><td class="td">${e.car_no}</td><td class="td">${e.location}</td><td class="td">${fmtTon(e.qty_tons)}</td><td class="td">${fmtLiter(e.natural_liters)}</td><td class="td">${fmtKg(e.weight_kg)}</td><td class="td">${e.po_no}</td><td class="td">${fmtM(e.refinery_price)}</td></tr>`).join('');
+  const sRows=slist.map((e,i)=>`<tr><td class="td-p">${i+1}</td><td class="td-p">${e.factory}</td><td class="td-p">${e.driver_name}</td><td class="td-p">${e.car_no}</td><td class="td-p" style="font-size:10px">${e.date}</td><td class="td-p">${e.location}</td><td class="td-p">${e.address||''}</td><td class="td-p">${e.product_type}</td><td class="td-p" style="color:#7c3aed;font-weight:900">${fmtKaban(e.kaban)}</td><td class="td-p">${fmt(e.qty_liters||0)}</td></tr>`).join('');
+  return`
+  <div class="print-header" style="text-align:center;border-bottom:3px double #1e3a8a;padding-bottom:16px;margin-bottom:24px">
+    <h1 style="font-size:22px;font-weight:900;color:#1e3a8a">شركة المنتجات النفطية — تقرير رسمي</h1>
+    <p style="font-size:13px;margin-top:6px">المعمل: ${sf} | ${S.filterFrom||'الكل'} — ${S.filterTo||''} | ${new Date().toLocaleString('ar-IQ')}</p>
+  </div>
+  <div class="card no-print" style="margin-bottom:14px">
+    <h3 style="font-size:13px;font-weight:900;margin-bottom:12px">فلترة التقارير</h3>
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <div><label class="lbl">من</label><input class="inp" type="date" id="r_from" value="${S.filterFrom}" style="width:150px"></div>
+      <div><label class="lbl">إلى</label><input class="inp" type="date" id="r_to" value="${S.filterTo}" style="width:150px"></div>
+      <button class="btn btn-blue" onclick="applyFilter()">تطبيق</button>
+      <button class="btn btn-gray" onclick="clearFilter()">مسح</button>
+      <button class="btn btn-amber" onclick="window.print()">طباعة PDF</button>
+    </div>
+  </div>
+  <h3 style="font-size:13px;font-weight:900;margin-bottom:10px;color:#1e40af">ملخص المشتريات</h3>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+    <div class="card" style="text-align:center"><div class="lbl">السيارات</div><div style="font-size:22px;font-weight:900">${pt.cars}</div></div>
+    <div class="card" style="text-align:center"><div class="lbl">أطنان</div><div style="font-size:22px;font-weight:900;color:#2563eb">${fmt(pt.tons)}</div></div>
+    <div class="card" style="text-align:center"><div class="lbl">لترات</div><div style="font-size:22px;font-weight:900;color:#059669">${fmt(pt.liters)}</div></div>
+    <div class="card" style="text-align:center"><div class="lbl">المبلغ</div><div style="font-size:16px;font-weight:900;color:#1e3a8a">${fmtM(pt.money)}</div></div>
+  </div>
+  <h3 style="font-size:13px;font-weight:900;margin-bottom:10px;color:#6d28d9">ملخص المبيعات</h3>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+    <div class="card" style="text-align:center;border-top:3px solid #7c3aed"><div class="lbl">السيارات</div><div style="font-size:22px;font-weight:900">${st.cars}</div></div>
+    <div class="card" style="text-align:center;border-top:3px solid #7c3aed"><div class="lbl">الكبان الكلي</div><div style="font-size:22px;font-weight:900;color:#7c3aed">${fmtKaban(st.kaban)}</div></div>
+    <div class="card" style="text-align:center;border-top:3px solid #7c3aed"><div class="lbl">اللترات</div><div style="font-size:22px;font-weight:900;color:#059669">${fmt(st.liters)}</div></div>
+  </div>
+  <div class="card" style="overflow:hidden;padding:0;margin-bottom:16px">
+    <div style="padding:12px 16px;font-weight:900;font-size:12px;background:#f8fafc;border-bottom:1px solid #e2e8f0;color:#1e40af">تفاصيل المشتريات</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:800px">
+      <thead><tr><th class="th">ت</th><th class="th">المعمل</th><th class="th">البوجر</th><th class="th">المصفى</th><th class="th">التاريخ</th><th class="th">النوع</th><th class="th">السائق</th><th class="th">السيارة</th><th class="th">العائدية</th><th class="th">طن</th><th class="th">لتر</th><th class="th">كغم</th><th class="th">PO</th><th class="th">الإجمالي</th></tr></thead>
+      <tbody>${pRows||`<tr><td colspan="14" class="td" style="padding:20px;color:#94a3b8">لا بيانات</td></tr>`}</tbody>
+    </table></div>
+  </div>
+  <div class="card" style="overflow:hidden;padding:0">
+    <div style="padding:12px 16px;font-weight:900;font-size:12px;background:#faf5ff;border-bottom:1px solid #e9d5ff;color:#6d28d9">تفاصيل المبيعات</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:700px">
+      <thead><tr><th class="th-p">ت</th><th class="th-p">المعمل</th><th class="th-p">السائق</th><th class="th-p">السيارة</th><th class="th-p">التاريخ</th><th class="th-p">العائدية</th><th class="th-p">العنوان</th><th class="th-p">النوع</th><th class="th-p">الكبان</th><th class="th-p">لتر</th></tr></thead>
+      <tbody>${sRows||`<tr><td colspan="10" class="td-p" style="padding:20px;color:#94a3b8">لا بيانات</td></tr>`}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function applyFilter(){S.filterFrom=gv('r_from');S.filterTo=gv('r_to');renderContent();}
+function clearFilter(){S.filterFrom='';S.filterTo='';renderContent();}
+
+// ===== استيراد Excel =====
+let importedRows=[], importType='purchases';
+const COL_MAP_P={'المصدر':'refinery','اسم السائق':'driver_name','التاريخ':'date','النوع':'product_type','رقم السيارة':'car_no','العائدية':'location','كمية طن':'qty_tons','كمية/ طن':'qty_tons','كمية /طن':'qty_tons','طبيعي /لتر':'natural_liters','طبيعي/ لتر':'natural_liters','طبيعي':'natural_liters','الوزن /كغم':'weight_kg','الوزن/ كغم':'weight_kg','الوزن':'weight_kg','رقم امر الشراء':'po_no','امر الشراء':'po_no','السعر':'price','سعر الوحدة':'price','سعر المصفى':'refinery_price','سعر المصفه':'refinery_price','الاجمالي':'refinery_price','الإجمالي':'refinery_price','المبلغ الاجمالي':'refinery_price','اجمالي السعر':'refinery_price','ت':'_num','رقم البوجر':'voucher_no','البوجر':'voucher_no'};
+const COL_MAP_S={'اسم السائق':'driver_name','رقم سيارة':'car_no','تاريخ':'date','العائدية':'location','العنوان':'address','النوع':'product_type','الكبان':'kaban','كمية اللتر':'qty_liters','السلفة':'advance','الواصل':'received','مصدر سيارة':'car_source','ت':'_num'};
+
+function normalizeCol(col, map){
+  const c=(col||'').toString().trim().replace(/\s+/g,' ');
+  for(const k of Object.keys(map)){if(c.includes(k))return map[k];}
+  return null;
+}
+function autoScale(val) {
+  // Detect unit automatically: < 1000 means metric tons/kL → multiply by 1000
+  var n = parseFloat(val) || 0;
+  if (n > 0 && n < 1000) return n * 1000;
+  return n;
+}
+
+function parseXLDate(d){
+  if(!d)return'';
+  d=d.toString().trim();
+  // YYYY.M.D  e.g. 2026.4.9
+  const m1=d.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/);
+  if(m1)return`${m1[1]}-${m1[2].padStart(2,'0')}-${m1[3].padStart(2,'0')}`;
+  // D.M.YYYY  e.g. 6.7.2025  ← الذهب الأسود
+  const m2=d.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if(m2)return`${m2[3]}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`;
+  // D/M/YYYY
+  const m3=d.match(/^(\d{1,2})[\/](\d{1,2})[\/](\d{4})$/);
+  if(m3)return`${m3[3]}-${m3[2].padStart(2,'0')}-${m3[1].padStart(2,'0')}`;
+  // YYYY-MM-DD already
+  if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;
+  // Excel serial
+  const n=parseFloat(d);
+  if(!isNaN(n)&&n>40000){const dt=new Date((n-25569)*86400*1000);return dt.toISOString().split('T')[0];}
+  return d;
+}
+
+function viewImport(presetType){
+  const facts=FACTORIES.map(f=>`<option value="${f}">${f}</option>`).join('');
+  return`
+  <div class="card" style="max-width:680px;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      ${presetType==='sales'?`<span style="background:#7c3aed;color:#fff;padding:5px 12px;border-radius:8px;font-size:11px;font-weight:900">مبيعات</span>`:(presetType==='purchases'?`<span style="background:#2563eb;color:#fff;padding:5px 12px;border-radius:8px;font-size:11px;font-weight:900">مشتريات</span>`:'')}
+      <h2 style="font-size:15px;font-weight:900">استيراد بيانات من Excel 📥</h2>
+      <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#92400e;font-weight:700">
+        ⚠️ <b>تنبيه:</b> إذا كنت تعيد الاستيراد لتصحيح خطأ — احذف أولاً البيانات القديمة من <b>⚙️ إدارة النظام ← تفريغ بيانات حسب المعمل</b> ثم استورد من جديد.
+      </div>
+    </div>
+    <p style="font-size:12px;color:#64748b;margin-bottom:18px">يدعم ملفات .xlsx — يقرأ الأعمدة تلقائياً</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div><label class="lbl">نوع البيانات *</label>
+        <select class="inp" id="imp_type" onchange="importType=this.value">
+          <option value="purchases" ${presetType==='sales'?'':'selected'}>مشتريات منتوج</option>
+          <option value="sales" ${presetType==='sales'?'selected':''}>مبيعات منتوج</option>
+        </select>
+      </div>
+      <div><label class="lbl">المعمل المستهدف *</label>
+        <select class="inp" id="imp_factory">${facts}</select>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div><label class="lbl">رقم صف الرأس</label>
+        <select class="inp" id="imp_hrow">
+          <option value="2">الصف 3 (افتراضي)</option>
+          <option value="0">الصف 1</option>
+          <option value="1">الصف 2</option>
+          <option value="3">الصف 4</option>
+        </select>
+      </div>
+      <div><label class="lbl">رقم الشيت</label>
+        <select class="inp" id="imp_sheet">
+          <option value="0">الشيت الأول</option>
+          <option value="1">الشيت الثاني</option>
+          <option value="2">الشيت الثالث</option>
+          <option value="3">الشيت الرابع</option>
+          <option value="4">الشيت الخامس</option>
+          <option value="5">الشيت السادس</option>
+          <option value="6">الشيت السابع</option>
+          <option value="7">الشيت الثامن</option>
+        </select>
+      </div>
+    </div>
+    <div id="imp-dropzone" onclick="document.getElementById('imp_file').click()" style="border:2px dashed #bfdbfe;border-radius:12px;padding:36px;text-align:center;cursor:pointer;background:#f8fafc;margin-bottom:14px" ondragover="event.preventDefault();this.style.background='#eff6ff'" ondragleave="this.style.background='#f8fafc'" ondrop="handleDrop(event)">
+      <div style="font-size:28px;margin-bottom:6px">📂</div>
+      <p style="font-weight:700;color:#2563eb;font-size:13px">اضغط لاختيار ملف Excel</p>
+      <p style="font-size:11px;color:#94a3b8;margin-top:3px">أو اسحب الملف هنا (.xlsx)</p>
+      <input type="file" id="imp_file" accept=".xlsx,.xls" style="display:none" onchange="previewExcel(this.files[0])">
+    </div>
+    <div id="imp-preview" style="display:none">
+      <div id="imp-info" style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;font-weight:700;color:#065f46"></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-green" style="padding:10px 26px" onclick="doImport()">استيراد الآن ✅</button>
+        <button class="btn btn-gray" onclick="resetImport()">إلغاء</button>
+      </div>
+    </div>
+    <div id="imp-result" style="display:none;margin-top:12px;padding:12px;border-radius:10px;font-size:13px;font-weight:700;text-align:center"></div>
+  </div>`;
+}
+
+function handleDrop(e){e.preventDefault();document.getElementById('imp-dropzone').style.background='#f8fafc';const f=e.dataTransfer.files[0];if(f)previewExcel(f);}
+
+function previewExcel(file){
+  if(!file)return;
+  const hrow=parseInt(gv('imp_hrow')||'2'), sheetIdx=parseInt(gv('imp_sheet')||'0');
+  const iType=gv('imp_type')||'purchases';
+  const map=iType==='sales'?COL_MAP_S:COL_MAP_P;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[sheetIdx]||wb.SheetNames[0]];
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      const headers=raw[hrow]||[];
+      const colMap={};
+      headers.forEach((h,i)=>{const m=normalizeCol(h,map);if(m)colMap[i]=m;});
+      importedRows=[];
+      for(let r=hrow+1;r<raw.length;r++){
+        const row=raw[r];
+        if(!row[1]&&!row[2])continue;
+        const obj={};
+        Object.entries(colMap).forEach(([i,f])=>{obj[f]=row[i];});
+        // Skip completely empty rows
+        if(!obj.driver_name&&!obj.refinery&&!obj.car_no)continue;
+        // Skip rows where all numeric values are 0 or missing (phantom rows)
+        const hasNums = parseFloat(obj.qty_tons||0)||parseFloat(obj.natural_liters||0)||
+                        parseFloat(obj.weight_kg||0)||parseFloat(obj.kaban||0)||
+                        parseFloat(obj.qty_liters||0);
+        const hasText = (obj.driver_name||'').trim()||(obj.refinery||'').trim()||
+                        (obj.car_no||'').toString().trim();
+        if(!hasNums && !hasText) continue;
+        importedRows.push(obj);
+      }
+      const factory=gv('imp_factory');
+      const info=el('imp-info');
+      
+      // Show column mapping and sample values for diagnosis
+      const mappedCols = Object.values(colMap);
+      const hasRefPrice = mappedCols.includes('refinery_price');
+      
+      // Calculate sample totals from first row
+      const sample = importedRows[0] || {};
+      const sampleLiters = parseFloat(sample.natural_liters||0);
+      const samplePrice  = parseFloat(sample.price||150);
+      const sampleRefP   = parseFloat(sample.refinery_price||0);
+      
+      // Total refinery_price from Excel
+      const totalRefPrice = importedRows.reduce((s,r)=>s+parseFloat(r.refinery_price||0),0);
+      const totalLiters   = importedRows.reduce((s,r)=>s+parseFloat(r.natural_liters||0),0);
+      
+      const fmtNum = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,',');
+      
+      if(info)info.innerHTML = 
+        '✅ الملف: <b>'+file.name+'</b> | السجلات: <b>'+importedRows.length+'</b><br>' +
+        'الأعمدة المكتشفة: <b>'+mappedCols.join('، ')+'</b><br>' +
+        '<span style="color:'+(hasRefPrice?'#065f46':'#dc2626')+'">' +
+        (hasRefPrice ? '✅ عمود سعر المصفى موجود' : '⚠️ عمود سعر المصفى غير مكتشف — سيُحسب تلقائياً') +
+        '</span><br>' +
+        'مجموع سعر المصفى من الإكسل: <b>'+fmtNum(totalRefPrice)+'</b> | ' +
+        'مجموع اللتر من الإكسل: <b>'+fmtNum(totalLiters)+'</b><br>' +
+        'قيمة الصف الأول — لتر: <b>'+sampleLiters+'</b> | سعر: <b>'+samplePrice+'</b> | سعر المصفى: <b>'+sampleRefP+'</b>';
+      
+      const prev=el('imp-preview');if(prev)prev.style.display='block';
+    }catch(err){alert('خطأ: '+err.message);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function doImport(){
+  if(!importedRows.length)return;
+  const factory=gv('imp_factory'), iType=gv('imp_type')||'purchases';
+  let drivers=DB.get('drivers',{}), added=0;
+  if(iType==='purchases'){
+    let entries=DB.get('entries',[]);
+    importedRows.forEach((row,i)=>{
+      const liters=parseFloat(row.natural_liters)||0, price=parseFloat(row.price)||150;
+      const dName=(row.driver_name||'').toString().trim();
+      const carNo=(row.car_no||'').toString().trim().replace(/\.0$/,'');
+      const loc=(row.location||'').toString().trim();
+      const xlTons=autoScale(row.qty_tons);
+      const xlLiters=autoScale(row.natural_liters);
+      const xlKg=autoScale(row.weight_kg);
+      const xlPrice=parseFloat(row.price)||150;
+      const xlRefPrice=parseFloat(row.refinery_price)||(xlPrice*xlLiters);
+      entries.push({id:'xl_p_'+Date.now()+'_'+i,voucher_no:row.voucher_no||(row._num||String(i+1)),refinery:(row.refinery||'').toString().trim(),date:parseXLDate(row.date),product_type:(row.product_type||'').toString().trim(),driver_name:dName,car_no:carNo,location:loc,qty_tons:xlTons,natural_liters:xlLiters,weight_kg:xlKg,po_no:(row.po_no||'').toString().trim(),price:xlPrice,transport_fee:42,refinery_price:xlRefPrice,factory,accountant:currentUser.email,time:Date.now()+i});
+      if(dName)drivers[dName]={name:dName,car_no:carNo,location:loc};
+      added++;
+    });
+    entries.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+    DB.set('entries',entries);
+  } else {
+    let sales=DB.get('sales',[]);
+    importedRows.forEach((row,i)=>{
+      const dName=(row.driver_name||'').toString().trim();
+      const carNo=(row.car_no||'').toString().trim().replace(/\.0$/,'');
+      const loc=(row.location||'').toString().trim();
+      sales.push({id:'xl_s_'+Date.now()+'_'+i,driver_name:dName,car_no:carNo,date:parseXLDate(row.date),location:loc,address:(row.address||'').toString().trim(),product_type:(row.product_type||'').toString().trim(),kaban:parseFloat(row.kaban)||0,qty_liters:autoScale(row.qty_liters),advance:parseFloat(row.advance)||0,received:parseFloat(row.received)||0,car_source:(row.car_source||'').toString().trim(),factory,accountant:currentUser.email,time:Date.now()+i});
+      if(dName)drivers[dName]={name:dName,car_no:carNo,location:loc};
+      added++;
+    });
+    sales.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+    DB.set('sales',sales);
+    importedRows.forEach(function(_,i){
+      var sale = sales[sales.length - importedRows.length + i];
+      if(sale) FDB.save('sales', sale.id, sale);
+    });
+  }
+  DB.set('drivers',drivers);
+  const res=el('imp-result');
+  if(res){res.style.display='block';res.style.background='#ecfdf5';res.style.color='#065f46';res.style.border='1px solid #6ee7b7';res.textContent=`✅ تم استيراد ${added} سجل إلى "${factory}"`;}
+  importedRows=[];
+  setTimeout(()=>{S.view=iType==='sales'?'sale_table':'table';S.selectedFactory=factory;render();},1500);
+}
+
+function resetImport(){importedRows=[];const p=el('imp-preview'),r=el('imp-result'),f=el('imp_file');if(p)p.style.display='none';if(r)r.style.display='none';if(f)f.value='';}
+
+// ===== إدارة النظام =====
+function viewAdmin(){
+  const users = DB.get('users', {});
+  const factOpts = FACTORIES.map(f => '<option value="' + f + '">' + f + '</option>').join('');
+  
+  let factRows = '';
+  FACTORIES.forEach(function(f, i) {
+    factRows += '<tr>' +
+      '<td class="td" style="color:#94a3b8">' + (i+1) + '</td>' +
+      '<td class="td" style="font-weight:900">' + f + '</td>' +
+      '<td class="td"><button class="btn btn-red" style="padding:3px 10px;font-size:10px" ' +
+        'onclick="deleteFactory(this.getAttribute(\'data-f\'))" data-f="' + f + '">حذف</button></td>' +
+      '</tr>';
+  });
+
+  let userRows = '';
+  Object.values(users).forEach(function(u) {
+    const roleColor = u.role === 'manager' ? 'background:#eff6ff;color:#2563eb' : 'background:#ecfdf5;color:#059669';
+    const roleLabel = u.role === 'manager' ? 'مدير' : 'محاسب';
+    const delBtn = u.role !== 'manager'
+      ? '<button class="btn btn-red" style="padding:4px 10px;font-size:10px" ' +
+        'onclick="deleteUser(this.getAttribute(\'data-e\'))" data-e="' + u.email + '">حذف</button>'
+      : '';
+    userRows += '<tr>' +
+      '<td class="td">' + u.email + '</td>' +
+      '<td class="td"><span class="badge" style="' + roleColor + '">' + roleLabel + '</span></td>' +
+      '<td class="td">' + u.factory + '</td>' +
+      '<td class="td">' + delBtn + '</td>' +
+      '</tr>';
+  });
+
+  var fixRows = FACTORIES.map(function(f, i) {
+    return '<tr>'+
+      '<td class="td" style="font-weight:900">'+f+'</td>'+
+      '<td class="td"><button class="btn btn-green" style="padding:3px 12px;font-size:11px" '+
+        'onclick="runFixData(FACTORIES['+i+'])">🔧 إصلاح '+f+'</button></td>'+
+    '</tr>';
+  }).join('');
+
+  var clearRows = FACTORIES.map(function(f, i){
+    return '<tr>'+
+      '<td class="td" style="font-weight:900">'+f+'</td>'+
+      '<td class="td"><button class="btn btn-red" style="padding:3px 10px;font-size:10px" onclick="clearFactoryData(FACTORIES['+i+'],\'purchases\')">🗑️ مشتريات</button></td>'+
+      '<td class="td"><button class="btn btn-red" style="padding:3px 10px;font-size:10px" onclick="clearFactoryData(FACTORIES['+i+'],\'sales\')">🗑️ مبيعات</button></td>'+
+      '<td class="td"><button class="btn btn-red" style="padding:3px 10px;font-size:10px;background:#7f1d1d" onclick="clearFactoryData(FACTORIES['+i+'],\'all\')">⛔ الكل</button></td>'+
+    '</tr>';
+  }).join('');
+
+  return (
+    '<div style="max-width:700px">' +
+
+    // === أداة نقل البيانات ===
+    '<div class="card" style="margin-bottom:14px;border-right:4px solid #0891b2;background:#f0f9ff">' +
+      '<h3 style="font-size:13px;font-weight:900;margin-bottom:8px;color:#0e7490">📦 نقل البيانات من ملف قديم</h3>' +
+      '<p style="font-size:11px;color:#64748b;margin-bottom:12px">إذا كانت بياناتك في ملف HTML قديم، استخدم هذا لنسخ البيانات إلى هذا الملف</p>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
+        '<button class="btn btn-blue" style="font-size:12px" onclick="exportDataBackup()">📤 تصدير بيانات الملف الحالي</button>' +
+        '<label class="btn btn-green" style="font-size:12px;cursor:pointer">📥 استيراد بيانات من ملف نسخ احتياطي<input type="file" accept=".json" style="display:none" onchange="importDataBackup(this)"></label>' +
+      '</div>' +
+      '<div id="migration-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>' +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:14px;border-right:4px solid #2563eb">' +
+      '<h3 style="font-size:13px;font-weight:900;margin-bottom:12px;color:#1e40af">🏭 إدارة المعامل</h3>' +
+      '<div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px">' +
+        '<div style="flex:1"><label class="lbl">اسم المعمل الجديد</label>' +
+        '<input class="inp" id="f_name" placeholder="مثال: معمل النور..."></div>' +
+        '<button class="btn btn-blue" onclick="addFactory()" style="white-space:nowrap;padding:9px 20px">إضافة معمل</button>' +
+      '</div>' +
+      '<div id="factory-msg" style="display:none;margin-bottom:10px;padding:8px;border-radius:6px;font-size:12px"></div>' +
+      '<table style="width:100%;border-collapse:collapse">' +
+        '<thead><tr><th class="th">ت</th><th class="th">اسم المعمل</th><th class="th">حذف</th></tr></thead>' +
+        '<tbody>' + factRows + '</tbody>' +
+      '</table>' +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:14px;border-right:4px solid #059669">' +
+      '<h3 style="font-size:13px;font-weight:900;margin-bottom:12px;color:#065f46">👤 إضافة محاسب جديد</h3>' +
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr) auto;gap:10px;align-items:flex-end">' +
+        '<div><label class="lbl">البريد الإلكتروني</label><input class="inp" id="a_email" type="email" placeholder="email@..."></div>' +
+        '<div><label class="lbl">كلمة السر</label><input class="inp" id="a_pass" type="password" placeholder="..."></div>' +
+        '<div><label class="lbl">المعمل المخصص</label><select class="inp" id="a_factory">' + factOpts + '</select></div>' +
+        '<button class="btn btn-green" onclick="addUser()" style="white-space:nowrap">إضافة</button>' +
+      '</div>' +
+      '<div id="admin-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>' +
+    '</div>' +
+
+    '<div class="card" style="overflow:hidden;padding:0">' +
+      '<div style="padding:12px 16px;font-weight:900;font-size:12px;background:#f8fafc;border-bottom:1px solid #e2e8f0">المستخدمون الحاليون</div>' +
+      '<table style="width:100%;border-collapse:collapse">' +
+        '<thead><tr><th class="th">البريد</th><th class="th">الدور</th><th class="th">المعمل</th><th class="th">إجراء</th></tr></thead>' +
+        '<tbody>' + userRows + '</tbody>' +
+      '</table>' +
+    '</div>' +
+
+    '<div class="card" style="overflow:hidden;padding:0;border:2px solid #10b981;margin-bottom:14px">' +
+      '<div style="padding:12px 16px;font-weight:900;font-size:12px;background:#ecfdf5;border-bottom:1px solid #6ee7b7;color:#065f46">🔧 إصلاح بيانات موجودة (تصحيح الأرقام الصغيرة × 1000)</div>' +
+      '<div style="padding:14px">' +
+        '<p style="font-size:11px;color:#64748b;margin-bottom:12px">إذا ظهرت قيم صغيرة (مثل 30.95 بدل 30,950) استخدم هذا الزر لإصلاحها مباشرة</p>' +
+        '<table style="width:100%;border-collapse:collapse">' +
+          '<thead><tr><th class="th">المعمل</th><th class="th">إصلاح بيانات هذا المعمل</th></tr></thead>' +
+          '<tbody>' + fixRows + '</tbody>' +
+        '</table>' +
+        '<div style="margin-top:10px">' +
+          '<button class="btn btn-green" style="font-size:12px" onclick="runFixData(null)">🔧 إصلاح كل المعامل دفعة واحدة</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card" style="overflow:hidden;padding:0;border:2px solid #fecaca">' +
+      '<div style="padding:12px 16px;font-weight:900;font-size:12px;background:#fef2f2;border-bottom:1px solid #fecaca;color:#dc2626">🗑️ تفريغ بيانات حسب المعمل</div>' +
+      '<div style="padding:14px">' +
+        '<p style="font-size:11px;color:#64748b;margin-bottom:12px">اختر المعمل ونوع البيانات — هذه العملية لا يمكن التراجع عنها</p>' +
+        '<table style="width:100%;border-collapse:collapse">' +
+          '<thead><tr><th class="th">المعمل</th><th class="th">حذف المشتريات</th><th class="th">حذف المبيعات</th><th class="th">حذف الكل</th></tr></thead>' +
+          '<tbody>' + clearRows + '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>' +
+
+    '</div>'
+  );
+}
+
+function addFactory() {
+  var name = gv('f_name').trim();
+  var m = el('factory-msg');
+  if (!name) {
+    if (m) { m.style.display='block'; m.style.background='#fef2f2'; m.style.color='#dc2626'; m.textContent='يرجى إدخال اسم المعمل'; }
+    return;
+  }
+  if (FACTORIES.indexOf(name) >= 0) {
+    if (m) { m.style.display='block'; m.style.background='#fef3c7'; m.style.color='#b45309'; m.textContent='هذا المعمل موجود مسبقاً'; }
+    return;
+  }
+  FACTORIES.push(name);
+  DB.set('factories', FACTORIES);
+  if (m) { m.style.display='block'; m.style.background='#ecfdf5'; m.style.color='#059669'; m.textContent='تم إضافة المعمل: ' + name; }
+  var inp = el('f_name'); if (inp) inp.value = '';
+  setTimeout(function(){ renderContent(); }, 700);
+}
+
+function deleteFactory(name) {
+  if (!name) return;
+  if (!confirm('حذف معمل ' + name + ' ؟')) return;
+  var idx = FACTORIES.indexOf(name);
+  if (idx >= 0) { FACTORIES.splice(idx, 1); DB.set('factories', FACTORIES); }
+  renderContent();
+}
+
+function addUser() {
+  var email = gv('a_email'), pass = gv('a_pass'), factory = gv('a_factory');
+  if (!email || !pass) return;
+  var users = DB.get('users', {}); var u={email:email, password:pass, role:'accountant', factory:factory}; users[uid(email)] = u; DB.set('users', users);
+  FDB.save('users', uid(email), u).then(function(){ console.log('User saved to Firebase:', email); });
+  var m = el('admin-msg'); if (m) { m.style.display='block'; m.style.background='#ecfdf5'; m.style.color='#059669'; m.textContent='تم إضافة المستخدم'; }
+  setTimeout(function(){ renderContent(); }, 600);
+}
+
+function deleteUser(email) {
+  if (!email) return;
+  if (!confirm('حذف المستخدم؟')) return;
+  var u = DB.get('users', {}); delete u[uid(email)]; DB.set('users', u); renderContent();
+}
+
+
+function clearFactoryData(factory, type) {
+  if (!factory || !type) return;
+  var typeLabel = type === 'purchases' ? 'المشتريات' : type === 'sales' ? 'المبيعات' : 'المشتريات والمبيعات';
+  var msg = 'حذف بيانات ' + typeLabel + ' لـ "' + factory + '" ؟';
+  if (!confirm('⚠️ ' + msg)) return;
+  if (!confirm('⚠️ تأكيد أخير — ' + msg + ' لا يمكن التراجع.')) return;
+
+  if (type === 'purchases' || type === 'all') {
+    var entries = DB.get('entries', []).filter(function(e){ return e.factory !== factory; });
+    DB.set('entries', entries);
+  }
+  if (type === 'sales' || type === 'all') {
+    var sales = DB.get('sales', []).filter(function(s){ return s.factory !== factory; });
+    DB.set('sales', sales);
+  }
+  alert('✅ تم حذف بيانات ' + typeLabel + ' للمعمل: ' + factory);
+  renderContent();
+}
+
+
+// ===== إصلاح البيانات الموجودة =====
+function fixExistingData(factory) {
+  var fixed = 0;
+  
+  // Fix entries (purchases)
+  var entries = DB.get('entries', []);
+  entries = entries.map(function(e) {
+    if (factory && e.factory !== factory) return e;
+    var changed = false;
+    
+    if (e.qty_tons > 0 && e.qty_tons < 1000) {
+      e.qty_tons = e.qty_tons * 1000; changed = true;
+    }
+    if (e.natural_liters > 0 && e.natural_liters < 1000) {
+      e.natural_liters = e.natural_liters * 1000; changed = true;
+    }
+    if (e.weight_kg > 0 && e.weight_kg < 1000) {
+      e.weight_kg = e.weight_kg * 1000; changed = true;
+    }
+    if (changed) {
+      e.refinery_price = (e.price || 150) * e.natural_liters;
+      fixed++;
+    }
+    return e;
+  });
+  DB.set('entries', entries);
+
+  // Fix sales
+  var sales = DB.get('sales', []);
+  sales = sales.map(function(s) {
+    if (factory && s.factory !== factory) return s;
+    if (s.qty_liters > 0 && s.qty_liters < 1000) {
+      s.qty_liters = s.qty_liters * 1000; fixed++;
+    }
+    if (s.kaban > 0 && s.kaban < 1000) {
+      s.kaban = s.kaban * 1000; fixed++;
+    }
+    return s;
+  });
+  DB.set('sales', sales);
+
+  return fixed;
+}
+
+function runFixData(factory) {
+  var label = factory || 'كل المعامل';
+  if (!confirm('إصلاح بيانات ' + label + '؟\nسيتم ضرب القيم الصغيرة (< 1000) × 1000 تلقائياً.')) return;
+  var fixed = fixExistingData(factory);
+  alert('✅ تم إصلاح ' + fixed + ' سجل في ' + label);
+  renderContent();
+}
+
+// ===== نقل البيانات =====
+function exportDataBackup() {
+  var backup = {
+    entries: DB.get('entries', []),
+    sales:   DB.get('sales', []),
+    drivers: DB.get('drivers', {}),
+    factories: DB.get('factories', []),
+    exported: new Date().toISOString()
+  };
+  var blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'oil_backup_' + new Date().toISOString().split('T')[0] + '.json';
+  a.click();
+}
+
+function importDataBackup(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var backup = JSON.parse(e.target.result);
+      var msg = el('migration-msg');
+      if (!backup.entries && !backup.sales) {
+        if (msg) { msg.style.display='block'; msg.style.background='#fef2f2'; msg.style.color='#dc2626'; msg.textContent='❌ الملف غير صالح'; }
+        return;
+      }
+      if (backup.entries && backup.entries.length)  DB.set('entries',  backup.entries);
+      if (backup.sales   && backup.sales.length)    DB.set('sales',    backup.sales);
+      if (backup.drivers) DB.set('drivers', backup.drivers);
+      if (backup.factories && backup.factories.length) {
+        FACTORIES.length = 0;
+        backup.factories.forEach(function(f){ FACTORIES.push(f); });
+        DB.set('factories', FACTORIES);
+      }
+      var total = (backup.entries||[]).length + (backup.sales||[]).length;
+      if (msg) { msg.style.display='block'; msg.style.background='#ecfdf5'; msg.style.color='#065f46'; msg.textContent='✅ تم نقل ' + total + ' سجل بنجاح! يمكنك الآن استخدام هذا الملف.'; }
+      setTimeout(function(){ render(); }, 1500);
+    } catch(err) {
+      var msg = el('migration-msg');
+      if (msg) { msg.style.display='block'; msg.style.background='#fef2f2'; msg.style.color='#dc2626'; msg.textContent='❌ خطأ: ' + err.message; }
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ===== تسجيل الدخول =====
+function renderLogin(err=''){
+  document.getElementById('app').innerHTML=`
+  <div style="min-height:100vh;background:#0f172a;display:flex;align-items:center;justify-content:center;padding:16px">
+    <div class="card" style="width:100%;max-width:420px;padding:44px">
+      <div style="text-align:center;margin-bottom:28px">
+        <div style="width:56px;height:56px;background:#2563eb;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:15px;margin:0 auto 12px">OIL</div>
+        <h1 style="font-size:18px;font-weight:900">نظام المراقبة المركزي</h1>
+        <p style="font-size:11px;color:#64748b;margin-top:4px">نظام إدارة المشتريات والمبيعات النفطية v40.0</p>
+      </div>
+      ${err?`<div style="background:#fef2f2;border:1px solid #fca5a5;color:#dc2626;padding:10px;border-radius:10px;font-size:12px;text-align:center;margin-bottom:14px">${err}</div>`:''}
+      <div style="margin-bottom:14px"><label class="lbl">البريد الإلكتروني</label><input class="inp" id="l_email" type="email" placeholder="email@example.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div style="margin-bottom:20px"><label class="lbl">كلمة السر</label><input class="inp" id="l_pass" type="password" placeholder="كلمة السر" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <button class="btn btn-blue" style="width:100%;padding:13px;font-size:15px" onclick="doLogin()">دخول إلى النظام</button>
+      <div style="margin-top:16px;padding:10px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;text-align:center">
+        <p style="font-size:11px;color:#64748b">المدير: fadel.manger@gmail.com / admin123</p>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function doLogin(){
+  const email=gv('l_email').toLowerCase(), pass=gv('l_pass');
+  const id2 = uid(email);
+
+  // Step 1: Check localStorage first (fastest)
+  let users = DB.get('users', {});
+  
+  // Step 2: If not in localStorage, try Firebase
+  if (!users[id2] && window._fbReady) {
+    try {
+      const {db, doc, getDoc} = window._fb;
+      const snap = await getDoc(doc(db, 'users', id2));
+      if (snap.exists()) {
+        const u = snap.data();
+        users[id2] = u;
+        DB.set('users', users);
+      }
+    } catch(e) { console.warn('Firebase user fetch error:', e); }
+  }
+
+  if (users[id2] && users[id2].password === pass) {
+    currentUser = users[id2];
+    // Save user to Firebase for other devices
+    FDB.save('users', id2, users[id2]);
+    S.selectedFactory = isManager() ? 'الكل' : currentUser.factory;
+    // Sync all data from Firebase
+    if (window._fbReady) {
+      render(); // show UI immediately
+      await syncFromCloud();
+      render(); // re-render with fresh data
+    } else {
+      render();
+    }
+  } else {
+    renderLogin('البريد أو كلمة السر غير صحيحة');
+  }
+}
+function logout(){currentUser=null;S={view:'dashboard',selectedFactory:'الكل',filterFrom:'',filterTo:'',editEntry:null,editSale:null};renderLogin();}
+function go(v){S.view=v;if(v==='form')S.editEntry=null;if(v==='sale_form')S.editSale=null;render();}
+function goImport(type){S.view=type==='purchases'?'import_p':'import_s';S.importPresetType=type;render();}
+function setFactory(f){S.selectedFactory=f;renderContent();}
+
+// تشغيل
+document.addEventListener('fb-ready', async function() {
+  console.log('Firebase ready, syncing...');
+  await syncFromCloud();
+  if (currentUser) render();
+});
+renderLogin();
+</script>
+</body>
+</html>

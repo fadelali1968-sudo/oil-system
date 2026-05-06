@@ -2721,6 +2721,7 @@ function viewKroob() {
         '<div style="display:flex;gap:8px;margin-right:auto">' +
           '<label class="btn btn-green" style="font-size:11px;padding:6px 12px;cursor:pointer">📥 استيراد من Excel<input type="file" accept=".xlsx" style="display:none" onchange="importKroobXLSX(this)"></label>' +
           '<button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="exportKroobXLSX()">📊 تصدير Excel</button>' +
+    '<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="clearKroobData()">🗑️ مسح كل البيانات</button>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -2876,7 +2877,17 @@ function saveKroobOpening() {
   renderContent();
 }
 
-function importKroobXLSX(input) {
+function clearKroobData() {
+  if(!confirm('⚠️ هل أنت متأكد من مسح كل بيانات الكروب؟')) return;
+  const kroob = DB.get('kroob', []);
+  for(const k of kroob){ try{ FDB.delete('kroob', k.id); }catch(e){} }
+  DB.set('kroob', []);
+  DB.set('kroob_opening', {dinar:0, dollar:0});
+  FDB.save('kroob_opening','opening',{dinar:0, dollar:0});
+  alert('✅ تم مسح كل بيانات الكروب!');
+  renderContent();
+}
+  function importKroobXLSX(input) {
   const file=input.files[0];
   if(!file||typeof XLSX==='undefined') return;
   const reader=new FileReader();
@@ -2935,7 +2946,9 @@ function importKroobXLSX(input) {
     function getVal(row, col) { return String(row[col]||'').trim(); }
     function getNum(row, col) { return parseFloat(String(row[col]||'').replace(/,/g,''))||0; }
 
-    let kroob=DB.get('kroob',[]);
+const oldKroob=DB.get('kroob',[]);
+    for(const old of oldKroob){ try{FDB.delete('kroob',old.id);}catch(e){} }
+    let kroob=[];
     let imported=0;
     for(let r=2;r<rows.length;r++){
       const row=rows[r];

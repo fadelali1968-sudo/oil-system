@@ -162,7 +162,12 @@ async function syncFromCloud() {
     const expenses = await FDB.getAll('expenses');
     if (expenses && expenses.length) DB.set('expenses', expenses);
     const kroob = await FDB.getAll('kroob');
-    if (kroob && kroob.length) DB.set('kroob', kroob);
+  if (kroob && kroob.length) DB.set('kroob', kroob);
+const kroobOpeningArr = await FDB.getAll('kroob_opening');
+    if (kroobOpeningArr && kroobOpeningArr.length) {
+      const op = kroobOpeningArr.find(x => x.id === 'opening') || kroobOpeningArr[0];
+      if (op) DB.set('kroob_opening', {dinar: parseFloat(op.dinar||0), dollar: parseFloat(op.dollar||0)});
+    }
     if (drivers && drivers.length) {
       const driversObj = {};
       drivers.forEach(d => { if(d.name) driversObj[d.name] = d; });
@@ -382,10 +387,15 @@ document.getElementById('app').innerHTML =
       '<div style="flex:1;display:flex;flex-direction:column;overflow:hidden">' +
         '<header class="no-print" style="height:54px;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 10px 0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">' +
           '<button class="mobile-menu-btn no-print" onclick="toggleMobileMenu()" style="margin-left:10px">☰</button>' +
-          '<div style="display:flex;align-items:center;gap:10px">' +
-            '<span style="font-size:11px;color:#64748b;font-weight:700">المعمل:</span>' +
-            factSel +
-          '</div>' +
+         (S.view!=='kroob' && S.view!=='kroob_statement' ?
+  '<div style="display:flex;align-items:center;gap:10px">' +
+    '<span style="font-size:11px;color:#64748b;font-weight:700">المعمل:</span>' +
+    factSel +
+  '</div>'
+: '') + 
+         
+           
+          
           '<div style="display:flex;align-items:center;gap:10px">' +
           (isM ? '<div style="position:relative;cursor:pointer" onclick="toggleNotif()" title="الإشعارات">' +
             '<div style="width:38px;height:38px;background:#f1f5f9;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;border:1px solid #e2e8f0">🔔</div>' +

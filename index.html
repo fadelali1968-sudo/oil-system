@@ -2954,8 +2954,8 @@ const oldKroob=DB.get('kroob',[]);
       const row=rows[r];
       const num=String(row[0]).trim();
       if(!num||isNaN(parseFloat(num)))continue;
-      const rawDate=dateCol>=0?String(row[dateCol]).trim():'';
-      const date = parseXLDate(rawDate);
+      const rawDate=String(row[C_DATE]||'').trim();
+     const date=(()=>{const n=parseFloat(rawDate);if(!isNaN(n)&&n>40000){const dt=new Date((n-25569)*86400*1000);return dt.toISOString().split('T')[0];}return rawDate;})();
       // Read all values using fixed column indices
       const dinar    = getNum(row, C_DINAR);
       const dollar   = getNum(row, C_DOLLAR);

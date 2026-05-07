@@ -162,8 +162,8 @@ async function syncFromCloud() {
     const expenses = await FDB.getAll('expenses');
     if (expenses && expenses.length) DB.set('expenses', expenses);
     const kroob = await FDB.getAll('kroob');
-  if (kroob && kroob.length) DB.set('kroob', kroob);
-const kroobOpeningArr = await FDB.getAll('kroob_opening');
+    if (kroob && kroob.length) DB.set('kroob', kroob);
+    const kroobOpeningArr = await FDB.getAll('kroob_opening');
     if (kroobOpeningArr && kroobOpeningArr.length) {
       const op = kroobOpeningArr.find(x => x.id === 'opening') || kroobOpeningArr[0];
       if (op) DB.set('kroob_opening', {dinar: parseFloat(op.dinar||0), dollar: parseFloat(op.dollar||0)});
@@ -251,6 +251,12 @@ function uid(e){ return e.replace(/[\.\@\+]/g,'_'); }
 function el(id){ return document.getElementById(id); }
 function gv(id){ return el(id)?.value?.trim()||''; }
 function isManager(){ return currentUser?.role==='manager'; }
+function hasPerm(perm){ 
+  if(isManager()) return true; 
+  const perms = currentUser?.permissions;
+  if(!perms) return false;
+  return perms.includes(perm);
+}
 
 // ===== تصحيح القيم تلقائياً =====
 function fixEntry(e) {
@@ -341,20 +347,21 @@ function render() {
     isM ? navItem('reports','التقارير والطباعة','color:#fbbf24') : '',
     '<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">',
     '<p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المالية</p>',
-    navItem('salaf','💰 السلف','color:#fbbf24'),
-    navItem('salaf_table','📋 ملخص السلف','color:#fbbf24'),
+    hasPerm('salaf') ? navItem('salaf','💰 السلف','color:#fbbf24') : '',
+    hasPerm('salaf') ? navItem('salaf_table','📋 ملخص السلف','color:#fbbf24') : '',
     '</div>',
     '<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">',
     '<p style="font-size:9px;color:#f87171;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المصاريف</p>',
-    navItem('expenses','📋 المصاريف','color:#f87171'),
-    navItem('expenses_summary','📊 تسوية المصاريف','color:#f87171'),
+    hasPerm('expenses') ? navItem('expenses','📋 المصاريف','color:#f87171') : '',
+    hasPerm('expenses') ? navItem('expenses_summary','📊 تسوية المصاريف','color:#f87171') : '',
     '</div>',
     '<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">',
     '<p style="font-size:9px;color:#34d399;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">الكروب / الصيرفة</p>',
-    navItem('kroob','🏦 حركة الكروب','color:#34d399'),
-    navItem('kroob_statement','📜 كشف الحساب','color:#34d399'),
+    hasPerm('kroob') ? navItem('kroob','🏦 حركة الكروب','color:#34d399') : '',
+    hasPerm('kroob') ? navItem('kroob_statement','📜 كشف الحساب','color:#34d399') : '',
     '</div>',
     isM ? navItem('admin','⚙️ إدارة النظام','color:#93c5fd') : '',
+    isM ? navItem('permissions','🔐 الصلاحيات','color:#c084fc') : '',
     '</div>',
   ].join('');
 
@@ -387,15 +394,12 @@ document.getElementById('app').innerHTML =
       '<div style="flex:1;display:flex;flex-direction:column;overflow:hidden">' +
         '<header class="no-print" style="height:54px;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 10px 0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">' +
           '<button class="mobile-menu-btn no-print" onclick="toggleMobileMenu()" style="margin-left:10px">☰</button>' +
-         (S.view!=='kroob' && S.view!=='kroob_statement' ?
-  '<div style="display:flex;align-items:center;gap:10px">' +
-    '<span style="font-size:11px;color:#64748b;font-weight:700">المعمل:</span>' +
-    factSel +
-  '</div>'
-: '') + 
-         
-           
-          
+          (S.view!=='kroob' && S.view!=='kroob_statement' ?
+            '<div style="display:flex;align-items:center;gap:10px">' +
+              '<span style="font-size:11px;color:#64748b;font-weight:700">المعمل:</span>' +
+              factSel +
+            '</div>'
+          : '') +
           '<div style="display:flex;align-items:center;gap:10px">' +
           (isM ? '<div style="position:relative;cursor:pointer" onclick="toggleNotif()" title="الإشعارات">' +
             '<div style="width:38px;height:38px;background:#f1f5f9;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;border:1px solid #e2e8f0">🔔</div>' +
@@ -470,6 +474,7 @@ function renderContent() {
   else if(v==='import_p')   c.innerHTML=viewImport('purchases');
   else if(v==='import_s')   c.innerHTML=viewImport('sales');
   else if(v==='admin')      c.innerHTML=viewAdmin();
+  else if(v==='permissions') c.innerHTML=viewPermissions();
 }
 
 // ===== اللوحة الرئيسية =====
@@ -1090,25 +1095,21 @@ function autoScale(val) {
 
 function parseXLDate(d){
   if(!d)return'';
-  // Convert Arabic-Indic numerals to Western
-  d=d.toString().trim().replace(/[\u0660-\u0669]/g,function(c){return c.charCodeAt(0)-0x0660+'';});
+  d=d.toString().trim();
+  // YYYY.M.D  e.g. 2026.4.9
+  const m1=d.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/);
+  if(m1)return`${m1[1]}-${m1[2].padStart(2,'0')}-${m1[3].padStart(2,'0')}`;
+  // D.M.YYYY  e.g. 6.7.2025  ← الذهب الأسود
+  const m2=d.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if(m2)return`${m2[3]}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`;
+  // D/M/YYYY
+  const m3=d.match(/^(\d{1,2})[\/](\d{1,2})[\/](\d{4})$/);
+  if(m3)return`${m3[3]}-${m3[2].padStart(2,'0')}-${m3[1].padStart(2,'0')}`;
   // YYYY-MM-DD already
   if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;
-  // YYYY/MM/D or YYYY/M/D  e.g. 2026/05/3
-  var m0=d.match(/^(\d{4})[\/](\d{1,2})[\/](\d{1,2})$/);
-  if(m0)return m0[1]+'-'+('0'+m0[2]).slice(-2)+'-'+('0'+m0[3]).slice(-2);
-  // YYYY.M.D  e.g. 2026.4.9
-  var m1=d.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/);
-  if(m1)return m1[1]+'-'+('0'+m1[2]).slice(-2)+'-'+('0'+m1[3]).slice(-2);
-  // D.M.YYYY  e.g. 6.7.2025
-  var m2=d.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-  if(m2)return m2[3]+'-'+('0'+m2[2]).slice(-2)+'-'+('0'+m2[1]).slice(-2);
-  // D/M/YYYY
-  var m3=d.match(/^(\d{1,2})[\/](\d{1,2})[\/](\d{4})$/);
-  if(m3)return m3[3]+'-'+('0'+m3[2]).slice(-2)+'-'+('0'+m3[1]).slice(-2);
   // Excel serial
-  var n=parseFloat(d);
-  if(!isNaN(n)&&n>40000){var dt=new Date((n-25569)*86400*1000);return dt.toISOString().split('T')[0];}
+  const n=parseFloat(d);
+  if(!isNaN(n)&&n>40000){const dt=new Date((n-25569)*86400*1000);return dt.toISOString().split('T')[0];}
   return d;
 }
 
@@ -1290,6 +1291,38 @@ async function doImport(){
 
 function resetImport(){importedRows=[];const p=el('imp-preview'),r=el('imp-result'),f=el('imp_file');if(p)p.style.display='none';if(r)r.style.display='none';if(f)f.value='';}
 
+// ===== صفحة الصلاحيات =====
+function viewPermissions() {
+  if(!isManager()) return '<div class="card">غير مصرح</div>';
+  const users = DB.get('users', {});
+  const permLabels = {salaf:'السلف', expenses:'المصاريف', kroob:'الكروب', reports:'التقارير', purchases:'المشتريات', sales:'المبيعات'};
+  const permKeys = ['purchases','sales','salaf','expenses','kroob','reports'];
+  let rows = '';
+  Object.values(users).forEach(function(u) {
+    if(u.role === 'manager') return;
+    const key = uid(u.email);
+    const perms = u.permissions || ['purchases','sales'];
+    let checkboxes = permKeys.map(function(p){
+      const checked = perms.includes(p) ? 'checked' : '';
+      return '<label style="font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap"><input type="checkbox" id="up_'+p+'_'+key+'" '+checked+'> '+permLabels[p]+'</label>';
+    }).join('');
+    rows += '<div class="card" style="margin-bottom:12px;border-right:4px solid #7c3aed">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+        '<div><div style="font-size:13px;font-weight:900;color:#1e293b">'+u.email+'</div>' +
+        '<div style="font-size:11px;color:#64748b">المعمل: '+u.factory+'</div></div>' +
+        '<button class="btn btn-blue" style="font-size:11px;padding:6px 14px" onclick="saveUserPermissions(''+u.email+'')">💾 حفظ</button>' +
+      '</div>' +
+      '<div style="display:flex;gap:14px;flex-wrap:wrap;padding:10px;background:#f8fafc;border-radius:8px">'+checkboxes+'</div>' +
+    '</div>';
+  });
+  if(!rows) rows = '<div class="card" style="color:#94a3b8;text-align:center;padding:30px">لا يوجد محاسبون حاليون</div>';
+  return '<div style="max-width:700px">' +
+    '<div class="card" style="margin-bottom:16px;border-right:4px solid #7c3aed;background:#faf5ff">' +
+      '<h3 style="font-size:14px;font-weight:900;color:#6d28d9;margin-bottom:4px">🔐 إدارة الصلاحيات</h3>' +
+      '<p style="font-size:11px;color:#64748b">حدد الصلاحيات لكل محاسب ثم اضغط حفظ</p>' +
+    '</div>' + rows + '</div>';
+}
+
 // ===== إدارة النظام =====
 function viewAdmin(){
   const users = DB.get('users', {});
@@ -1382,8 +1415,17 @@ function viewAdmin(){
       '<div style="display:grid;grid-template-columns:repeat(3,1fr) auto;gap:10px;align-items:flex-end">' +
         '<div><label class="lbl">البريد الإلكتروني</label><input class="inp" id="a_email" type="email" placeholder="email@..."></div>' +
         '<div><label class="lbl">كلمة السر</label><input class="inp" id="a_pass" type="password" placeholder="..."></div>' +
-        '<div><label class="lbl">المعمل المخصص</label><select class="inp" id="a_factory">' + factOpts + '</select></div>' +
+        '<div><label class="lbl">المعمل المخصص</label><select class="inp" id="a_factory"><option value="الكل">الكل (كافة المعامل)</option>' + factOpts + '</select></div>' +
         '<button class="btn btn-green" onclick="addUser()" style="white-space:nowrap">إضافة</button>' +
+      '</div>' +
+      '<div style="margin-top:12px;padding:10px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">' +
+        '<p style="font-size:11px;font-weight:700;color:#374151;margin-bottom:8px">🔐 الصلاحيات:</p>' +
+        '<div style="display:flex;gap:16px;flex-wrap:wrap">' +
+          '<label style="font-size:11px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="perm_salaf" checked> السلف</label>' +
+          '<label style="font-size:11px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="perm_expenses" checked> المصاريف</label>' +
+          '<label style="font-size:11px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="perm_kroob" checked> الكروب</label>' +
+          '<label style="font-size:11px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="perm_reports"> التقارير</label>' +
+        '</div>' +
       '</div>' +
       '<div id="admin-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>' +
     '</div>' +
@@ -1455,15 +1497,36 @@ function deleteFactory(name) {
 function addUser() {
   var email = gv('a_email'), pass = gv('a_pass'), factory = gv('a_factory');
   if (!email || !pass) return;
+  var perms = ['purchases','sales'];
+  ['salaf','expenses','kroob','reports'].forEach(function(p){
+    var cb = document.getElementById('perm_'+p);
+    if(cb && cb.checked) perms.push(p);
+  });
   var users = DB.get('users', {});
   hashPassword(pass).then(function(hash) {
-    var u={email:email, password:hash, role:'accountant', factory:factory};
+    var u={email:email, password:hash, role:'accountant', factory:factory, permissions:perms};
     users[uid(email)] = u;
     DB.set('users', users);
     FDB.save('users', uid(email), u).then(function(){ console.log('User saved to Firebase:', email); });
   });
-  var m = el('admin-msg'); if (m) { m.style.display='block'; m.style.background='#ecfdf5'; m.style.color='#059669'; m.textContent='تم إضافة المستخدم'; }
+  var m = el('admin-msg'); if (m) { m.style.display='block'; m.style.background='#ecfdf5'; m.style.color='#059669'; m.textContent='✅ تم إضافة المستخدم بالصلاحيات المحددة'; }
   setTimeout(function(){ renderContent(); }, 600);
+}
+
+function saveUserPermissions(email) {
+  var users = DB.get('users', {});
+  var key = uid(email);
+  if (!users[key]) return;
+  var perms = ['purchases','sales'];
+  ['salaf','expenses','kroob','reports'].forEach(function(p){
+    var cb = document.getElementById('up_'+p+'_'+key);
+    if(cb && cb.checked) perms.push(p);
+  });
+  users[key].permissions = perms;
+  DB.set('users', users);
+  FDB.save('users', key, users[key]);
+  alert('✅ تم حفظ صلاحيات ' + email);
+  renderContent();
 }
 
 function deleteUser(email) {
@@ -1478,7 +1541,6 @@ function clearKroobData() {
   if(!confirm('تأكيد نهائي — لا يمكن التراجع!')) return;
   DB.set('kroob', []);
   DB.set('kroob_opening', {dinar:0, dollar:0});
-  DB.set('kroob_final_balance', null);
   renderContent();
   alert('✅ تم مسح بيانات الكروب');
 }
@@ -1575,16 +1637,20 @@ function runFixData(factory) {
 // ===== نقل البيانات =====
 function exportDataBackup() {
   var backup = {
-    entries: DB.get('entries', []),
-    sales:   DB.get('sales', []),
-    drivers: DB.get('drivers', {}),
-    factories: DB.get('factories', []),
+    entries:       DB.get('entries', []),
+    sales:         DB.get('sales', []),
+    drivers:       DB.get('drivers', {}),
+    factories:     DB.get('factories', []),
+    kroob:         DB.get('kroob', []),
+    kroob_opening: DB.get('kroob_opening', {dinar:0, dollar:0}),
+    salaf:         DB.get('salaf', []),
+    expenses:      DB.get('expenses', []),
     exported: new Date().toISOString()
   };
   var blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'oil_backup_' + new Date().toISOString().split('T')[0] + '.json';
+  a.download = 'oil_backup_full_' + new Date().toISOString().split('T')[0] + '.json';
   a.click();
 }
 
@@ -1600,16 +1666,20 @@ function importDataBackup(input) {
         if (msg) { msg.style.display='block'; msg.style.background='#fef2f2'; msg.style.color='#dc2626'; msg.textContent='❌ الملف غير صالح'; }
         return;
       }
-      if (backup.entries && backup.entries.length)  DB.set('entries',  backup.entries);
-      if (backup.sales   && backup.sales.length)    DB.set('sales',    backup.sales);
+      if (backup.entries && backup.entries.length)  { DB.set('entries',  backup.entries);  backup.entries.forEach(function(x){ FDB.save('entries', x.id, x); }); }
+      if (backup.sales   && backup.sales.length)    { DB.set('sales',    backup.sales);    backup.sales.forEach(function(x){ FDB.save('sales', x.id, x); }); }
       if (backup.drivers) DB.set('drivers', backup.drivers);
+      if (backup.kroob && backup.kroob.length)      { DB.set('kroob', backup.kroob);       backup.kroob.forEach(function(x){ FDB.save('kroob', x.id, x); }); }
+      if (backup.kroob_opening)                     { DB.set('kroob_opening', backup.kroob_opening); FDB.save('kroob_opening','opening', backup.kroob_opening); }
+      if (backup.salaf && backup.salaf.length)      { DB.set('salaf', backup.salaf);       backup.salaf.forEach(function(x){ FDB.save('salaf', x.id, x); }); }
+      if (backup.expenses && backup.expenses.length){ DB.set('expenses', backup.expenses); backup.expenses.forEach(function(x){ FDB.save('expenses', x.id, x); }); }
       if (backup.factories && backup.factories.length) {
         FACTORIES.length = 0;
         backup.factories.forEach(function(f){ FACTORIES.push(f); });
         DB.set('factories', FACTORIES);
       }
-      var total = (backup.entries||[]).length + (backup.sales||[]).length;
-      if (msg) { msg.style.display='block'; msg.style.background='#ecfdf5'; msg.style.color='#065f46'; msg.textContent='✅ تم نقل ' + total + ' سجل بنجاح! يمكنك الآن استخدام هذا الملف.'; }
+      var total = (backup.entries||[]).length + (backup.sales||[]).length + (backup.kroob||[]).length + (backup.salaf||[]).length + (backup.expenses||[]).length;
+      if (msg) { msg.style.display='block'; msg.style.background='#ecfdf5'; msg.style.color='#065f46'; msg.textContent='✅ تم نقل ' + total + ' سجل بنجاح ورفعها لـ Firebase!'; }
       setTimeout(function(){ render(); }, 1500);
     } catch(err) {
       var msg = el('migration-msg');
@@ -1837,7 +1907,7 @@ function generatePDF(type) {
   <tbody>${tableRows}${totalsRow}</tbody>
 </table>
 <div class="footer">نظام المراقبة المركزي v40.5 — جميع الحقوق محفوظة</div>
-'<scr'+'ipt>window.onload=()=>{window.print();}</scr'+'ipt>\n'
+<script>window.onload=()=>{window.print();}<\/script>
 </body></html>`);
   printWin.document.close();
 }
@@ -2605,16 +2675,7 @@ function exportExpensesXLSX(factory) {
 // ===== نظام الكروب / الصيرفة =====
 function getKroobList() {
   let list = DB.get('kroob', []);
-  list.sort((a,b) => {
-    // Primary: xl_row (Excel row order) - missing xl_row goes last
-    const ra = a.xl_row != null ? a.xl_row : 9999;
-    const rb = b.xl_row != null ? b.xl_row : 9999;
-    if(ra !== rb) return ra - rb;
-    // Secondary: date
-    if(a.date && b.date && a.date !== b.date) return a.date.localeCompare(b.date);
-    // Fallback: time
-    return (a.time||0) - (b.time||0);
-  });
+  list.sort((a,b) => (a.date||'').localeCompare(b.date||'') || (a.time||0)-(b.time||0));
   return list;
 }
 
@@ -2622,28 +2683,21 @@ function calcKroobBalance(list) {
   const opening = DB.get('kroob_opening', {dinar: 0, dollar: 0});
   let balDinar  = parseFloat(opening.dinar||0);
   let balDollar = parseFloat(opening.dollar||0);
-  
-  // Sort by xl_row first (entries without xl_row go last)
-  const sorted = [...list].sort((a,b) => {
-    const ra = a.xl_row != null ? a.xl_row : 9999;
-    const rb = b.xl_row != null ? b.xl_row : 9999;
-    return ra - rb;
-  });
-
-  return sorted.map(e => {
-    // Use Excel balance directly if available
-    if(e.xl_bal_dinar !== null && e.xl_bal_dinar !== undefined) {
-      balDinar  = e.xl_bal_dinar;
-      if(e.xl_bal_dollar !== null && e.xl_bal_dollar !== undefined)
-        balDollar = e.xl_bal_dollar;
+  return list.map(e => {
+    const dinar  = parseFloat(e.amount_dinar||0);
+    const dollar = parseFloat(e.amount_dollar||0);
+    const op = (e.operation_type || 'صرف').trim();
+    const comm = parseFloat(e.commission||0);
+    if(op === 'إيداع' || op === 'ايداع') {
+      balDinar  += dinar;
+      balDollar += dollar;
     } else {
-      // Manual calculation for manually-added entries
-      const dinar  = parseFloat(e.amount_dinar||0);
-      const dollar = parseFloat(e.amount_dollar||0);
-      const op = (e.operation_type||'صرف').trim();
-      if(op==='إيداع'||op==='ايداع') { balDinar+=dinar; balDollar+=dollar; }
-      else { balDinar-=dinar; balDollar-=dollar; }
+      // صرف و حواله = debit
+      balDinar  -= dinar;
+      balDollar -= dollar;
     }
+    // العمولة تُطرح دائماً من الرصيد كمصروف
+    balDinar -= comm;
     return {...e, bal_dinar: balDinar, bal_dollar: balDollar};
   });
 }
@@ -2656,11 +2710,9 @@ function viewKroob() {
   const opening = DB.get('kroob_opening', {dinar:0, dollar:0});
   
   // Current balance
-  // Use stored final balance (most accurate) or calculate from last row
-  const storedFinal = DB.get('kroob_final_balance', null);
   const lastRow = listWithBal[listWithBal.length-1];
-  const curBalDinar  = storedFinal ? storedFinal.dinar  : (lastRow ? lastRow.bal_dinar  : parseFloat(opening.dinar||0));
-  const curBalDollar = storedFinal ? storedFinal.dollar : (lastRow ? lastRow.bal_dollar : parseFloat(opening.dollar||0));
+  const curBalDinar  = lastRow ? lastRow.bal_dinar  : parseFloat(opening.dinar||0);
+  const curBalDollar = lastRow ? lastRow.bal_dollar : parseFloat(opening.dollar||0);
 
   const rows = listWithBal.map((e,i) => {
     const op = e.operation_type || 'صرف';
@@ -2721,7 +2773,7 @@ function viewKroob() {
         '<div style="display:flex;gap:8px;margin-right:auto">' +
           '<label class="btn btn-green" style="font-size:11px;padding:6px 12px;cursor:pointer">📥 استيراد من Excel<input type="file" accept=".xlsx" style="display:none" onchange="importKroobXLSX(this)"></label>' +
           '<button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="exportKroobXLSX()">📊 تصدير Excel</button>' +
-    '<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="clearKroobData()">🗑️ مسح كل البيانات</button>' +
+          '<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="clearKroobData()">🗑️ مسح كل البيانات</button>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -2878,16 +2930,17 @@ function saveKroobOpening() {
 }
 
 function clearKroobData() {
-  if(!confirm('⚠️ هل أنت متأكد من مسح كل بيانات الكروب؟')) return;
+  if(!confirm('⚠️ هل أنت متأكد من مسح كل بيانات الكروب؟ لا يمكن التراجع!')) return;
   const kroob = DB.get('kroob', []);
   for(const k of kroob){ try{ FDB.delete('kroob', k.id); }catch(e){} }
   DB.set('kroob', []);
   DB.set('kroob_opening', {dinar:0, dollar:0});
   FDB.save('kroob_opening','opening',{dinar:0, dollar:0});
-  alert('✅ تم مسح كل بيانات الكروب!');
+  alert('✅ تم مسح كل بيانات الكروب بنجاح!');
   renderContent();
 }
-  function importKroobXLSX(input) {
+
+function importKroobXLSX(input) {
   const file=input.files[0];
   if(!file||typeof XLSX==='undefined') return;
   const reader=new FileReader();
@@ -2895,10 +2948,6 @@ function clearKroobData() {
     const wb=XLSX.read(e.target.result,{type:'array'});
     const ws=wb.Sheets[wb.SheetNames[0]];
     const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-    // FIXED COLUMN INDICES (based on exact Excel structure):
-    // col0=ت, col1=تاريخ, col2=بيان, col3=جهة, col4=مستلم
-    // col5=مبلغ دولار, col6=مبلغ دينار, col10=مدين دينار
-    // col11=رصيد دولار, col12=رصيد دينار, col13=نوع العملية, col14=عمولة
 
     // Read opening balance - scan first 5 rows for رصيد مدور
     let opDinar=0, opDollar=0;
@@ -2938,15 +2987,17 @@ function clearKroobData() {
     // Headers at row 1
     const headers=rows[1].map(v=>String(v).trim());
     const getCol=(names)=>{ for(const n of names){ const idx=headers.findIndex(h=>h.includes(n)); if(idx>=0)return idx; } return -1; };
-    // Use fixed column numbers directly (no detection needed)
-    const C_DATE=1, C_DESC=2, C_BENEF=3, C_RECV=4;
-    const C_DOLLAR=5, C_DINAR=6, C_DINAR_DEBIT=10;
-    const C_BAL_DOLLAR=11, C_BAL_DINAR=12;
-    const C_TYPE=13, C_COMM=14;
-    function getVal(row, col) { return String(row[col]||'').trim(); }
-    function getNum(row, col) { return parseFloat(String(row[col]||'').replace(/,/g,''))||0; }
+    const dateCol  =getCol(['التاريخ']);
+    const descCol  =getCol(['البيان']);
+    const benefCol =getCol(['الجهه','الجهة']);
+    const recvCol  =getCol(['المستلم']);
+    const dinarCol =getCol(['الدينار العراقي','بالدينار']);
+    const dollarCol=getCol(['الدولار','بالدولار']);
+    const typeCol  =getCol(['نوع العملية']);
+    const commCol  =getCol(['عموله','عمولة']);
 
-const oldKroob=DB.get('kroob',[]);
+    // مسح البيانات القديمة قبل الاستيراد
+    const oldKroob=DB.get('kroob',[]);
     for(const old of oldKroob){ try{FDB.delete('kroob',old.id);}catch(e){} }
     let kroob=[];
     let imported=0;
@@ -2954,61 +3005,30 @@ const oldKroob=DB.get('kroob',[]);
       const row=rows[r];
       const num=String(row[0]).trim();
       if(!num||isNaN(parseFloat(num)))continue;
-      const rawDate=String(row[C_DATE]||'').trim();
-     const date=(()=>{const n=parseFloat(rawDate);if(!isNaN(n)&&n>40000){const dt=new Date((n-25569)*86400*1000);return dt.toISOString().split('T')[0];}return rawDate;})();
-      // Read all values using fixed column indices
-      const dinar    = getNum(row, C_DINAR);
-      const dollar   = getNum(row, C_DOLLAR);
-      const desc     = getVal(row, C_DESC);
-      const benef    = getVal(row, C_BENEF);
-      const recv     = getVal(row, C_RECV);
-      const opType   = getVal(row, C_TYPE) || 'صرف';
-      const comm     = getNum(row, C_COMM);
-      // Read EXACT running balance from Excel col 12 (always correct)
-      const balDinar  = parseFloat(String(row[C_BAL_DINAR]||'').replace(/,/g,''));
-      const balDollar = parseFloat(String(row[C_BAL_DOLLAR]||'').replace(/,/g,''));
-      if(!dinar && !dollar && !desc) continue;
+      const rawDate=dateCol>=0?String(row[dateCol]).trim():'';
+      let date='';
+      const m1=rawDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      const m2=rawDate.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+      if(m1) date=m1[1]+'-'+m1[2]+'-'+m1[3];
+      else if(m2) date=m2[3]+'-'+m2[2].padStart(2,'0')+'-'+m2[1].padStart(2,'0');
+      else{const n=parseFloat(rawDate);if(!isNaN(n)&&n>40000){const dt=new Date((n-25569)*86400*1000);date=dt.toISOString().split('T')[0];}}
+      const dinar =dinarCol>=0?parseFloat(String(row[dinarCol]).replace(/,/g,''))||0:0;
+      const dollar=dollarCol>=0?parseFloat(String(row[dollarCol]).replace(/,/g,''))||0:0;
+      const desc  =descCol>=0?String(row[descCol]).trim():'';
+      const benef =benefCol>=0?String(row[benefCol]).trim():'';
+      const recv  =recvCol>=0?String(row[recvCol]).trim():'';
+      const opType=typeCol>=0?String(row[typeCol]).trim():'صرف';
+      const comm  =commCol>=0?parseFloat(String(row[commCol]).replace(/,/g,''))||0:0;
+      if(!dinar&&!dollar&&!desc)continue;
       const id='kr_xl_'+r+'_'+Date.now();
-      const entry={
-        id, date,
-        description: desc,
-        operation_type: opType,
-        beneficiary: benef,
-        receiver: recv,
-        amount_dinar: dinar,
-        amount_dollar: dollar,
-        commission: comm,
-        xl_bal_dinar:  !isNaN(balDinar)  ? balDinar  : null,
-        xl_bal_dollar: !isNaN(balDollar) ? balDollar : null,
-        xl_row: r,
-        accountant:'import',
-        time: Date.now()+r
-      };
+      const entry={id,date,description:desc,operation_type:opType||'صرف',beneficiary:benef,receiver:recv,amount_dinar:dinar,amount_dollar:dollar,commission:comm,accountant:'import',time:Date.now()+r};
       kroob.push(entry);
       FDB.save('kroob',id,entry);
       imported++;
     }
-    // Sort by Excel row number (original order)
-    kroob.sort((a,b)=>(a.xl_row||0)-(b.xl_row||0));
+    kroob.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
     DB.set('kroob',kroob);
-    
-    // Store final balance from entry with MAXIMUM xl_row (last Excel row)
-    let maxXlRow = -1, finalEntry = null;
-    kroob.forEach(function(e) {
-      if((e.xl_row||0) > maxXlRow && e.xl_bal_dinar !== null && e.xl_bal_dinar !== undefined) {
-        maxXlRow = e.xl_row||0;
-        finalEntry = e;
-      }
-    });
-    if(finalEntry) {
-      const finalBal = {dinar: finalEntry.xl_bal_dinar, dollar: finalEntry.xl_bal_dollar||0};
-      DB.set('kroob_final_balance', finalBal);
-      FDB.save('kroob_final_balance', 'final', finalBal);
-      console.log('Final balance stored: Dinar='+finalEntry.xl_bal_dinar+' from xl_row='+maxXlRow);
-    }
-    
-    alert('✅ تم استيراد '+imported+' حركة بنجاح!\nالرصيد النهائي: '+
-      (finalEntry?Math.round(finalEntry.xl_bal_dinar).toLocaleString():'؟')+' د.ع');
+    alert('✅ تم استيراد '+imported+' حركة بنجاح!');
     input.value='';
     renderContent();
   };
@@ -3078,7 +3098,7 @@ async function doLogin(){
       DB.set('users', users);
     }
     FDB.save('users', id2, users[id2]);
-    S.selectedFactory = isManager() ? 'الكل' : currentUser.factory;
+    S.selectedFactory = (isManager() || currentUser.factory === 'الكل') ? 'الكل' : currentUser.factory;
     // Sync all data from Firebase
     if (window._fbReady) {
       render(); // show UI immediately
@@ -3162,24 +3182,13 @@ function go(v){S.view=v;if(v==='form')S.editEntry=null;if(v==='sale_form')S.edit
 function goImport(type){S.view=type==='purchases'?'import_p':'import_s';S.importPresetType=type;render();}
 function setFactory(f){S.selectedFactory=f;renderContent();}
 
-// تشغيل - يعمل فوراً بدون انتظار Firebase
-renderLogin();
-
-// Firebase sync in background
+// تشغيل
 document.addEventListener('fb-ready', async function() {
-  clearTimeout(window._fbOfflineTimer);
-  if(!window._fbReady) return;
   console.log('Firebase ready, syncing...');
-  try { await syncFromCloud(); if(currentUser) render(); } catch(e) { console.warn('Sync error:', e); }
+  await syncFromCloud();
+  if (currentUser) render();
 });
-
-// Offline fallback after 6 seconds
-window._fbOfflineTimer = setTimeout(function() {
-  if(!window._fbReady) {
-    console.warn('Offline mode');
-    window._offlineMode = true;
-  }
-}, 6000);
+renderLogin();
 </script>
 </body>
 </html>

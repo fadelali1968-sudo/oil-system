@@ -366,7 +366,8 @@ function render() {
   ].join('');
 
   // Build factory selector
-  const factSel = isM
+  const canSelectFactory = isM || currentUser.factory === 'الكل';
+  const factSel = canSelectFactory
     ? '<select class="inp" style="width:160px;padding:5px 10px" onchange="setFactory(this.value)"><option value="الكل" '+(sf==='الكل'?'selected':'')+'>كل المعامل</option>'+factOpts+'</select>'
     : '<span style="background:#eff6ff;color:#2563eb;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:900">'+sf+'</span>';
 

@@ -1310,7 +1310,7 @@ function viewPermissions() {
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
         '<div><div style="font-size:13px;font-weight:900;color:#1e293b">'+u.email+'</div>' +
         '<div style="font-size:11px;color:#64748b">المعمل: '+u.factory+'</div></div>' +
-        '<button class="btn btn-blue" style="font-size:11px;padding:6px 14px" onclick="saveUserPermissions(''+u.email+'')">💾 حفظ</button>' +
+        '<button class="btn btn-blue" style="font-size:11px;padding:6px 14px" onclick="saveUserPermissions(this.dataset.e)" data-e="'+u.email+'">💾 حفظ</button>' +
       '</div>' +
       '<div style="display:flex;gap:14px;flex-wrap:wrap;padding:10px;background:#f8fafc;border-radius:8px">'+checkboxes+'</div>' +
     '</div>';
@@ -1513,7 +1513,8 @@ function addUser() {
   setTimeout(function(){ renderContent(); }, 600);
 }
 
-function saveUserPermissions(email) {
+function saveUserPermissions(emailOrEl) {
+  var email = typeof emailOrEl === 'string' ? emailOrEl : emailOrEl;
   var users = DB.get('users', {});
   var key = uid(email);
   if (!users[key]) return;

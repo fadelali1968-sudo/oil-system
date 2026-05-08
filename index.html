@@ -1362,42 +1362,49 @@ async function doImport(){
   let drivers=DB.get('drivers',{}), added=0;
   if(iType==='purchases'){
     let entries=DB.get('entries',[]);
+    const newEntries=[];
     importedRows.forEach((row,i)=>{
-      const liters=parseFloat(row.natural_liters)||0, price=parseFloat(row.price)||150;
-      const dName=(row.driver_name||'').toString().trim();
-      const carNo=(row.car_no||'').toString().trim().replace(/\.0$/,'');
-      const loc=(row.location||'').toString().trim();
       const xlTons=autoScale(row.qty_tons);
       const xlLiters=autoScale(row.natural_liters);
       const xlKg=autoScale(row.weight_kg);
       const xlPrice=parseFloat(row.price)||150;
       const xlRefPrice=parseFloat(row.refinery_price)||(xlPrice*xlLiters);
-      entries.push({id:'xl_p_'+Date.now()+'_'+i,voucher_no:row.voucher_no||(row._num||String(i+1)),refinery:(row.refinery||'').toString().trim(),date:parseXLDate(row.date),product_type:(row.product_type||'').toString().trim(),driver_name:dName,car_no:carNo,location:loc,qty_tons:xlTons,natural_liters:xlLiters,weight_kg:xlKg,po_no:(row.po_no||'').toString().trim(),price:xlPrice,transport_fee:42,refinery_price:xlRefPrice,factory,accountant:currentUser.email,time:Date.now()+i});
+      const dName=(row.driver_name||'').toString().trim();
+      const carNo=(row.car_no||'').toString().trim().replace(/\.0$/,'');
+      const loc=(row.location||'').toString().trim();
+      const entry={id:'xl_p_'+Date.now()+'_'+i,voucher_no:row.voucher_no||(row._num||String(i+1)),refinery:(row.refinery||'').toString().trim(),date:parseXLDate(row.date),product_type:(row.product_type||'').toString().trim(),driver_name:dName,car_no:carNo,location:loc,qty_tons:xlTons,natural_liters:xlLiters,weight_kg:xlKg,po_no:(row.po_no||'').toString().trim(),price:xlPrice,transport_fee:42,refinery_price:xlRefPrice,factory,accountant:currentUser.email,time:Date.now()+i};
+      entries.push(entry);
+      newEntries.push(entry);
       if(dName)drivers[dName]={name:dName,car_no:carNo,location:loc};
       added++;
     });
-    entries.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+    entries.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
     DB.set('entries',entries);
+    for(let i=0;i<newEntries.length;i++){
+      await FDB.save('entries',newEntries[i].id,newEntries[i]);
+    }
   } else {
     let sales=DB.get('sales',[]);
+    const newSales=[];
     importedRows.forEach((row,i)=>{
       const dName=(row.driver_name||'').toString().trim();
       const carNo=(row.car_no||'').toString().trim().replace(/\.0$/,'');
       const loc=(row.location||'').toString().trim();
-      sales.push({id:'xl_s_'+Date.now()+'_'+i,driver_name:dName,car_no:carNo,date:parseXLDate(row.date),location:loc,address:(row.address||'').toString().trim(),product_type:(row.product_type||'').toString().trim(),kaban:parseFloat(row.kaban)||0,qty_liters:autoScale(row.qty_liters),advance:parseFloat(row.advance)||0,received:parseFloat(row.received)||0,car_source:(row.car_source||'').toString().trim(),factory,accountant:currentUser.email,time:Date.now()+i});
+      const sale={id:'xl_s_'+Date.now()+'_'+i,driver_name:dName,car_no:carNo,date:parseXLDate(row.date),location:loc,address:(row.address||'').toString().trim(),product_type:(row.product_type||'').toString().trim(),kaban:parseFloat(row.kaban)||0,qty_liters:autoScale(row.qty_liters),advance:parseFloat(row.advance)||0,received:parseFloat(row.received)||0,car_source:(row.car_source||'').toString().trim(),factory,accountant:currentUser.email,time:Date.now()+i};
+      sales.push(sale);
+      newSales.push(sale);
       if(dName)drivers[dName]={name:dName,car_no:carNo,location:loc};
       added++;
     });
-    sales.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+    sales.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
     DB.set('sales',sales);
-    importedRows.forEach(function(_,i){
-      var sale = sales[sales.length - importedRows.length + i];
-      if(sale) FDB.save('sales', sale.id, sale);
-    });
+    for(let i=0;i<newSales.length;i++){
+      await FDB.save('sales',newSales[i].id,newSales[i]);
+    }
   }
   DB.set('drivers',drivers);
   const res=el('imp-result');
-  if(res){res.style.display='block';res.style.background='#ecfdf5';res.style.color='#065f46';res.style.border='1px solid #6ee7b7';res.textContent=`✅ تم استيراد ${added} سجل إلى "${factory}"`;}
+  if(res){res.style.display='block';res.style.background='#ecfdf5';res.style.color='#065f46';res.style.border='1px solid #6ee7b7';res.textContent=`✅ تم استيراد ${added} سجل إلى "${factory}" وحفظها في Firebase`;}
   importedRows=[];
   setTimeout(()=>{S.view=iType==='sales'?'sale_table':'table';S.selectedFactory=factory;render();},1500);
 }

@@ -836,7 +836,7 @@ function viewForm() {
         </select>
       </div>
       <div><label class="lbl">نوع المنتج (تلقائي)</label><input class="inp" id="f_pt" value="${e.product_type||''}" readonly style="background:#f8fafc;color:#2563eb;font-style:italic"></div>
-      <div style="grid-column:span 2"><label class="lbl">اسم السائق الرباعي *</label><input class="inp" id="f_driver" list="dlist" value="${e.driver_name||''}" oninput="autoFillDriver(this.value)"></div>
+      <div style="grid-column:span 2"><label class="lbl">اسم السائق الرباعي *</label><input class="inp" id="f_driver" list="dlist" value="${e.driver_name||''}" oninput="autoFillDriver(this.value)" onfocus="showDriversList('f_driver','f_car','f_loc')" autocomplete="off" placeholder="اضغط لاختيار سائق..."></div>
       <div><label class="lbl">رقم السيارة *</label><input class="inp" id="f_car" value="${e.car_no||''}"></div>
       <div><label class="lbl">العائدية *</label><input class="inp" id="f_loc" value="${e.location||''}"></div>
       <div><label class="lbl">أمر الشراء (PO) *</label><input class="inp" id="f_po" value="${e.po_no||''}"></div>
@@ -860,7 +860,37 @@ function viewForm() {
 
 function updateProduct(){const r=gv('f_ref'),pt=el('f_pt');if(pt)pt.value=r==='مصفى كربلاء'?'HFO':r==='مصفى صلاح الدين'?'VR':'';}
 function calcTotal(){const l=parseFloat(el('f_liters')?.value||0),t=el('f_tot');if(t)t.textContent=fmtM(l*150)+' د.ع';}
-function autoFillDriver(name){const d=DB.get('drivers',{});if(d[name]){const c=el('f_car'),l=el('f_loc');if(c)c.value=d[name].car_no||'';if(l)l.value=d[name].location||'';}}
+function showDriversList(inputId, carId, locId) {
+  const drivers = DB.get('drivers', {});
+  const list = Object.values(drivers);
+  if (!list.length) return;
+  const old = document.getElementById('drv-drop');
+  if (old) old.remove();
+  const input = el(inputId);
+  if (!input) return;
+  const rect = input.getBoundingClientRect();
+  const drop = document.createElement('div');
+  drop.id = 'drv-drop';
+  drop.style.cssText = 'position:fixed;top:'+(rect.bottom+2)+'px;right:'+(window.innerWidth-rect.right)+'px;width:'+rect.width+'px;background:#fff;border:1.5px solid #bfdbfe;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:99999;max-height:220px;overflow-y:auto';
+  list.forEach(d => {
+    const item = document.createElement('div');
+    item.style.cssText = 'padding:9px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9';
+    item.innerHTML = '<div style="font-size:13px;font-weight:900;color:#0f172a">'+d.name+'</div><div style="font-size:10px;color:#64748b;margin-top:2px">🚗 '+d.car_no+' &nbsp;|&nbsp; 📍 '+d.location+'</div>';
+    item.onmouseover = ()=>item.style.background='#eff6ff';
+    item.onmouseout  = ()=>item.style.background='';
+    item.onmousedown = (ev)=>{
+      ev.preventDefault();
+      input.value = d.name;
+      const c=el(carId), l=el(locId);
+      if(c) c.value = d.car_no||'';
+      if(l) l.value = d.location||'';
+      drop.remove();
+    };
+    drop.appendChild(item);
+  });
+  document.body.appendChild(drop);
+  input.onblur = ()=>setTimeout(()=>{ const d=document.getElementById('drv-drop'); if(d)d.remove(); },200);
+}function autoFillDriver(name){const d=DB.get('drivers',{});if(d[name]){const c=el('f_car'),l=el('f_loc');if(c)c.value=d[name].car_no||'';if(l)l.value=d[name].location||'';}}
 
 function saveEntry(){
   const sf=S.selectedFactory, e=S.editEntry||{};

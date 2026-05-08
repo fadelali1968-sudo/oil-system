@@ -274,8 +274,20 @@ async function syncFromCloud() {
       FDB.getAll('entries'), FDB.getAll('sales'),
       FDB.getAll('drivers'), FDB.getAll('salaf')
     ]);
-    if (entries && entries.length) DB.set('entries', entries);
-    if (sales && sales.length) DB.set('sales', sales);
+    if (entries && entries.length) {
+      const local = DB.get('entries', []);
+      const merged = {};
+      local.forEach(function(e){ merged[e.id] = e; });
+      entries.forEach(function(e){ merged[e.id] = e; });
+      DB.set('entries', Object.values(merged));
+    }
+    if (sales && sales.length) {
+      const localS = DB.get('sales', []);
+      const mergedS = {};
+      localS.forEach(function(s){ mergedS[s.id] = s; });
+      sales.forEach(function(s){ mergedS[s.id] = s; });
+      DB.set('sales', Object.values(mergedS));
+    }
     if (salaf && salaf.length) DB.set('salaf', salaf);
     const expenses = await FDB.getAll('expenses');
     if (expenses && expenses.length) DB.set('expenses', expenses);

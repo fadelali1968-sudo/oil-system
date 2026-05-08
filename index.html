@@ -364,8 +364,7 @@ function fmtKg(v)   { return fmt(sc(v)); }
 function fmtKaban(v){
   const n = parseFloat(v);
   if (!n || isNaN(n)) return '0';
-  if (n >= 1000) return Math.round(n).toLocaleString('en-US'); // after ×1000, whole number
-  return n.toLocaleString('en-US', {minimumFractionDigits:3, maximumFractionDigits:3});
+  return n.toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:3});
 }
 function fmt(v,d=3){
   const n=parseFloat(v); if(!n||isNaN(n))return'0';

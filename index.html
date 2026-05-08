@@ -108,6 +108,47 @@ body, p, span, div, td, th, li { color: #1a3a5c !important; font-weight: 600 !im
 label, .form-label { color: #0d2b4e !important; font-weight: 700 !important; font-size: 14px !important; }
 h1, h2, h3, h4, h5, h6 { color: #0d2b4e !important; font-weight: 800 !important; }
 input, select, textarea { color: #1a3a5c !important; font-weight: 600 !important; font-size: 14px !important; }
+  /* ===== إصلاح رؤوس الجداول الداكنة ===== */
+table thead tr th,
+table thead tr td,
+th {
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  font-size: 14px !important;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.8) !important;
+  letter-spacing: 0.3px !important;
+}
+
+/* رأس الجدول الأسود */
+thead th[style*="background:#1a1a2e"],
+thead th[style*="background:#000"],
+thead th[style*="background: #000"],
+.table-dark th {
+  color: #FFE066 !important;
+  font-weight: 800 !important;
+}
+
+/* رأس الجدول الأحمر الداكن */
+thead th[style*="background:#8B0000"],
+thead th[style*="background:#7B0000"],
+thead th[style*="background: rgb"] {
+  color: #FFE066 !important;
+  font-weight: 800 !important;
+}
+
+/* رأس الجدول البنفسجي */
+thead th[style*="background:#6B21A8"],
+thead th[style*="background:#5B21B6"],
+thead th[style*="background:purple"] {
+  color: #FFE066 !important;
+  font-weight: 800 !important;
+}
+
+/* القائمة الجانبية */
+.sidebar *, nav a, nav li, nav span {
+  font-weight: 700 !important;
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.9) !important;
+}
 </style>
 </head>
 <body>

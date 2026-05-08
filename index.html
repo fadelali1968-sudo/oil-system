@@ -356,7 +356,7 @@ let S = { view:'dashboard', selectedFactory:'الكل', filterFrom:'', filterTo:
 
 // ===== مساعدات =====
 // دوال العرض مع تصحيح تلقائي للوحدات
-function sc(v){ var n=parseFloat(v)||0; return (n>0&&n<1000)?n*1000:n; }
+function sc(v){ return parseFloat(v)||0; }
 function fmtTon(v)  { return fmt(sc(v)); }
 function fmtLiter(v){ return fmt(sc(v)); }
 function fmtKg(v)   { return fmt(sc(v)); }
@@ -549,31 +549,6 @@ function renderContent() {
   const c=el('main-content'); if(!c)return;
   
   // تصحيح تلقائي للقيم الصغيرة في كل عرض
-  (function() {
-    var raw = localStorage.getItem('oil_entries');
-    if (!raw) return;
-    var entries = JSON.parse(raw);
-    var dirty = false;
-    for (var i = 0; i < entries.length; i++) {
-      var e = entries[i];
-      if (e.qty_tons > 0 && e.qty_tons < 1000) { entries[i].qty_tons = e.qty_tons * 1000; dirty = true; }
-      if (e.natural_liters > 0 && e.natural_liters < 1000) { entries[i].natural_liters = e.natural_liters * 1000; dirty = true; }
-      if (e.weight_kg > 0 && e.weight_kg < 1000) { entries[i].weight_kg = e.weight_kg * 1000; dirty = true; }
-      // Keep original refinery_price from Excel
-    }
-    if (dirty) localStorage.setItem('oil_entries', JSON.stringify(entries));
-
-    var rawS = localStorage.getItem('oil_sales');
-    if (!rawS) return;
-    var sales = JSON.parse(rawS);
-    var dirtyS = false;
-    for (var j = 0; j < sales.length; j++) {
-      var s = sales[j];
-      if (s.qty_liters > 0 && s.qty_liters < 1000) { sales[j].qty_liters = s.qty_liters * 1000; dirtyS = true; }
-      // kaban is stored correctly, do not multiply
-    }
-    if (dirtyS) localStorage.setItem('oil_sales', JSON.stringify(sales));
-  })();
 
   const v=S.view;
   if(v==='dashboard')   c.innerHTML=viewDashboard();

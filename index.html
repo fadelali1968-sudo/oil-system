@@ -389,18 +389,8 @@ function hasPerm(perm){
 }
 
 // ===== تصحيح القيم تلقائياً =====
-function fixEntry(e) {
-  if (e.qty_tons      > 0 && e.qty_tons      < 1000) e.qty_tons      = e.qty_tons      * 1000;
-  if (e.natural_liters> 0 && e.natural_liters< 1000) e.natural_liters= e.natural_liters* 1000;
-  if (e.weight_kg     > 0 && e.weight_kg     < 1000) e.weight_kg     = e.weight_kg     * 1000;
-  // Keep stored refinery_price - don't recalculate
-  return e;
-}
-function fixSale(s) {
-  // kaban values are stored as-is (already in correct units)
-  if (s.qty_liters> 0 && s.qty_liters< 1000) s.qty_liters= s.qty_liters* 1000;
-  return s;
-}
+function fixEntry(e) { return e; }
+function fixSale(s) { return s; }
 function loadEntries() { return DB.get('entries',[]).map(fixEntry); }
 function loadSales()   { return DB.get('sales',[]).map(fixSale);   }
 

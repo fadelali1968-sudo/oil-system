@@ -1399,7 +1399,8 @@ function previewExcel(file){
 }
 
 async function doImport(){
-  if(!importedRows.length)return;
+  window._importing = true;
+if(!importedRows.length){ window._importing = false; return; }
   const factory=gv('imp_factory'), iType=gv('imp_type')||'purchases';
   let drivers=DB.get('drivers',{}), added=0;
   if(iType==='purchases'){
@@ -1448,6 +1449,7 @@ async function doImport(){
   const res=el('imp-result');
   if(res){res.style.display='block';res.style.background='#ecfdf5';res.style.color='#065f46';res.style.border='1px solid #6ee7b7';res.textContent=`✅ تم استيراد ${added} سجل إلى "${factory}" وحفظها في Firebase`;}
   importedRows=[];
+  window._importing = false;
   setTimeout(()=>{S.view=iType==='sales'?'sale_table':'table';S.selectedFactory=factory;render();},1500);
 }
 
@@ -1875,7 +1877,7 @@ function initNotifications() {
       const data = doc.data();
       if (!lastKnownEntries.has(data.id)) {
         lastKnownEntries.add(data.id);
-        if (lastKnownEntries.size > existingEntries.length + 1) {
+     if (!window._importing && lastKnownEntries.size > existingEntries.length + 1) {
           addNotification({
             type: 'purchase',
             icon: '🛢️',
@@ -1896,7 +1898,7 @@ function initNotifications() {
       const data = doc.data();
       if (!lastKnownSales.has(data.id)) {
         lastKnownSales.add(data.id);
-        if (lastKnownSales.size > existingSales.length + 1) {
+       if (!window._importing && lastKnownSales.size > existingSales.length + 1) {
           addNotification({
             type: 'sale',
             icon: '📦',

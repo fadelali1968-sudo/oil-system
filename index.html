@@ -897,7 +897,13 @@ function saveEntry(){
   const v=gv('f_voucher'),date=gv('f_date'),ref=gv('f_ref'),pt=gv('f_pt');
   const driver=gv('f_driver'),car=gv('f_car'),loc=gv('f_loc'),po=gv('f_po');
   const tons=parseFloat(el('f_tons')?.value||0),liters=parseFloat(el('f_liters')?.value||0),kg=parseFloat(el('f_kg')?.value||0);
-  if(!v||!date||!ref||!driver||!car||!loc||!po||!liters){const m=el('form-msg');if(m){m.style.display='block';m.style.background='#fef2f2';m.style.color='#dc2626';m.textContent='يرجى ملء جميع الحقول (*)'}return;}
+const allEntries = DB.get('entries', []);
+const dupVoucher = allEntries.find(x => x.voucher_no == v && x.id !== (e.id||''));
+if(dupVoucher) {
+  const m = el('form-msg');
+  if(m){ m.style.display='block'; m.style.background='#fef2f2'; m.style.color='#dc2626'; m.textContent='⚠️ رقم البوجر ' + v + ' موجود مسبقاً! يرجى التحقق.'; }
+  return;
+}  if(!v||!date||!ref||!driver||!car||!loc||!po||!liters){const m=el('form-msg');if(m){m.style.display='block';m.style.background='#fef2f2';m.style.color='#dc2626';m.textContent='يرجى ملء جميع الحقول (*)'}return;}
   const entry={id:e.id||('e_'+Date.now()),voucher_no:v,refinery:ref,date,product_type:pt,driver_name:driver,car_no:car,location:loc,qty_tons:tons,natural_liters:liters,weight_kg:kg,po_no:po,price:150,transport_fee:42,refinery_price:150*liters,factory:sf,accountant:currentUser.email,time:Date.now()};
   let entries=DB.get('entries',[]);
   if(e.id){const idx=entries.findIndex(x=>x.id===e.id);if(idx>=0)entries[idx]=entry;else entries.push(entry);}

@@ -923,7 +923,7 @@ function viewSaleForm() {
     </div>
     <datalist id="dlist2">${dlist}</datalist>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-      <div style="grid-column:span 2"><label class="lbl">اسم السائق *</label><input class="inp" id="s_driver" list="dlist2" value="${e.driver_name||''}" oninput="autoFillSaleDriver(this.value)"></div>
+      <div style="grid-column:span 2"><label class="lbl">اسم السائق *</label><input class="inp" id="s_driver" list="dlist2" value="${e.driver_name||''}"oninput="autoFillSaleDriver(this.value)" onfocus="showDriversList('s_driver','s_car','s_loc')" autocomplete="off" placeholder="اضغط لاختيار سائق..."> </div>
       <div><label class="lbl">رقم السيارة *</label><input class="inp" id="s_car" value="${e.car_no||''}"></div>
       <div><label class="lbl">التاريخ *</label><input class="inp" id="s_date" type="date" value="${e.date||today()}"></div>
       <div><label class="lbl">العائدية *</label><input class="inp" id="s_loc" value="${e.location||''}"></div>

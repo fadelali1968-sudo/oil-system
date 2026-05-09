@@ -1458,7 +1458,30 @@ function viewPermissions() {
 }
 
 // ===== إدارة النظام =====
-function viewAdmin(){
+function rebuildDrivers() {
+  var entries = DB.get('entries', []);
+  var sales = DB.get('sales', []);
+  var drivers = {};
+  entries.forEach(function(e) {
+    if (e.driver_name && e.driver_name.trim()) {
+      var name = e.driver_name.trim();
+      drivers[name] = { name: name, car_no: e.car_no || '', location: e.location || '' };
+    }
+  });
+  sales.forEach(function(s) {
+    if (s.driver_name && s.driver_name.trim()) {
+      var name = s.driver_name.trim();
+      if (!drivers[name]) drivers[name] = { name: name, car_no: s.car_no || '', location: s.location || '' };
+    }
+  });
+  DB.set('drivers', drivers);
+  Object.entries(drivers).forEach(function(entry) {
+    FDB.save('drivers', entry[0].replace(/\s+/g,'_'), entry[1]);
+  });
+  var m = document.getElementById('drivers-msg');
+  if(m) { m.style.display='block'; m.style.background='#ecfdf5'; m.style.color='#065f46'; m.textContent='✅ تم تحديث القائمة! عدد السائقين: ' + Object.keys(drivers).length; }
+  setTimeout(function(){ renderContent(); }, 1000);
+}function viewAdmin(){
   const users = DB.get('users', {});
   const factOpts = FACTORIES.map(f => '<option value="' + f + '">' + f + '</option>').join('');
   
@@ -1573,7 +1596,12 @@ function viewAdmin(){
     '</div>' +
 
     '<div class="card" style="overflow:hidden;padding:0;border:2px solid #10b981;margin-bottom:14px">' +
-      '<div style="padding:12px 16px;font-weight:900;font-size:12px;background:#ecfdf5;border-bottom:1px solid #6ee7b7;color:#065f46">🔧 إصلاح بيانات موجودة (تصحيح الأرقام الصغيرة × 1000)</div>' +
+      '<div class="card" style="margin-bottom:14px;border-right:4px solid #2563eb;background:#eff6ff">' +
+  '<h3 style="font-size:13px;font-weight:900;margin-bottom:8px;color:#1e40af">👥 تحديث قائمة السائقين</h3>' +
+  '<p style="font-size:11px;color:#64748b;margin-bottom:12px">إذا لم تظهر أسماء السائقين في القائمة المنسدلة، اضغط هذا الزر</p>' +
+  '<button class="btn btn-blue" style="font-size:12px" onclick="rebuildDrivers()">🔄 إعادة بناء قائمة السائقين</button>' +
+  '<div id="drivers-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>' +
+'</div>' +'<div style="padding:12px 16px;font-weight:900;font-size:12px;background:#ecfdf5;border-bottom:1px solid #6ee7b7;color:#065f46">🔧 إصلاح بيانات موجودة (تصحيح الأرقام الصغيرة × 1000)</div>' +
       '<div style="padding:14px">' +
         '<p style="font-size:11px;color:#64748b;margin-bottom:12px">إذا ظهرت قيم صغيرة (مثل 30.95 بدل 30,950) استخدم هذا الزر لإصلاحها مباشرة</p>' +
         '<table style="width:100%;border-collapse:collapse">' +

@@ -3356,5 +3356,159 @@ document.addEventListener('fb-ready', async function() {
 });
 renderLogin();
 </script>
+<!-- 
+  ╔══════════════════════════════════════════╗
+  ║  PATCH: إصلاح قائمة السائقين v40.5     ║
+  ║  الصق هذا الكود قبل </script> مباشرة  ║
+  ╚══════════════════════════════════════════╝
+-->
+<script>
+// ===== إصلاح قائمة السائقين - يُطبَّق فوراً =====
+
+// إعادة تعريف showDriversList مع دعم الفلترة
+window.showDriversList = function(inputId, carId, locId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  window._renderDriverDrop(inputId, carId, locId, input.value || '');
+};
+
+// دالة مُحسَّنة: قائمة منسدلة قابلة للتصفية
+window._renderDriverDrop = function(inputId, carId, locId, filter) {
+  const drivers = (function(){
+    try { const v = localStorage.getItem('oil_drivers'); return v ? JSON.parse(v) : {}; } catch { return {}; }
+  })();
+  
+  let list = Object.values(drivers);
+  if (!list.length) return;
+
+  // تصفية بالاسم أو رقم السيارة أو العائدية
+  if (filter && filter.trim()) {
+    const f = filter.trim().toLowerCase();
+    list = list.filter(function(d) {
+      return (d.name || '').toLowerCase().includes(f) ||
+             (d.car_no || '').toString().toLowerCase().includes(f) ||
+             (d.location || '').toLowerCase().includes(f);
+    });
+  }
+
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  // استعادة أو إنشاء القائمة المنسدلة
+  let drop = document.getElementById('drv-drop');
+  if (!drop) {
+    drop = document.createElement('div');
+    drop.id = 'drv-drop';
+    drop.style.cssText = 'position:fixed;background:#fff;border:1.5px solid #bfdbfe;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:99999;max-height:260px;overflow-y:auto';
+    document.body.appendChild(drop);
+    input.onblur = function() {
+      setTimeout(function() { var d = document.getElementById('drv-drop'); if (d) d.remove(); }, 200);
+    };
+  }
+
+  drop.innerHTML = '';
+
+  if (!list.length) {
+    drop.innerHTML = '<div style="padding:12px 14px;color:#94a3b8;font-size:12px;text-align:center">لا يوجد سائق مطابق</div>';
+  } else {
+    list.forEach(function(d) {
+      var item = document.createElement('div');
+      item.style.cssText = 'padding:9px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9';
+      item.innerHTML =
+        '<div style="font-size:13px;font-weight:900;color:#0f172a">' + d.name + '</div>' +
+        '<div style="font-size:10px;color:#64748b;margin-top:2px">🚗 ' + (d.car_no || '—') + ' &nbsp;|&nbsp; 📍 ' + (d.location || '—') + '</div>';
+      item.onmouseover = function() { item.style.background = '#eff6ff'; };
+      item.onmouseout  = function() { item.style.background = ''; };
+      item.onmousedown = function(ev) {
+        ev.preventDefault();
+        input.value = d.name;
+        var c = document.getElementById(carId);
+        var l = document.getElementById(locId);
+        if (c) c.value = d.car_no || '';
+        if (l) l.value = d.location || '';
+        drop.remove();
+      };
+      drop.appendChild(item);
+    });
+  }
+
+  // تحديث الموضع في كل مرة
+  var rect = input.getBoundingClientRect();
+  drop.style.top   = (rect.bottom + 2) + 'px';
+  drop.style.right = (window.innerWidth - rect.right) + 'px';
+  drop.style.width = rect.width + 'px';
+};
+
+// autoFillDriver — مطابقة غير حساسة لحالة الحرف
+window.autoFillDriver = function(name) {
+  var drivers = (function(){
+    try { var v = localStorage.getItem('oil_drivers'); return v ? JSON.parse(v) : {}; } catch { return {}; }
+  })();
+  var nameLower = (name || '').trim().toLowerCase();
+  var match = drivers[name] || Object.values(drivers).find(function(x) {
+    return (x.name || '').toLowerCase() === nameLower;
+  });
+  if (match) {
+    var c = document.getElementById('f_car');
+    var l = document.getElementById('f_loc');
+    if (c) c.value = match.car_no || '';
+    if (l) l.value = match.location || '';
+  }
+};
+
+// autoFillSaleDriver — مطابقة غير حساسة لحالة الحرف  
+window.autoFillSaleDriver = function(name) {
+  var drivers = (function(){
+    try { var v = localStorage.getItem('oil_drivers'); return v ? JSON.parse(v) : {}; } catch { return {}; }
+  })();
+  var nameLower = (name || '').trim().toLowerCase();
+  var match = drivers[name] || Object.values(drivers).find(function(x) {
+    return (x.name || '').toLowerCase() === nameLower;
+  });
+  if (match) {
+    var c = document.getElementById('s_car');
+    var l = document.getElementById('s_loc');
+    if (c) c.value = match.car_no || '';
+    if (l) l.value = match.location || '';
+  }
+};
+
+// تحديث حقول السائق في نماذج المشتريات والمبيعات
+// نُعيد ربط الـ oninput بعد كل render عبر MutationObserver
+(function() {
+  var observer = new MutationObserver(function() {
+    // نموذج المشتريات
+    var fd = document.getElementById('f_driver');
+    if (fd && !fd._patched) {
+      fd._patched = true;
+      fd.removeAttribute('list'); // إزالة datalist المتعارض
+      var oldInput = fd.oninput;
+      fd.oninput = function(e) {
+        window.autoFillDriver(this.value);
+        window._renderDriverDrop('f_driver', 'f_car', 'f_loc', this.value);
+      };
+      fd.onfocus = function() {
+        window.showDriversList('f_driver', 'f_car', 'f_loc');
+      };
+    }
+    // نموذج المبيعات
+    var sd = document.getElementById('s_driver');
+    if (sd && !sd._patched) {
+      sd._patched = true;
+      sd.removeAttribute('list'); // إزالة datalist المتعارض
+      sd.oninput = function(e) {
+        window.autoFillSaleDriver(this.value);
+        window._renderDriverDrop('s_driver', 's_car', 's_loc', this.value);
+      };
+      sd.onfocus = function() {
+        window.showDriversList('s_driver', 's_car', 's_loc');
+      };
+    }
+  });
+  observer.observe(document.getElementById('app') || document.body, { childList: true, subtree: true });
+  console.log('✅ Driver list patch applied');
+})();
+</script>
+
 </body>
 </html>

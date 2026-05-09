@@ -1725,22 +1725,27 @@ function clearExpensesData() {
   alert('✅ تم مسح بيانات المصاريف');
 }
 
-function clearFactoryData(factory, type) {
+async function clearFactoryData(factory, type) {
   if (!factory || !type) return;
-  var typeLabel = type === 'purchases' ? 'المشتريات' : type === 'sales' ? 'المبيعات' : 'المشتريات والمبيعات';
-  var msg = 'حذف بيانات ' + typeLabel + ' لـ "' + factory + '" ؟';
-  if (!confirm('⚠️ ' + msg)) return;
-  if (!confirm('⚠️ تأكيد أخير — ' + msg + ' لا يمكن التراجع.')) return;
-
-  if (type === 'purchases' || type === 'all') {
-    var entries = DB.get('entries', []).filter(function(e){ return e.factory !== factory; });
-    DB.set('entries', entries);
+  var typeLabel = type==='purchases'?'المشتريات':type==='sales'?'المبيعات':'المشتريات والمبيعات';
+  if (!confirm('⚠️ حذف بيانات '+typeLabel+' لـ "'+factory+'" ؟')) return;
+  if (!confirm('⚠️ تأكيد أخير — لا يمكن التراجع.')) return;
+  var deletedEntries=[], deletedSales=[];
+  if (type==='purchases'||type==='all') {
+    var allEntries=DB.get('entries',[]);
+    deletedEntries=allEntries.filter(function(e){return e.factory===factory;});
+    DB.set('entries', allEntries.filter(function(e){return e.factory!==factory;}));
   }
-  if (type === 'sales' || type === 'all') {
-    var sales = DB.get('sales', []).filter(function(s){ return s.factory !== factory; });
-    DB.set('sales', sales);
+  if (type==='sales'||type==='all') {
+    var allSales=DB.get('sales',[]);
+    deletedSales=allSales.filter(function(s){return s.factory===factory;});
+    DB.set('sales', allSales.filter(function(s){return s.factory!==factory;}));
   }
-  alert('✅ تم حذف بيانات ' + typeLabel + ' للمعمل: ' + factory);
+  if (window._fbReady) {
+    for (var i=0; i<deletedEntries.length; i++) await FDB.delete('entries', deletedEntries[i].id);
+    for (var j=0; j<deletedSales.length; j++) await FDB.delete('sales', deletedSales[j].id);
+  }
+  alert('✅ تم حذف '+typeLabel+' للمعمل: '+factory+'\nالجهاز وFirebase كلاهما ✓');
   renderContent();
 }
 

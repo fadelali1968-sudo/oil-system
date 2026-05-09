@@ -563,7 +563,7 @@ function renderContent() {
 // ===== اللوحة الرئيسية =====
 function viewDashboard() {
   const analysis=getAnalysis(), saleAn=getSaleAnalysis(), t=today();
-  const facts=(isManager()||currentUser.factory==='الكل')?FACTORIES:[currentUser.factory].filter(f=>FACTORIES.includes(f));
+  const sf=S.selectedFactory;const facts=sf&&sf!=='الكل'?[sf]:(isManager()||currentUser.factory==='الكل')?FACTORIES:[currentUser.factory].filter(f=>FACTORIES.includes(f));
   
   // KPI totals across all factories
   const totalCars  = facts.reduce((s,f)=>s+analysis[f].total.cars, 0);

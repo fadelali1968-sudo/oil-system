@@ -769,7 +769,7 @@ function copyWhatsapp() {
   const period = wf&&wt ? wf+' → '+wt : wf ? 'من '+wf : wt ? 'إلى '+wt : 'الكلي';
   let txt=`*📊 الموقف الإجمالي — ${sf}*\n*الفترة:* ${period}\n*تاريخ التقرير:* ${today()}\n================================\n\n`;
   txt+=`*🛢️ المشتريات:*\n`;
-  for(const f of facts){const d=analysis[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmtM(d.money)} د.ع\n`;}
+  for(const f of facts){const d=analysis[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmt(d.kg)} كغم`\n`;}
   txt+=`\n*📦 المبيعات:*\n`;
   for(const f of facts){const d=saleAn[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان | ${fmt(d.liters)} لتر\n`;}
   txt+=`\n✅ نظام المراقبة v40.0`;

@@ -2865,7 +2865,7 @@ function calcKroobBalance(list) {
       balDollar -= dollar;
     }
     // العمولة تُطرح دائماً من الرصيد كمصروف
-    balDinar -= comm;
+    balDinar -= comm; balDollar -= parseFloat(e.commission_dollar||0);
     return {...e, bal_dinar: balDinar, bal_dollar: balDollar};
   });
 }
@@ -2963,7 +2963,7 @@ function viewKroob() {
         '<div><label class="lbl">المستلم/المسلم</label><input class="inp" id="kr_receiver" placeholder="الاسم..." value="'+(editData?editData.receiver||'':'')+'"></div>' +
         '<div><label class="lbl">💛 المبلغ دينار</label><input class="inp" id="kr_dinar" type="number" placeholder="0" value="'+(editData?editData.amount_dinar||'':'')+'"></div>' +
         '<div><label class="lbl">🖤 المبلغ دولار</label><input class="inp" id="kr_dollar" type="number" placeholder="0" value="'+(editData?editData.amount_dollar||'':'')+'"></div>' +
-        '<div><label class="lbl">عمولة التحويل</label><input class="inp" id="kr_comm" type="number" placeholder="0" value="'+(editData?editData.commission||'':'')+'"></div>' +
+        '<div><label class="lbl">عمولة دينار</label><input class="inp" id="kr_comm" type="number" placeholder="0" value="'+(editData?editData.commission||'':'')+'">'+ '</div><div><label class="lbl">عمولة دولار</label><input class="inp" id="kr_comm_dollar" type="number" placeholder="0" value="'+(editData?editData.commission||'':'')+'"></div>' +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">' +
         (editId?'<button class="btn btn-gray" onclick="S.kroobEditId=\'\';renderContent()">إلغاء</button>':'') +
@@ -3075,7 +3075,7 @@ function saveKroob() {
     if(idx>=0){ entry={...kroob[idx],date,description:desc,operation_type:op_type,beneficiary,receiver,amount_dinar:dinar,amount_dollar:dollar,commission}; kroob[idx]=entry; }
     S.kroobEditId='';
   } else {
-    entry={id:'kr_'+Date.now(),date,description:desc,operation_type:op_type,beneficiary,receiver,amount_dinar:dinar,amount_dollar:dollar,commission,accountant:currentUser.email,time:Date.now()};
+    entry={id:'kr_'+Date.now(),date,description:desc,operation_type:op_type,beneficiary,receiver,amount_dinar:dinar,amount_dollar:dollar,commission,commission_dollar:parseFloat(document.getElementById('kr_comm_dollar')?.value||0),accountant:currentUser.email,time:Date.now()};
     kroob.push(entry);
   }
   kroob.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));

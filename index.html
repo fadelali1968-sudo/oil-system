@@ -2884,7 +2884,7 @@ function viewKroob() {
 
   const rows = listWithBal.map((e,i) => {
     const op = e.operation_type || 'صرف';
-    const isDeposit = op === 'إيداع';
+    const const isDeposit = op === 'إيداع';     const isDollar = parseFloat(e.amount_dollar||0) > 0 && parseFloat(e.amount_dinar||0) === 0;     return '<tr style="background:'+(isDollar?'#eff6ff':'')+'">' +
     return '<tr>' +
       '<td class="td" style="color:#94a3b8">'+(i+1)+'</td>' +
       '<td class="td">'+(e.date||'')+'</td>' +
@@ -2894,7 +2894,7 @@ function viewKroob() {
       '<td class="td" style="background:#fffbeb;color:#ca8a04;font-weight:900">'+fmtM(e.amount_dinar||0)+'</td>' +
       '<td class="td" style="background:#f8fafc;color:#0f172a;font-weight:900">'+fmtM(e.amount_dollar||0)+'</td>' +
       '<td class="td"><span class="badge" style="background:'+(isDeposit?'#ecfdf5':'#fef2f2')+';color:'+(isDeposit?'#059669':'#dc2626')+'">'+op+'</span></td>' +
-      '<td class="td" style="color:#059669;font-weight:900">'+fmtM(e.commission||0)+'</td>' +
+      '<td class="td" style="color:#059669;font-weight:900">'+fmtM(e.commission||0)+'</td>' +'<td class="td" style="color:#2563eb;font-weight:900">'+fmtM(e.commission_dollar||0)+'</td>' +
       '<td class="td" style="color:'+(e.bal_dinar>=0?'#059669':'#dc2626')+';font-weight:900">'+fmtM(e.bal_dinar)+'</td>' +
       '<td class="td" style="color:'+(e.bal_dollar>=0?'#2563eb':'#dc2626')+';font-weight:900">'+fmtM(e.bal_dollar)+'</td>' +
       (isManager() ?
@@ -2925,7 +2925,7 @@ function viewKroob() {
         '<div style="font-size:10px;color:#334155">$</div>' +
       '</div>' +
       '<div class="card" style="text-align:center;border-top:4px solid #059669">' +
-        '<div style="font-size:10px;color:#64748b;margin-bottom:4px">إجمالي العمولة</div>' +
+        '<div style="font-size:10px;color:#64748b;margin-bottom:4px">'<div style="font-size:10px;color:#64748b;margin-bottom:4px">عمولة دينار</div>' +' +
         '<div style="font-size:16px;font-weight:900;color:#059669">'+fmtM(allList.reduce((s,e)=>s+parseFloat(e.commission||0),0))+'</div>' +
         '<div style="font-size:10px;color:#94a3b8">د.ع</div>' +
       '</div>' +
@@ -2986,7 +2986,7 @@ function viewKroob() {
             '<th class="th" style="background:#065f46">💛 دينار</th>' +
             '<th class="th" style="background:#065f46">🖤 دولار</th>' +
             '<th class="th" style="background:#065f46">النوع</th>' +
-            '<th class="th" style="background:#065f46">عمولة</th>' +
+            '<th class="th" style="background:#065f46">عمولة دينار</th>'+'<th class="th" style="background:#065f46">عمولة دولار</th>' +
             '<th class="th" style="background:#065f46">رصيد دينار</th>' +
             '<th class="th" style="background:#065f46">رصيد دولار</th>' +
             (isManager() ? '<th class="th" style="background:#065f46">إجراء</th>' : '') +

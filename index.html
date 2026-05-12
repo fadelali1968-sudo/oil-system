@@ -2884,9 +2884,8 @@ function viewKroob() {
 
   const rows = listWithBal.map((e,i) => {
     const op = e.operation_type || 'صرف';
-    const isDeposit = op === 'إيداع';     const isDollar = parseFloat(e.amount_dollar||0) > 0 && parseFloat(e.amount_dinar||0) === 0;     return '<tr style="background:'+(isDollar?'#eff6ff':'')+'">' +
-    return '<tr style="background:'+(isDollar?'#eff6ff':'')+'">' +
-      '<td class="td" style="color:#94a3b8">'+(i+1)+'</td>' +
+    const isDeposit = op === 'إيداع';     const isDollar = parseFloat(e.amount_dollar||0) > 0 && parseFloat(e.amount_dinar||0) === 0;   
+   return '<tr style="background:'+(isDollar?'#eff6ff':'')+'">' +
       '<td class="td">'+(e.date||'')+'</td>' +
       '<td class="td" style="font-size:11px;text-align:right;max-width:160px">'+(e.description||'')+'</td>' +
       '<td class="td" style="font-size:11px">'+(e.beneficiary||'')+'</td>' +

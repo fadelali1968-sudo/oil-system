@@ -771,7 +771,7 @@ function copyWhatsapp() {
   txt+=`*🛢️ المشتريات:*\n`;
   for(const f of facts){const d=analysis[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmt(d.kg)} كغم\n`;}
   txt+=`\n*📦 المبيعات:*\n`;
-  for(const f of facts){const d=saleAn[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان | ${fmt(d.liters)} لتر\n`;}
+  for(const f of facts){const d=saleAn[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
   txt+=`\n✅ نظام المراقبة v40.0`;
   navigator.clipboard.writeText(txt).catch(()=>{});
   const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}

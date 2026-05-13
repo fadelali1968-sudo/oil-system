@@ -709,7 +709,7 @@ function viewWhatsapp() {
   const analysis=getAnalysis(wf,wt), saleAn=getSaleAnalysis(wf,wt), sf=S.selectedFactory;
   const facts=sf==='الكل'?FACTORIES:[sf];
   const periodLabel = wf&&wt ? wf+' → '+wt : wf ? 'من '+wf : wt ? 'إلى '+wt : 'الكلي';
-  const pRows=facts.map((f,i)=>{const d=analysis[f].total;return`<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900">${f}</td><td class="td">${d.cars}</td><td class="td" style="color:#2563eb;font-weight:900">${fmt(d.tons)}</td><td class="td" style="color:#059669;font-weight:900">${fmt(d.liters)}</td><td class="td" style="color:#d97706;font-weight:900">${fmt(d.kg)}</td><td class="td" style="font-weight:900">${fmtM(d.money)}</td></tr>`;}).join('');
+  const pRows=facts.map((f,i)=>{const d=analysis[f].total;return`<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900">${f}</td><td class="td">${d.cars}</td><td class="td" style="color:#2563eb;font-weight:900">${fmt(d.tons)}</td><td class="td" style="color:#059669;font-weight:900">${fmt(d.liters)}</td><td class="td" style="color:#d97706;font-weight:900">${fmt(d.kg)}</td></tr>`;}).join('');
   const sRows=facts.map((f,i)=>{const d=saleAn[f].total;return`<tr><td class="td-p" style="color:#94a3b8">${i+1}</td><td class="td-p" style="font-weight:900">${f}</td><td class="td-p">${d.cars}</td><td class="td-p" style="color:#7c3aed;font-weight:900">${fmtKaban(d.kaban)}</td></tr>`;}).join('');
   return`
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px" class="no-print">
@@ -735,7 +735,7 @@ function viewWhatsapp() {
   <h3 style="font-size:13px;font-weight:900;margin-bottom:8px;color:#1e40af">🛢️ المشتريات</h3>
   <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px">
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:500px">
-      <thead><tr><th class="th">ت</th><th class="th">المعمل</th><th class="th">السيارات</th><th class="th">أطنان</th><th class="th">لتر</th><th class="th">كغم</th><th class="th">المبالغ (د.ع)</th></tr></thead>
+      <thead><tr><th class="th">ت</th><th class="th">المعمل</th><th class="th">السيارات</th><th class="th">أطنان</th><th class="th">لتر</th><th class="th">كغم</th></tr></thead>
       <tbody>${pRows}</tbody>
     </table></div>
   </div>
@@ -769,7 +769,7 @@ function copyWhatsapp() {
   const period = wf&&wt ? wf+' → '+wt : wf ? 'من '+wf : wt ? 'إلى '+wt : 'الكلي';
   let txt=`*📊 الموقف الإجمالي — ${sf}*\n*الفترة:* ${period}\n*تاريخ التقرير:* ${today()}\n================================\n\n`;
   txt+=`*🛢️ المشتريات:*\n`;
-  for(const f of facts){const d=analysis[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmtM(d.money)} د.ع\n`;}
+  for(const f of facts){const d=analysis[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmt(d.kg)} كغم\n`;}
   txt+=`\n*📦 المبيعات:*\n`;
   for(const f of facts){const d=saleAn[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان | ${fmt(d.liters)} لتر\n`;}
   txt+=`\n✅ نظام المراقبة v40.0`;

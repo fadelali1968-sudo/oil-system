@@ -1403,7 +1403,7 @@ if(!importedRows.length){ window._importing = false; return; }
       const dName=(row.driver_name||'').toString().trim();
       const carNo=(row.car_no||'').toString().trim().replace(/\.0$/,'');
       const loc=(row.location||'').toString().trim();
-      const sale={id:'xl_s_'+Date.now()+'_'+i,driver_name:dName,car_no:carNo,date:parseXLDate(row.date),location:loc,address:(row.address||'').toString().trim(),product_type:(row.product_type||'').toString().trim(),kaban:parseFloat(row.kaban)||0,qty_liters:autoScale(row.qty_liters),advance:parseFloat(row.advance)||0,received:parseFloat(row.received)||0,car_source:(row.car_source||'').toString().trim(),factory,accountant:currentUser.email,time:Date.now()+i};
+      const sale={id:'xl_s_'+Date.now()+'_'+i,driver_name:dName,car_no:carNo,date:parseXLDate(row.date),location:loc,address:(row.address||'').toString().trim(),product_type:(row.product_type||'').toString().trim(),kaban:autoScale(row.kaban),qty_liters:autoScale(row.qty_liters),advance:parseFloat(row.advance)||0,received:parseFloat(row.received)||0,car_source:(row.car_source||'').toString().trim(),factory,accountant:currentUser.email,time:Date.now()+i};
       sales.push(sale);
       newSales.push(sale);
       if(dName)drivers[dName]={name:dName,car_no:carNo,location:loc};
@@ -2033,8 +2033,8 @@ function generatePDF(type) {
       <td>${i+1}</td><td>${e.factory}</td><td>${e.driver_name}</td>
       <td>${e.car_no}</td><td>${e.date}</td><td>${e.location}</td>
       <td>${e.address||''}</td><td>${e.product_type}</td>
-      <td style="color:#7c3aed;font-weight:900">${fmtM(e.kaban||0)}</td>
-      <td>${fmtM(e.qty_liters||0)}</td>
+      <td style="color:#7c3aed;font-weight:900">${fmtKaban(e.kaban)}</td>
+      
       <td>${fmtM(e.advance||0)}</td><td>${fmtM(e.received||0)}</td>
       <td>${e.car_source||''}</td>
     </tr>`).join('');

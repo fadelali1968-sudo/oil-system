@@ -903,7 +903,7 @@ function viewSaleForm() {
       </div>
       <div><label class="lbl">الكبان *</label><input class="inp" id="s_kaban" type="number" step="0.001" value="${e.kaban||''}"></div>
       <div><label class="lbl">كمية اللتر</label><input class="inp" id="s_liters" type="number" step="0.001" value="${e.qty_liters||''}"></div>
-      <div><label class="lbl">السلفة</label><input class="inp" id="s_advance" type="number" step="0.001" value="${e.advance||''}"></div>
+      <div><label class="lbl">أجرة السائق/طن</label><input class="inp" id="s_advance" type="number" step="0.001" value="${e.advance||''}"></div>
       <div><label class="lbl">الواصل</label><input class="inp" id="s_received" type="number" step="0.001" value="${e.received||''}"></div>
       <div><label class="lbl">مصدر السيارة</label><input class="inp" id="s_source" value="${e.car_source||''}"></div>
     </div>
@@ -1029,10 +1029,10 @@ function viewSaleTable(){
     <td class="td-p" style="font-size:11px">${e.address||''}</td>
     <td class="td-p" style="color:#7c3aed;font-weight:900">${e.product_type}</td>
     <td class="td-p" style="color:#7c3aed;font-weight:900">${fmtKaban(e.kaban)}</td>
-    <td class="td-p" style="color:#059669">${fmt(e.qty_liters)}</td>
+    <td class="td-p" 
     <td class="td-p">${fmtM(e.advance||0)}</td>
-    <td class="td-p">${fmtM(e.received||0)}</td>
-    <td class="td-p" style="font-size:11px">${e.car_source||''}</td>
+    <td class="td-p">${fmtM(e.received||0)}</td><td class="td-p" style="color:#1e3a8a;font-weight:900">${fmtM((e.advance||0)*(e.received||0))}</td>
+    <td class="td-p" style="font-size:11px">${e.car_source||e.factory||''}</td>
     ${isM?`<td class="td-p" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 8px;font-size:10px;margin-left:3px" onclick="editSale('${e.id}')">تعديل</button><button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteSale('${e.id}')">حذف</button></td>`:''}
   </tr>`).join('');
   const totKaban=list.reduce((s,e)=>s+parseFloat(e.kaban||0),0);
@@ -1061,7 +1061,7 @@ function viewSaleTable(){
         <thead style="position:sticky;top:0;z-index:1"><tr>
           <th class="th-p">ت</th><th class="th-p">السائق</th><th class="th-p">السيارة</th><th class="th-p">التاريخ</th>
           <th class="th-p">العائدية</th><th class="th-p">العنوان</th><th class="th-p">النوع</th><th class="th-p">الكبان</th>
-          <th class="th-p">لتر</th><th class="th-p">السلفة</th><th class="th-p">الواصل</th><th class="th-p">مصدر السيارة</th>
+          <th class="th-p">أجرة السائق/طن</th><th class="th-p">الواصل</th><th class="th-p">إجمالي المبلغ</th><th class="th-p">مصدر السيارة</th>
           ${isM?'<th class="th-p">إجراء</th>':''}
         </tr></thead>
         <tbody id="sales-tbody">${rows||`<tr><td colspan="${isM?13:12}" class="td-p" style="padding:30px;color:#94a3b8">لا توجد بيانات مبيعات</td></tr>`}</tbody>
@@ -1192,7 +1192,7 @@ function viewReports(){
   <div class="card" style="overflow:hidden;padding:0">
     <div style="padding:12px 16px;font-weight:900;font-size:12px;background:#faf5ff;border-bottom:1px solid #e9d5ff;color:#6d28d9">تفاصيل المبيعات</div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:700px">
-      <thead><tr><th class="th-p">ت</th><th class="th-p">المعمل</th><th class="th-p">السائق</th><th class="th-p">السيارة</th><th class="th-p">التاريخ</th><th class="th-p">العائدية</th><th class="th-p">العنوان</th><th class="th-p">النوع</th><th class="th-p">الكبان</th><th class="th-p">لتر</th></tr></thead>
+      <thead><tr><th class="th-p">ت</th><th class="th-p">المعمل</th><th class="th-p">السائق</th><th class="th-p">السيارة</th><th class="th-p">العائدية</th><th class="th-p">التاريخ</th><th class="th-p">العنوان</th><th class="th-p">النوع</th><th class="th-p">الكبان</th><th class="th-p">لتر</th></tr></thead>
       <tbody>${sRows||`<tr><td colspan="10" class="td-p" style="padding:20px;color:#94a3b8">لا بيانات</td></tr>`}</tbody>
     </table></div>
   </div>`;

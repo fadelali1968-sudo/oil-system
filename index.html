@@ -2885,7 +2885,7 @@ function viewKroob() {
   const rows = listWithBal.map((e,i) => {
     const op = e.operation_type || 'صرف';
     const isDeposit = op === 'إيداع';     const isDollar = parseFloat(e.amount_dollar||0) > 0 && parseFloat(e.amount_dinar||0) === 0;   
-   return '<tr style="background:'+(isDollar?'#eff6ff':'')+'">' +
+   return '<tr style="background:'+(isDollar?'#eff6ff':'')+'">' +'<td class="td" style="color:#94a3b8">'+(i+1)+'</td>' +
       '<td class="td">'+(e.date||'')+'</td>' +
       '<td class="td" style="font-size:11px;text-align:right;max-width:160px">'+(e.description||'')+'</td>' +
       '<td class="td" style="font-size:11px">'+(e.beneficiary||'')+'</td>' +
@@ -2925,7 +2925,7 @@ function viewKroob() {
       '</div>' +
       '<div class="card" style="text-align:center;border-top:4px solid #059669">' +
         '<div style="font-size:10px;color:#64748b;margin-bottom:4px">عمولة دينار</div>' +
-        '<div style="font-size:16px;font-weight:900;color:#059669">'+fmtM(allList.reduce((s,e)=>s+parseFloat(e.commission||0),0))+'</div>' +
+        '<div style="font-size:16px;font-weight:900;color:#059669">'+fmtM(allList.reduce((s,e)=>s+parseFloat(color:#94a3b8">د.ع</div>'+'</div>'+'<div class="card" style="text-align:center;border-top:4px solid #2563eb">'+'<div style="font-size:10px;color:#64748b;margin-bottom:4px">عمولة دولار</div>'+'<div style="font-size:16px;font-weight:900;color:#2563eb">'+fmtM(allList.reduce((s,e)=>s+parseFloat(e.commission_dollar||0),0))+'</div>'+'<div style="font-size:10px;color:#94a3b8">$</div>' ++'</div>' +
         '<div style="font-size:10px;color:#94a3b8">د.ع</div>' +
       '</div>' +
     '</div>' +

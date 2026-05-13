@@ -3161,7 +3161,7 @@ function importKroobXLSX(input) {
     const dinarCol =getCol(['الدينار العراقي','بالدينار']);
     const dollarCol=getCol(['الدولار','بالدولار']);
     const typeCol  =getCol(['نوع العملية']);
-    const commCol  =getCol(['عموله','عمولة']);
+    const commCol  =getCol(['عموله','عمولة']);       const commDollarCol =getCol(['تحويل دولار','عموله دولار']);
 
     // مسح البيانات القديمة قبل الاستيراد
     const oldKroob=DB.get('kroob',[]);
@@ -3188,7 +3188,7 @@ function importKroobXLSX(input) {
       const comm  =commCol>=0?parseFloat(String(row[commCol]).replace(/,/g,''))||0:0;
       if(!dinar&&!dollar&&!desc)continue;
       const id='kr_xl_'+r+'_'+Date.now();
-      const entry={id,date,description:desc,operation_type:opType||'صرف',beneficiary:benef,receiver:recv,amount_dinar:dinar,amount_dollar:dollar,commission:comm,accountant:'import',time:Date.now()+r};
+      const commDollar=commDollarCol>=0?parseFloat(String(row[commDollarCol]).replace(/,/g,''))||0:0;       const entry={id,date,description:desc,operation_type:opType||'صرف',beneficiary:benef,receiver:recv,amount_dinar:dinar,amount_dollar:dollar,commission:comm,commission_dollar:commDollar,accountant:'import',time:Date.now()+r};
       kroob.push(entry);
       FDB.save('kroob',id,entry);
       imported++;

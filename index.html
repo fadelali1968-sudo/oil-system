@@ -572,7 +572,7 @@ function viewDashboard() {
   const todayCars  = facts.reduce((s,f)=>s+analysis[f].today.cars, 0);
   const totalSaleCars = facts.reduce((s,f)=>s+saleAn[f].total.cars, 0);
   const totalKaban = facts.reduce((s,f)=>s+saleAn[f].total.kaban, 0);
-  const totalTons = facts.reduce((s,f)=>s+analysis[f].total.tons, 0);
+  const totalTons = facts.reduce((s,f)=>s+analysis[f].total.tons, 0);   const totalKg   = facts.reduce((s,f)=>s+analysis[f].total.kg,   0);
 
   const kpiCards = `
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">
@@ -591,7 +591,7 @@ function viewDashboard() {
       <div style="font-size:22px;font-weight:900;color:#059669">${fmt(totalLiters)}</div>
       <div style="font-size:10px;color:#94a3b8;margin-top:4px">لتر</div>
     </div>
-    <div class="card" style="text-align:center;border-top:4px solid #1e3a8a">
+    <div class="card" style="text-align:center;border-top:4px solid #d97706"><div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:6px">إجمالي الكغم</div><div style="font-size:22px;font-weight:900;color:#d97706">${fmt(totalKg)}</div><div style="font-size:10px;color:#94a3b8;margin-top:4px">كغم</div></div><div class="card" style="text-align:center;border-top:4px solid #1e3a8a">
       <div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:6px">إجمالي المبالغ</div>
       <div style="font-size:18px;font-weight:900;color:#1e3a8a">${fmtM(totalMoney)}</div>
       <div style="font-size:10px;color:#94a3b8;margin-top:4px">دينار عراقي</div>

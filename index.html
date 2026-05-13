@@ -710,7 +710,7 @@ function viewWhatsapp() {
   const facts=sf==='الكل'?FACTORIES:[sf];
   const periodLabel = wf&&wt ? wf+' → '+wt : wf ? 'من '+wf : wt ? 'إلى '+wt : 'الكلي';
   const pRows=facts.map((f,i)=>{const d=analysis[f].total;return`<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900">${f}</td><td class="td">${d.cars}</td><td class="td" style="color:#2563eb;font-weight:900">${fmt(d.tons)}</td><td class="td" style="color:#059669;font-weight:900">${fmt(d.liters)}</td><td class="td" style="color:#d97706;font-weight:900">${fmt(d.kg)}</td><td class="td" style="font-weight:900">${fmtM(d.money)}</td></tr>`;}).join('');
-  const sRows=facts.map((f,i)=>{const d=saleAn[f].total;return`<tr><td class="td-p" style="color:#94a3b8">${i+1}</td><td class="td-p" style="font-weight:900">${f}</td><td class="td-p">${d.cars}</td><td class="td-p" style="color:#7c3aed;font-weight:900">${fmtKaban(d.kaban)}</td><td class="td-p" style="color:#059669;font-weight:900">${fmt(d.liters)}</td></tr>`;}).join('');
+  const sRows=facts.map((f,i)=>{const d=saleAn[f].total;return`<tr><td class="td-p" style="color:#94a3b8">${i+1}</td><td class="td-p" style="font-weight:900">${f}</td><td class="td-p">${d.cars}</td><td class="td-p" style="color:#7c3aed;font-weight:900">${fmtKaban(d.kaban)}</td></tr>`;}).join('');
   return`
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px" class="no-print">
     <h2 style="font-size:15px;font-weight:900">الموقف الإجمالي للمدير المفوض</h2>
@@ -742,7 +742,7 @@ function viewWhatsapp() {
   <h3 style="font-size:13px;font-weight:900;margin-bottom:8px;color:#6d28d9">📦 المبيعات</h3>
   <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px">
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:400px">
-      <thead><tr><th class="th-p">ت</th><th class="th-p">المعمل</th><th class="th-p">السيارات</th><th class="th-p">كبان</th><th class="th-p">لتر</th></tr></thead>
+      <thead><tr><th class="th-p">ت</th><th class="th-p">المعمل</th><th class="th-p">السيارات</th><th class="th-p">كبان</th></tr></thead>
       <tbody>${sRows}</tbody>
     </table></div>
   </div>

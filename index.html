@@ -1059,8 +1059,8 @@ function viewSaleTable(){
     </div>
       <table style="width:100%;border-collapse:collapse;min-width:900px">
         <thead style="position:sticky;top:0;z-index:1"><tr>
-          <th class="th-p">ت</th><th class="th-p">السائق</th><th class="th-p">السيارة</th><th class="th-p">العائدية</th>
-          <th class="th-p">التاريخ</th><th class="th-p">العنوان</th><th class="th-p">النوع</th><th class="th-p">الكبان</th>
+          <th class="th-p">ت</th><th class="th-p">السائق</th><th class="th-p">السيارة</th><th class="th-p">التاريخ</th>
+          <th class="th-p">العائدية</th><th class="th-p">العنوان</th><th class="th-p">النوع</th><th class="th-p">الكبان</th>
           <th class="th-p">أجرة السائق/طن</th><th class="th-p">الواصل</th><th class="th-p">إجمالي المبلغ</th><th class="th-p">مصدر السيارة</th>
           ${isM?'<th class="th-p">إجراء</th>':''}
         </tr></thead>
@@ -1192,7 +1192,7 @@ function viewReports(){
   <div class="card" style="overflow:hidden;padding:0">
     <div style="padding:12px 16px;font-weight:900;font-size:12px;background:#faf5ff;border-bottom:1px solid #e9d5ff;color:#6d28d9">تفاصيل المبيعات</div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:700px">
-      <thead><tr><th class="th-p">ت</th><th class="th-p">المعمل</th><th class="th-p">السائق</th><th class="th-p">السيارة</th><th class="th-p">العائدية</th><th class="th-p">التاريخ</th><th class="th-p">العنوان</th><th class="th-p">النوع</th><th class="th-p">الكبان</th><th class="th-p">لتر</th></tr></thead>
+      <thead><tr><th class="th-p">ت</th><th class="th-p">المعمل</th><th class="th-p">السائق</th><th class="th-p">السيارة</th><th class="th-p">العائدية</th><th class="th-p">العائدية</th><th class="th-p">العنوان</th><th class="th-p">النوع</th><th class="th-p">الكبان</th><th class="th-p">لتر</th></tr></thead>
       <tbody>${sRows||`<tr><td colspan="10" class="td-p" style="padding:20px;color:#94a3b8">لا بيانات</td></tr>`}</tbody>
     </table></div>
   </div>`;

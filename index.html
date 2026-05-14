@@ -638,21 +638,21 @@ function viewDashboard() {
         <span class="badge" style="background:#ecfdf5;color:#059669;font-size:10px">مُراقب ✓</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div style="background:#f8fafc;border-radius:8px;padding:10px">
+        <div style="display:none">
           <p style="font-size:10px;color:#2563eb;font-weight:700;text-align:center;margin-bottom:6px">مشتريات اليوم</p>
           ${sr('السيارات',d.today.cars)} ${sr('لتر',fmt(d.today.liters),'#059669')} ${sr('المبلغ',fmtM(d.today.money),'#1e3a8a')}
         </div>
         <div style="background:#eff6ff;border-radius:8px;padding:10px">
           <p style="font-size:10px;color:#2563eb;font-weight:700;text-align:center;margin-bottom:6px">إجمالي المشتريات</p>
-          ${sr('السيارات',d.total.cars)} ${sr('لتر',fmt(d.total.liters),'#059669')} ${sr('المبلغ',fmtM(d.total.money),'#1e3a8a')}
+          ${sr('السيارات',d.total.cars)} ${sr('طن',fmt(d.total.tons),'#059669')} ${sr('المبلغ',fmtM(d.total.money),'#1e3a8a')}
         </div>
-        <div style="background:#fdf4ff;border-radius:8px;padding:10px">
+        <div style="display:none">
           <p style="font-size:10px;color:#7c3aed;font-weight:700;text-align:center;margin-bottom:6px">مبيعات اليوم</p>
           ${sr('السيارات',sd.today.cars)} ${sr('كبان',fmtKaban(sd.today.kaban),'#7c3aed')} ${sr('لتر',fmt(sd.today.liters),'#059669')}
         </div>
         <div style="background:#f5f3ff;border-radius:8px;padding:10px">
           <p style="font-size:10px;color:#7c3aed;font-weight:700;text-align:center;margin-bottom:6px">إجمالي المبيعات</p>
-          ${sr('السيارات',sd.total.cars)} ${sr('كبان',fmtKaban(sd.total.kaban),'#7c3aed')} ${sr('لتر',fmt(sd.total.liters),'#059669')}
+          ${sr('السيارات',sd.total.cars)} ${sr('كبان',fmtKaban(sd.total.kaban),'#7c3aed')} ${sr('المبلغ',fmtM(sd.total.money),'#1e3a8a')}
         </div>
       </div>
     </div>`;

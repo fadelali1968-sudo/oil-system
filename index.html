@@ -1409,7 +1409,7 @@ if(!importedRows.length){ window._importing = false; return; }
       if(dName)drivers[dName]={name:dName,car_no:carNo,location:loc};
       added++;
     });
-    sales.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+    if(newSales.length>0){var _fd=(newSales[0].date||'').toString();if(_fd&&!_fd.match(/\d{4}/)){newSales.forEach(function(s){var t=s.date;s.date=s.location;s.location=t;});}}sales.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
     DB.set('sales',sales);
     for(let i=0;i<newSales.length;i++){
       await FDB.save('sales',newSales[i].id,newSales[i]);
@@ -1735,11 +1735,13 @@ async function clearFactoryData(factory, type) {
     var allEntries=DB.get('entries',[]);
     deletedEntries=allEntries.filter(function(e){return e.factory===factory;});
     DB.set('entries', allEntries.filter(function(e){return e.factory!==factory;}));
+    deletedEntries.forEach(function(e){try{const{db,doc,deleteDoc}=window._fb;deleteDoc(doc(db,'entries',e.id));}catch(_){}});
   }
   if (type==='sales'||type==='all') {
     var allSales=DB.get('sales',[]);
     deletedSales=allSales.filter(function(s){return s.factory===factory;});
     DB.set('sales', allSales.filter(function(s){return s.factory!==factory;}));
+    deletedSales.forEach(function(s){try{const{db,doc,deleteDoc}=window._fb;deleteDoc(doc(db,'sales',s.id));}catch(_){}});
   }
   if (window._fbReady) {
     for (var i=0; i<deletedEntries.length; i++) await FDB.delete('entries', deletedEntries[i].id);

@@ -447,6 +447,7 @@ function render() {
     navItem('dashboard','اللوحة الرئيسية',''),
     // الموقف الإجمالي للمدير فقط
     isM ? navItem('whatsapp','الموقف الإجمالي 📱','color:#34d399') : '',
+    isM ? navItem('ports','⚓ موقف الموانئ','color:#7c3aed') : '',
     '<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">',
     '<p style="font-size:9px;color:#475569;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المشتريات</p>',
     navItem('form','مشتريات منتوج',''),
@@ -541,7 +542,7 @@ function renderContent() {
 
   const v=S.view;
   if(v==='dashboard')   c.innerHTML=viewDashboard();
-  else if(v==='whatsapp')   c.innerHTML=viewWhatsapp();
+  else if(v==='ports')        c.innerHTML=viewPorts();     else if(v==='whatsapp')   c.innerHTML=viewWhatsapp();
   else if(v==='form')       c.innerHTML=viewForm();
   else if(v==='table')      c.innerHTML=viewTable();
   else if(v==='sale_form')  c.innerHTML=viewSaleForm();
@@ -703,7 +704,15 @@ function viewDashboard() {
 }
 function sr(l,v,c=''){return`<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:#64748b">${l}:</span><span style="font-weight:900;color:${c||'#0f172a'}">${v}</span></div>`;}
 
-// ===== الموقف الإجمالي =====
+// ===== موقف الموانئ ===== function copyPortWhatsapp(){const txt=window._portWAText||'';if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>alert('✅ تم نسخ موقف الموانئ'));}else{const t=document.createElement('textarea');t.value=txt;document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);alert('✅ تم النسخ');}} function viewPorts(){const wf=S.wFrom,wt=S.wTo,sf=S.selectedFactory;const facts=sf==='الكل'?FACTORIES:[sf];const periodLabel=wf&&wt?wf+' إلى '+wt:wf?'من '+wf:wt?'إلى '+wt:'الكلي';const allSales=DB.get('sales',[]);const fs=allSales.filter(function(s){if(sf!=='الكل'&&s.factory!==sf)return false;if(wf&&(s.date||'')<wf)return false;if(wt&&(s.date||'')>wt)return false;return(s.address||'').includes('الخور')||(s.address||'').includes('الحرة');});let html='';let wa='⚓ موقف مبيعات الموانئ
+📅 '+periodLabel+'
+═══════════════
+
+';facts.forEach(function(fac){let fH='';let fT='🏭 '+fac+'
+';let ok=false;[['ميناء الخور','الخور'],['ميناء الحرة','الحرة']].forEach(function(p){const ps=fs.filter(function(s){return s.factory===fac&&(s.address||'').includes(p[1]);});if(ps.length){const c=ps.length;const k=ps.reduce(function(s,e){return s+(parseFloat(e.kaban)||0);},0);fH+='<div style="display:flex;justify-content:space-between;padding:8px 10px;background:#f5f3ff;border-radius:6px;margin:4px 0"><span style="color:#7c3aed;font-weight:700;font-size:13px">⛴ '+p[0]+'</span><span style="font-size:13px">🚗 <b>'+c+'</b> سيارة | كبان: <b style="color:#7c3aed">'+fmtKaban(k)+'</b></span></div>';fT+='  ⛴ '+p[0]+':
+    السيارات: '+c+' | الكبان: '+fmtKaban(k)+'
+';ok=true;}});if(ok){html+='<div style="margin-bottom:16px;border-right:4px solid #7c3aed;padding-right:10px"><div style="font-weight:900;color:#5b21b6;font-size:13px;margin-bottom:6px">🏭 '+fac+'</div>'+fH+'</div>';wa+=fT+'─────────────
+';}});window._portWAText=wa;if(!html)html='<div style="color:#94a3b8;text-align:center;padding:20px;font-size:13px">لا توجد بيانات للموانئ في هذه الفترة</div>';return '<div class="card no-print" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:15px;font-weight:900">⚓ موقف مبيعات الموانئ</h2><button class="btn btn-green" onclick="copyPortWhatsapp()">📋 نسخ الواتساب</button></div><div class="card no-print" style="margin-bottom:14px;background:#f8fafc;padding:14px"><div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap"><button class="btn btn-blue" style="font-size:12px" onclick="S.wFrom=today();S.wTo=today();renderContent()">اليوم فقط</button><button class="btn btn-gray" style="font-size:12px" onclick="setThisWeek()">هذا الأسبوع</button><button class="btn btn-gray" style="font-size:12px" onclick="setThisMonth()">هذا الشهر</button><button class="btn btn-red" style="font-size:12px" onclick="S.wFrom=\'\';S.wTo=\'\';renderContent()">مسح «الكلي»</button></div><div style="margin-top:8px;font-size:12px;color:#2563eb;font-weight:700">📅 الفترة: <span style="background:#eff6ff;padding:2px 10px;border-radius:6px">'+periodLabel+'</span></div></div><div class="card" style="padding:16px">'+html+'</div>';} // ===== الموقف الإجمالي =====
 function viewWhatsapp() {
   const wf=S.wFrom, wt=S.wTo;
   const analysis=getAnalysis(wf,wt), saleAn=getSaleAnalysis(wf,wt), sf=S.selectedFactory;

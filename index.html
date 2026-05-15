@@ -5581,5 +5581,205 @@ window.importRafidXLSX = function(input) {
 };
 console.log('✅ importRafidXLSX v3 — correct commission currency');
 </script>
+  <!-- PATCH: كشف يومي حسابات سيد رافد في الموقف الإجمالي -->
+<script>
+// ===== جلب حركات سيد رافد لتاريخ معين =====
+function getRafidByDate(date) {
+  return DB.get('rafid_accounts', []).filter(function(e){ return (e.date||'') === date; });
+}
+
+// ===== حساب الرصيد قبل تاريخ معين =====
+function getRafidBalanceBefore(date) {
+  var list = DB.get('rafid_accounts', []);
+  list.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || (a.time||0)-(b.time||0); });
+  var opening = DB.get('rafid_opening', {dinar:0, dollar:0});
+  var balDinar  = parseFloat(opening.dinar||0);
+  var balDollar = parseFloat(opening.dollar||0);
+  list.forEach(function(e){
+    if((e.date||'') >= date) return;
+    var d    = parseFloat(e.dinar||0);
+    var dl   = parseFloat(e.dollar||0);
+    var tdD  = (e.type_dinar  ||'مدين').trim();
+    var tdDol= (e.type_dollar ||'مدين').trim();
+    var comm = parseFloat(e.commission||0);
+    var commD= parseFloat(e.commission_dollar||0);
+    if(tdD  ==='دائن') balDinar  += d;  else balDinar  -= d;
+    if(tdDol==='دائن') balDollar += dl; else balDollar -= dl;
+    balDinar  -= comm;
+    balDollar -= commD;
+  });
+  return {dinar: balDinar, dollar: balDollar};
+}
+
+// ===== عرض قسم الكشف اليومي =====
+function renderRafidDailySection(date) {
+  var todayList = getRafidByDate(date);
+  var openingBal= getRafidBalanceBefore(date);
+  var balDinar  = openingBal.dinar;
+  var balDollar = openingBal.dollar;
+
+  if(!todayList.length) {
+    return '<div class="card" style="margin-bottom:14px;border-right:4px solid #f59e0b;padding:16px;background:#fffbeb">' +
+      '<h3 style="font-size:13px;font-weight:900;color:#92400e;margin-bottom:6px">💼 كشف حسابات سيد رافد — ' + date + '</h3>' +
+      '<p style="color:#94a3b8;font-size:12px">لا توجد حركات اليوم</p>' +
+    '</div>';
+  }
+
+  // بناء الصفوف
+  var rows = '';
+  todayList.forEach(function(e, i) {
+    var d     = parseFloat(e.dinar||0);
+    var dl    = parseFloat(e.dollar||0);
+    var tdD   = (e.type_dinar  ||'مدين').trim();
+    var tdDol = (e.type_dollar ||'مدين').trim();
+    var comm  = parseFloat(e.commission||0);
+    var commD = parseFloat(e.commission_dollar||0);
+    var isDainD  = tdD   === 'دائن';
+    var isDainDol= tdDol === 'دائن';
+
+    if(isDainD)   balDinar  += d;   else balDinar  -= d;
+    if(isDainDol) balDollar += dl;  else balDollar -= dl;
+    balDinar  -= comm;
+    balDollar -= commD;
+
+    var commCell = '';
+    if(comm && commD) commCell = fmtM(comm)+' د / $'+fmtM(commD);
+    else if(comm)     commCell = fmtM(comm)+' د';
+    else if(commD)    commCell = '$'+fmtM(commD);
+    else commCell = '—';
+
+    rows += '<tr>' +
+      '<td class="td" style="color:#94a3b8">'+(i+1)+'</td>' +
+      '<td class="td" style="font-size:11px;text-align:right;max-width:150px">'+(e.description||'')+'</td>' +
+      '<td class="td" style="font-size:11px">'+(e.receiver||'')+'</td>' +
+      '<td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">'+(isDainD&&d?fmtM(d):'')+'</td>' +
+      '<td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">'+(!isDainD&&d?fmtM(d):'')+'</td>' +
+      '<td class="td" style="background:#eff6ff;color:#2563eb;font-weight:900">'+(isDainDol&&dl?fmtM(dl):'')+'</td>' +
+      '<td class="td" style="background:#faf5ff;color:#7c3aed;font-weight:900">'+(!isDainDol&&dl?fmtM(dl):'')+'</td>' +
+      '<td class="td" style="font-size:11px"><span class="badge" style="background:#f1f5f9;color:#334155">'+(e.op_type||'')+'</span></td>' +
+      '<td class="td" style="color:#f59e0b;font-size:11px">'+commCell+'</td>' +
+      '<td class="td" style="color:'+(balDinar>=0?'#ca8a04':'#dc2626')+';font-weight:900">'+fmtM(balDinar)+'</td>' +
+      '<td class="td" style="color:'+(balDollar>=0?'#2563eb':'#dc2626')+';font-weight:900">'+fmtM(balDollar)+'</td>' +
+    '</tr>';
+  });
+
+  // إجماليات اليوم
+  var totalIn  = todayList.filter(function(e){ return e.type_dinar==='دائن'; }).reduce(function(s,e){ return s+parseFloat(e.dinar||0); },0);
+  var totalOut = todayList.filter(function(e){ return e.type_dinar!=='دائن'; }).reduce(function(s,e){ return s+parseFloat(e.dinar||0); },0);
+
+  // نص الواتساب
+  var N = '\n', L = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+  var wa = '💼 *كشف يومي — حسابات سيد رافد*\n📅 *'+date+'*\n'+L+N;
+  wa += '📊 *الرصيد السابق:*\n';
+  wa += '   💛 '+fmtM(openingBal.dinar)+' د.ع';
+  if(openingBal.dollar) wa += '  |  🖤 $ '+fmtM(openingBal.dollar);
+  wa += N+L+N;
+  wa += '📋 *الحركات ('+todayList.length+'):*\n';
+  todayList.forEach(function(e, i){
+    var isDainD = (e.type_dinar||'مدين')==='دائن';
+    var isDainDol=(e.type_dollar||'مدين')==='دائن';
+    var d  = parseFloat(e.dinar||0);
+    var dl = parseFloat(e.dollar||0);
+    var icon = isDainD ? '🟢' : '🔴';
+    var row  = icon+' '+(i+1)+'. '+(e.description||'');
+    if(e.receiver) row += ' | 👤 '+e.receiver;
+    if(d)  row += ' | '+(isDainD?'💛 +':'💛 -')+fmtM(d)+' د.ع';
+    if(dl) row += ' | '+(isDainDol?'💚 +':'💔 -')+fmtM(dl)+' $';
+    if(parseFloat(e.commission||0))        row += ' | عمولة: '+fmtM(e.commission)+' د.ع';
+    if(parseFloat(e.commission_dollar||0)) row += ' | عمولة $: '+fmtM(e.commission_dollar);
+    wa += row+N;
+  });
+  wa += L+N+'💰 *الرصيد الحالي:*\n';
+  wa += '   💛 '+fmtM(balDinar)+' د.ع';
+  if(balDollar) wa += '  |  🖤 $ '+fmtM(balDollar);
+  wa += N+L+'\n✅ نظام المراقبة v40.5';
+  window._rafidWaText = wa;
+
+  return (
+    '<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #f59e0b">' +
+      '<div style="padding:12px 16px;background:#92400e;display:flex;justify-content:space-between;align-items:center">' +
+        '<div>' +
+          '<span style="font-weight:900;font-size:14px;color:#fff">💼 كشف حسابات سيد رافد — '+date+'</span>' +
+          '<span class="badge" style="background:rgba(255,255,255,0.2);color:#fff;margin-right:8px">'+todayList.length+' حركة</span>' +
+        '</div>' +
+        '<button class="btn" style="background:#f59e0b;color:#fff;font-size:12px;padding:7px 14px" onclick="copyRafidDailyWhatsapp()">📱 نسخ للواتساب</button>' +
+      '</div>' +
+
+      // بطاقات الرصيد
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px">' +
+        '<div style="background:#fffbeb;border-radius:8px;padding:10px;text-align:center">' +
+          '<div style="font-size:10px;color:#92400e;font-weight:700">الرصيد السابق دينار</div>' +
+          '<div style="font-size:13px;font-weight:900;color:#ca8a04">'+fmtM(openingBal.dinar)+'</div>' +
+          (openingBal.dollar?'<div style="font-size:11px;color:#2563eb;font-weight:700">$ '+fmtM(openingBal.dollar)+'</div>':'') +
+        '</div>' +
+        '<div style="background:#ecfdf5;border-radius:8px;padding:10px;text-align:center">' +
+          '<div style="font-size:10px;color:#065f46;font-weight:700">🟢 إجمالي الدائن</div>' +
+          '<div style="font-size:13px;font-weight:900;color:#059669">'+fmtM(totalIn)+'</div>' +
+        '</div>' +
+        '<div style="background:#fef2f2;border-radius:8px;padding:10px;text-align:center">' +
+          '<div style="font-size:10px;color:#7f1d1d;font-weight:700">🔴 إجمالي المدين</div>' +
+          '<div style="font-size:13px;font-weight:900;color:#dc2626">'+fmtM(totalOut)+'</div>' +
+        '</div>' +
+        '<div style="background:'+(balDinar>=0?'#fffbeb':'#fef2f2')+';border-radius:8px;padding:10px;text-align:center;border:2px solid '+(balDinar>=0?'#fde68a':'#fecaca')+'">' +
+          '<div style="font-size:10px;color:#0f172a;font-weight:700">الرصيد الحالي</div>' +
+          '<div style="font-size:13px;font-weight:900;color:'+(balDinar>=0?'#ca8a04':'#dc2626')+'">'+fmtM(balDinar)+' د.ع</div>' +
+          (balDollar?'<div style="font-size:11px;font-weight:900;color:'+(balDollar>=0?'#2563eb':'#dc2626')+'">$ '+fmtM(balDollar)+'</div>':'') +
+        '</div>' +
+      '</div>' +
+
+      // جدول الحركات
+      '<div style="overflow-x:auto">' +
+        '<table style="width:100%;border-collapse:collapse;min-width:900px">' +
+          '<thead><tr>' +
+            '<th class="th" style="background:#92400e">ت</th>' +
+            '<th class="th" style="background:#92400e">البيان</th>' +
+            '<th class="th" style="background:#92400e">المستلم</th>' +
+            '<th class="th" style="background:#059669">🟢 دائن دينار</th>' +
+            '<th class="th" style="background:#dc2626">🔴 مدين دينار</th>' +
+            '<th class="th" style="background:#2563eb">🟢 دائن دولار</th>' +
+            '<th class="th" style="background:#7c3aed">🔴 مدين دولار</th>' +
+            '<th class="th" style="background:#92400e">النوع</th>' +
+            '<th class="th" style="background:#f59e0b">العمولة</th>' +
+            '<th class="th" style="background:#92400e">رصيد دينار</th>' +
+            '<th class="th" style="background:#92400e">رصيد دولار</th>' +
+          '</tr></thead>' +
+          '<tbody>' +
+            '<tr style="background:#fffbeb">' +
+              '<td class="td" colspan="3" style="font-weight:900;color:#92400e;text-align:right">الرصيد السابق</td>' +
+              '<td class="td" colspan="6"></td>' +
+              '<td class="td" style="color:#ca8a04;font-weight:900">'+fmtM(openingBal.dinar)+'</td>' +
+              '<td class="td" style="color:#2563eb;font-weight:900">'+fmtM(openingBal.dollar)+'</td>' +
+            '</tr>' +
+            rows +
+          '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+// ===== نسخ للواتساب =====
+window.copyRafidDailyWhatsapp = function() {
+  var text = window._rafidWaText || '';
+  if(navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(function(){ alert('✅ تم نسخ كشف سيد رافد!'); });
+  } else {
+    var t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);alert('✅ تم النسخ!');
+  }
+};
+
+// ===== إضافة القسم في الموقف الإجمالي =====
+var _origViewWhatsappRafid = window.viewWhatsapp;
+window.viewWhatsapp = function() {
+  var original = _origViewWhatsappRafid ? _origViewWhatsappRafid() : '';
+  var targetDate = S.wFrom && S.wTo && S.wFrom === S.wTo ? S.wFrom : (S.wFrom || today());
+  var rafidSection =
+    '<h3 style="font-size:13px;font-weight:900;margin-bottom:8px;margin-top:16px;color:#92400e">💼 كشف حسابات سيد رافد اليومي</h3>' +
+    renderRafidDailySection(targetDate);
+  return original + rafidSection;
+};
+
+console.log('✅ Rafid daily section in الموقف الإجمالي ready');
+</script>
 </body>
 </html>

@@ -3526,6 +3526,200 @@ window.autoFillSaleDriver = function(name) {
   console.log('✅ Driver list patch applied');
 })();
 </script>
+<!--
+  ╔══════════════════════════════════════════════════════╗
+  ║  PATCH: الكشف اليومي لكروب رافد فيصل               ║
+  ║  أضف هذا الكود قبل </body> في GitHub مباشرة        ║
+  ╚══════════════════════════════════════════════════════╝
+-->
+<script>
+// ===== الكشف اليومي للكروب =====
 
+// جلب حركات الكروب لتاريخ معين
+function getKroobByDate(date) {
+  var list = DB.get('kroob', []);
+  return list.filter(function(e){ return (e.date||'') === date; });
+}
+
+// حساب الرصيد قبل تاريخ معين
+function getKroobBalanceBefore(date) {
+  var list = DB.get('kroob', []);
+  list.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || (a.time||0)-(b.time||0); });
+  var opening = DB.get('kroob_opening', {dinar:0, dollar:0});
+  var balDinar  = parseFloat(opening.dinar||0);
+  var balDollar = parseFloat(opening.dollar||0);
+  list.forEach(function(e){
+    if((e.date||'') >= date) return;
+    var d = parseFloat(e.amount_dinar||0);
+    var dl = parseFloat(e.amount_dollar||0);
+    var op = (e.operation_type||'صرف').trim();
+    var comm = parseFloat(e.commission||0);
+    var commD = parseFloat(e.commission_dollar||0);
+    if(op==='إيداع'||op==='ايداع'){ balDinar+=d; balDollar+=dl; }
+    else { balDinar-=d; balDollar-=dl; }
+    balDinar -= comm; balDollar -= commD;
+  });
+  return {dinar: balDinar, dollar: balDollar};
+}
+
+// عرض قسم الكروب اليومي
+function renderKroobDailySection(date) {
+  var todayList = getKroobByDate(date);
+  var openingBal = getKroobBalanceBefore(date);
+  var balDinar  = openingBal.dinar;
+  var balDollar = openingBal.dollar;
+
+  if(!todayList.length) {
+    return '<div class="card" style="margin-bottom:14px;border-right:4px solid #34d399;padding:16px;background:#f0fdf4">' +
+      '<h3 style="font-size:13px;font-weight:900;color:#065f46;margin-bottom:6px">🏦 كشف الكروب اليومي — ' + date + '</h3>' +
+      '<p style="color:#94a3b8;font-size:12px">لا توجد حركات اليوم</p>' +
+    '</div>';
+  }
+
+  // بناء الصفوف مع الرصيد الجاري
+  var rows = '';
+  var prevBalD = balDinar, prevBalDol = balDollar;
+  todayList.forEach(function(e, i){
+    var d = parseFloat(e.amount_dinar||0);
+    var dl = parseFloat(e.amount_dollar||0);
+    var op = (e.operation_type||'صرف').trim();
+    var comm = parseFloat(e.commission||0);
+    var commDol = parseFloat(e.commission_dollar||0);
+    var isDeposit = op==='إيداع'||op==='ايداع';
+    if(isDeposit){ balDinar+=d; balDollar+=dl; }
+    else { balDinar-=d; balDollar-=dl; }
+    balDinar -= comm; balDollar -= commDol;
+
+    rows += '<tr>' +
+      '<td class="td" style="color:#94a3b8">'+(i+1)+'</td>' +
+      '<td class="td" style="font-size:11px;text-align:right;max-width:180px">'+(e.description||'')+'</td>' +
+      '<td class="td" style="font-size:11px">'+(e.beneficiary||'')+'</td>' +
+      '<td class="td" style="font-size:11px">'+(e.receiver||'')+'</td>' +
+      '<td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">'+(isDeposit&&d?fmtM(d):'')+'</td>' +
+      '<td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">'+(!isDeposit&&d?fmtM(d):'')+'</td>' +
+      '<td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">'+(isDeposit&&dl?fmtM(dl):'')+'</td>' +
+      '<td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">'+(!isDeposit&&dl?fmtM(dl):'')+'</td>' +
+      '<td class="td"><span class="badge" style="background:'+(isDeposit?'#ecfdf5':'#fef2f2')+';color:'+(isDeposit?'#059669':'#dc2626')+'">'+op+'</span></td>' +
+      '<td class="td" style="color:#f59e0b;font-weight:900">'+(comm?fmtM(comm):'')+'</td>' +
+      '<td class="td" style="color:'+(balDinar>=0?'#ca8a04':'#dc2626')+';font-weight:900">'+fmtM(balDinar)+'</td>' +
+      '<td class="td" style="color:'+(balDollar>=0?'#2563eb':'#dc2626')+';font-weight:900">'+fmtM(balDollar)+'</td>' +
+    '</tr>';
+  });
+
+  // إجماليات اليوم
+  var totalIn  = todayList.filter(function(e){var op=(e.operation_type||'').trim();return op==='إيداع'||op==='ايداع';}).reduce(function(s,e){return s+parseFloat(e.amount_dinar||0);},0);
+  var totalOut = todayList.filter(function(e){var op=(e.operation_type||'').trim();return op!=='إيداع'&&op!=='ايداع';}).reduce(function(s,e){return s+parseFloat(e.amount_dinar||0);},0);
+  var totalComm = todayList.reduce(function(s,e){return s+parseFloat(e.commission||0);},0);
+
+  // تخزين نص الواتساب
+  var waText = '🏦 *كشف يومي — كروب رافد فيصل*\n';
+  waText += '📅 التاريخ: ' + date + '\n';
+  waText += '================================\n';
+  waText += '💛 الرصيد السابق:\n';
+  waText += '   دينار: ' + fmtM(openingBal.dinar) + ' د.ع\n';
+  waText += '   دولار: ' + fmtM(openingBal.dollar) + ' $\n\n';
+  waText += '📋 حركات اليوم (' + todayList.length + '):\n';
+  todayList.forEach(function(e, i){
+    var op = e.operation_type||'صرف';
+    var icon = (op==='إيداع'||op==='ايداع') ? '🟢' : (op==='حواله'?'🔵':'🔴');
+    waText += icon + ' ' + (i+1) + '. ' + (e.description||'') + '\n';
+    if(parseFloat(e.amount_dinar||0)) waText += '   دينار: ' + fmtM(e.amount_dinar) + ' د.ع\n';
+    if(parseFloat(e.amount_dollar||0)) waText += '   دولار: ' + fmtM(e.amount_dollar) + ' $\n';
+    if(parseFloat(e.commission||0)) waText += '   عمولة: ' + fmtM(e.commission) + ' د.ع\n';
+  });
+  waText += '\n💰 *الرصيد الحالي:*\n';
+  waText += '   💛 دينار: ' + fmtM(balDinar) + ' د.ع\n';
+  waText += '   🖤 دولار: ' + fmtM(balDollar) + ' $\n';
+  if(totalComm) waText += '   💸 عمولة اليوم: ' + fmtM(totalComm) + ' د.ع\n';
+  waText += '\n✅ نظام المراقبة v40.5';
+  window._kroobWaText = waText;
+
+  return (
+    '<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #34d399">' +
+      '<div style="padding:12px 16px;background:#ecfdf5;border-bottom:1px solid #6ee7b7;display:flex;justify-content:space-between;align-items:center">' +
+        '<div>' +
+          '<span style="font-weight:900;font-size:14px;color:#065f46">🏦 كشف الكروب اليومي — ' + date + '</span>' +
+          '<span class="badge" style="background:#d1fae5;color:#059669;margin-right:8px">' + todayList.length + ' حركة</span>' +
+        '</div>' +
+        '<button class="btn btn-green" style="font-size:12px;padding:7px 14px" onclick="copyKroobWhatsapp()">📱 نسخ للواتساب</button>' +
+      '</div>' +
+
+      // بطاقات الرصيد
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px">' +
+        '<div style="background:#fffbeb;border-radius:8px;padding:10px;text-align:center">' +
+          '<div style="font-size:10px;color:#92400e;font-weight:700">الرصيد السابق (دينار)</div>' +
+          '<div style="font-size:14px;font-weight:900;color:#ca8a04">' + fmtM(openingBal.dinar) + '</div>' +
+        '</div>' +
+        '<div style="background:#ecfdf5;border-radius:8px;padding:10px;text-align:center">' +
+          '<div style="font-size:10px;color:#065f46;font-weight:700">إجمالي الإيداع</div>' +
+          '<div style="font-size:14px;font-weight:900;color:#059669">' + fmtM(totalIn) + '</div>' +
+        '</div>' +
+        '<div style="background:#fef2f2;border-radius:8px;padding:10px;text-align:center">' +
+          '<div style="font-size:10px;color:#7f1d1d;font-weight:700">إجمالي الصرف</div>' +
+          '<div style="font-size:14px;font-weight:900;color:#dc2626">' + fmtM(totalOut) + '</div>' +
+        '</div>' +
+        '<div style="background:'+(balDinar>=0?'#fffbeb':'#fef2f2')+';border-radius:8px;padding:10px;text-align:center;border:2px solid '+(balDinar>=0?'#fde68a':'#fecaca')+'">' +
+          '<div style="font-size:10px;color:#0f172a;font-weight:700">الرصيد الحالي (دينار)</div>' +
+          '<div style="font-size:14px;font-weight:900;color:'+(balDinar>=0?'#ca8a04':'#dc2626')+'">' + fmtM(balDinar) + '</div>' +
+          '<div style="font-size:11px;font-weight:900;color:'+(balDollar>=0?'#2563eb':'#dc2626')+'">$ ' + fmtM(balDollar) + '</div>' +
+        '</div>' +
+      '</div>' +
+
+      // جدول الحركات
+      '<div style="overflow-x:auto">' +
+        '<table style="width:100%;border-collapse:collapse;min-width:900px">' +
+          '<thead><tr>' +
+            '<th class="th" style="background:#065f46">ت</th>' +
+            '<th class="th" style="background:#065f46">البيان</th>' +
+            '<th class="th" style="background:#065f46">الجهة</th>' +
+            '<th class="th" style="background:#065f46">المستلم</th>' +
+            '<th class="th" style="background:#065f46">💛 دائن دينار</th>' +
+            '<th class="th" style="background:#065f46">🔴 مدين دينار</th>' +
+            '<th class="th" style="background:#065f46">💚 دائن دولار</th>' +
+            '<th class="th" style="background:#065f46">🔴 مدين دولار</th>' +
+            '<th class="th" style="background:#065f46">النوع</th>' +
+            '<th class="th" style="background:#065f46">العمولة</th>' +
+            '<th class="th" style="background:#065f46">رصيد دينار</th>' +
+            '<th class="th" style="background:#065f46">رصيد دولار</th>' +
+          '</tr></thead>' +
+          '<tbody>' +
+            '<tr style="background:#fffbeb">' +
+              '<td class="td" colspan="4" style="font-weight:900;color:#92400e;text-align:right">الرصيد السابق</td>' +
+              '<td class="td" colspan="6"></td>' +
+              '<td class="td" style="color:#ca8a04;font-weight:900">'+fmtM(openingBal.dinar)+'</td>' +
+              '<td class="td" style="color:#2563eb;font-weight:900">'+fmtM(openingBal.dollar)+'</td>' +
+            '</tr>' +
+            rows +
+          '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function copyKroobWhatsapp() {
+  var text = window._kroobWaText || '';
+  if(navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(function(){ alert('✅ تم نسخ كشف الكروب!'); });
+  } else {
+    var t = document.createElement('textarea');
+    t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t);
+    alert('✅ تم النسخ!');
+  }
+}
+
+// إعادة تعريف viewWhatsapp لإضافة قسم الكروب
+var _originalViewWhatsapp = window.viewWhatsapp;
+window.viewWhatsapp = function() {
+  var original = _originalViewWhatsapp ? _originalViewWhatsapp() : '';
+  var targetDate = S.wFrom && S.wTo && S.wFrom === S.wTo ? S.wFrom : (S.wFrom || today());
+  var kroobSection = '<h3 style="font-size:13px;font-weight:900;margin-bottom:8px;color:#065f46">🏦 الكشف اليومي للكروب</h3>' +
+    renderKroobDailySection(targetDate);
+  // أضف قسم الكروب في نهاية الصفحة
+  return original + kroobSection;
+};
+
+console.log('✅ Kroob daily report patch applied');
+</script>
 </body>
 </html>

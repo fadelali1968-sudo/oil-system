@@ -5410,8 +5410,43 @@ window.renderContent = function(){
   console.log('✅ renderContent — safe single override, no recursion');
 })();
 </script>
-  <!-- PATCH: إضافة زر مسح بيانات سيد رافد في الواجهة -->
+<!-- PATCH FIX: إصلاح زر مسح سيد رافد - بدون تعديل HTML -->
 <script>
+// إلغاء الـ override الخاطئ على viewRafidAccounts
+// واستبداله بحقن آمن عبر DOM فقط
+
+// مراقبة تغيير الصفحة وإضافة الزر بشكل آمن
+var _rafidClearObserver = new MutationObserver(function() {
+  if(S.view !== 'rafid_accounts') return;
+  if(document.getElementById('btn-clear-rafid-safe')) return;
+
+  // ابحث عن الـ div الذي يحتوي أزرار الرصيد الافتتاحي
+  var saveBtn = null;
+  document.querySelectorAll('button').forEach(function(b){
+    if(b.textContent.includes('حفظ') && b.getAttribute('onclick') === null) {
+      // تخطِّ
+    }
+    if(b.getAttribute('onclick') && b.getAttribute('onclick').includes('saveRafidOpening')) {
+      saveBtn = b;
+    }
+  });
+
+  if(saveBtn) {
+    var clearBtn = document.createElement('button');
+    clearBtn.id  = 'btn-clear-rafid-safe';
+    clearBtn.className = 'btn btn-red';
+    clearBtn.style.cssText = 'font-size:11px;padding:6px 14px;margin-right:8px';
+    clearBtn.textContent = '🗑️ مسح الكل';
+    clearBtn.onclick = function(e) {
+      e.stopPropagation();
+      window.clearRafidData();
+    };
+    saveBtn.parentNode.insertBefore(clearBtn, saveBtn.nextSibling);
+  }
+});
+
+_rafidClearObserver.observe(document.body, {childList:true, subtree:true});
+
 // مسح البيانات
 window.clearRafidData = function() {
   if(!confirm('مسح جميع بيانات حسابات سيد رافد؟')) return;
@@ -5425,57 +5460,13 @@ window.clearRafidData = function() {
         snap.docs.forEach(function(d){ fb.deleteDoc(fb.doc(fb.db,'rafid_accounts',d.id)); });
       });
       fb.deleteDoc(fb.doc(fb.db,'rafid_opening','opening'));
-    } catch(e){ console.warn(e); }
+    } catch(e){}
   }
   alert('✅ تم مسح جميع بيانات حسابات سيد رافد');
   renderContent();
 };
 
-// حقن الزر في الواجهة عند فتح صفحة حسابات سيد رافد
-var _origViewRafid = window.viewRafidAccounts;
-window.viewRafidAccounts = function() {
-  var html = _origViewRafid ? _origViewRafid() : '';
-  // أضف زر المسح بجانب زر الاستيراد
-  html = html.replace(
-    '📥 استيراد Excel',
-    '🗑️ مسح الكل</button><label class="btn btn-amber" style="font-size:11px;padding:6px 12px;cursor:pointer">📥 استيراد Excel'
-  );
-  // إذا لم ينجح البحث — أضف الزر في بداية الصفحة
-  if(html.indexOf('clearRafidData') === -1) {
-    html = '<div style="margin-bottom:10px;text-align:left">' +
-      '<button class="btn btn-red" style="font-size:12px;padding:8px 16px" onclick="clearRafidData()">🗑️ مسح كل بيانات سيد رافد</button>' +
-    '</div>' + html;
-  }
-  return html;
-};
-
-// أو: أضف الزر مباشرة في الـ DOM عند فتح الصفحة
-var _origRC_clear = window.renderContent;
-window.renderContent = function() {
-  _origRC_clear ? _origRC_clear() : null;
-  // إذا كنا في صفحة سيد رافد — أضف الزر إذا لم يكن موجوداً
-  if(S.view === 'rafid_accounts') {
-    setTimeout(function() {
-      if(document.getElementById('btn-clear-rafid')) return;
-      // ابحث عن منطقة الأزرار
-      var labels = document.querySelectorAll('label.btn-amber, label.btn-red');
-      for(var i=0; i<labels.length; i++) {
-        if(labels[i].textContent.includes('استيراد')) {
-          var btn = document.createElement('button');
-          btn.id = 'btn-clear-rafid';
-          btn.className = 'btn btn-red';
-          btn.style.cssText = 'font-size:11px;padding:6px 12px;margin-right:6px';
-          btn.textContent = '🗑️ مسح الكل';
-          btn.onclick = window.clearRafidData;
-          labels[i].parentNode.insertBefore(btn, labels[i]);
-          break;
-        }
-      }
-    }, 400);
-  }
-};
-
-console.log('✅ Rafid clear button ready');
+console.log('✅ Rafid clear button — safe DOM injection');
 </script>
 </body>
 </html>

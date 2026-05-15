@@ -4467,5 +4467,181 @@ window.viewRefineryAccount = function() {
 
 console.log('✅ Refinery account v3 — separate tables + white text');
 </script> 
+<!-- PATCH v4: حساب المصفى - إضافة عمود المبلغ المستلم والمبلغ المتبقي -->
+<script>
+window.viewRefineryAccount = function() {
+  var entries  = DB.get('entries', []);
+  var received = DB.get('refinery_received', {}); // {refinery: {factory: amount}}
+  var sf  = S.selectedFactory || 'الكل';
+  var wf  = S.wFrom || '', wt = S.wTo || '';
+  if(wf) entries = entries.filter(function(e){ return (e.date||'') >= wf; });
+  if(wt) entries = entries.filter(function(e){ return (e.date||'') <= wt; });
+  var facts       = (sf !== 'الكل') ? [sf] : FACTORIES;
+  var periodLabel = wf&&wt ? wf+' → '+wt : wf ? 'من '+wf : wt ? 'إلى '+wt : 'الكلي';
+  var PRICE = 42000;
+
+  function buildTable(refName, color) {
+    var rows = '', grandTons=0, grandAmt=0, grandRec=0, grandRem=0;
+    var recData = received[refName] || {};
+    var hasRows = false;
+
+    facts.forEach(function(f, i) {
+      var fe   = entries.filter(function(e){ return e.factory===f && e.refinery===refName; });
+      var tons = fe.reduce(function(s,e){ return s+(parseFloat(e.qty_tons)||0); },0);
+      if(!tons) return;
+      hasRows = true;
+      var amt  = tons * PRICE;
+      var rec  = parseFloat(recData[f]||0);
+      var rem  = amt - rec;
+      grandTons+=tons; grandAmt+=amt; grandRec+=rec; grandRem+=rem;
+
+      var safeRef = refName.replace(/\s+/g,'_');
+      var safeF   = f.replace(/\s+/g,'_').replace(/['"]/g,'');
+
+      rows += '<tr>' +
+        '<td class="td" style="color:#94a3b8">'+(i+1)+'</td>' +
+        '<td class="td" style="font-weight:900;color:#1e40af;font-size:13px">'+f+'</td>' +
+        '<td class="td" style="color:'+color+';font-weight:900;font-size:13px">'+fmt(tons)+'</td>' +
+        '<td class="td" style="color:#d97706;font-weight:900">'+fmtM(PRICE)+'</td>' +
+        '<td class="td" style="color:#1e3a8a;font-weight:900;font-size:13px;background:#eff6ff">'+fmtM(amt)+'</td>' +
+
+        // المبلغ المستلم — قابل للتعديل
+        '<td class="td" style="background:#ecfdf5">' +
+          '<input type="number" ' +
+            'id="rec_'+safeRef+'_'+safeF+'" ' +
+            'value="'+(rec||'')+'" ' +
+            'placeholder="0" ' +
+            'style="width:130px;border:1.5px solid #6ee7b7;border-radius:8px;padding:5px 8px;font-family:Cairo,sans-serif;font-size:12px;font-weight:700;text-align:center;background:#f0fdf4;color:#065f46" ' +
+            'onchange="saveRefineryReceived(\''+refName+'\',\''+f+'\',this.value)" ' +
+            'onblur="saveRefineryReceived(\''+refName+'\',\''+f+'\',this.value)">' +
+        '</td>' +
+
+        // المبلغ المتبقي
+        '<td class="td" style="font-weight:900;font-size:13px;color:'+(rem<=0?'#059669':'#dc2626')+';background:'+(rem<=0?'#ecfdf5':'#fef2f2')+'">' +
+          fmtM(Math.abs(rem)) + (rem<=0?' ✅':' ⚠️') +
+        '</td>' +
+      '</tr>';
+    });
+
+    if(!hasRows) {
+      rows = '<tr><td colspan="7" class="td" style="color:#94a3b8;padding:20px;text-align:center">لا توجد بيانات</td></tr>';
+    }
+
+    // صف الإجمالي — نص أبيض
+    var totalRow = '<tr style="background:'+color+'">' +
+      '<td class="td" style="color:#fff;font-weight:900" colspan="2">الإجمالي</td>' +
+      '<td class="td" style="color:#fff;font-weight:900;font-size:14px">'+fmt(grandTons)+'</td>' +
+      '<td class="td" style="color:#fff;font-weight:900">'+fmtM(PRICE)+'</td>' +
+      '<td class="td" style="color:#fff;font-weight:900;font-size:14px">'+fmtM(grandAmt)+'</td>' +
+      '<td class="td" style="color:#fff;font-weight:900;font-size:14px">'+fmtM(grandRec)+'</td>' +
+      '<td class="td" style="color:#fff;font-weight:900;font-size:14px">'+fmtM(Math.abs(grandRem))+(grandRem<=0?' ✅':' ⚠️')+'</td>' +
+    '</tr>';
+
+    return '<div class="card" style="overflow:hidden;padding:0;margin-bottom:18px">' +
+      '<div style="padding:12px 16px;background:'+color+';display:flex;justify-content:space-between;align-items:center">' +
+        '<span style="font-weight:900;font-size:14px;color:#fff">🏭 '+refName+'</span>' +
+        '<div style="display:flex;gap:8px;align-items:center">' +
+          '<span class="badge" style="background:rgba(255,255,255,0.2);color:#fff">إجمالي: '+fmtM(grandAmt)+'</span>' +
+          '<span class="badge" style="background:rgba(255,255,255,0.2);color:#fff">مستلم: '+fmtM(grandRec)+'</span>' +
+          '<span class="badge" style="background:'+(grandRem<=0?'#ecfdf5':'#fef2f2')+';color:'+(grandRem<=0?'#059669':'#dc2626')+'">متبقي: '+fmtM(Math.abs(grandRem))+(grandRem<=0?' ✅':' ⚠️')+'</span>' +
+        '</div>' +
+      '</div>' +
+      '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:700px">' +
+        '<thead><tr>' +
+          '<th class="th" style="background:'+color+'">ت</th>' +
+          '<th class="th" style="background:'+color+'">اسم المعمل</th>' +
+          '<th class="th" style="background:'+color+'">الكمية (طن)</th>' +
+          '<th class="th" style="background:'+color+'">سعر الطن</th>' +
+          '<th class="th" style="background:'+color+'">إجمالي المبلغ</th>' +
+          '<th class="th" style="background:#059669">💚 المبلغ المستلم</th>' +
+          '<th class="th" style="background:#dc2626">🔴 المبلغ المتبقي</th>' +
+        '</tr></thead>' +
+        '<tbody>'+rows+totalRow+'</tbody>' +
+      '</table></div>' +
+    '</div>';
+  }
+
+  // بطاقات الملخص الكلي
+  var recK = received['مصفى كربلاء']   || {};
+  var recS = received['مصفى صلاح الدين']|| {};
+  var allE = DB.get('entries',[]);
+  var totK = allE.filter(function(e){return e.refinery==='مصفى كربلاء';}).reduce(function(s,e){return s+(parseFloat(e.qty_tons)||0);},0);
+  var totS = allE.filter(function(e){return e.refinery==='مصفى صلاح الدين';}).reduce(function(s,e){return s+(parseFloat(e.qty_tons)||0);},0);
+  var amtK = totK*PRICE, amtS = totS*PRICE;
+  var recKtot = Object.values(recK).reduce(function(s,v){return s+parseFloat(v||0);},0);
+  var recStot = Object.values(recS).reduce(function(s,v){return s+parseFloat(v||0);},0);
+  var remK = amtK-recKtot, remS = amtS-recStot;
+
+  var cards = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">' +
+    '<div class="card" style="text-align:center;border-top:4px solid #0891b2">' +
+      '<div style="font-size:10px;color:#64748b;margin-bottom:4px">إجمالي مصفى كربلاء</div>' +
+      '<div style="font-size:16px;font-weight:900;color:#0891b2">'+fmtM(amtK)+'</div>' +
+      '<div style="font-size:10px;color:#94a3b8">'+fmt(totK)+' طن</div>' +
+    '</div>' +
+    '<div class="card" style="text-align:center;border-top:4px solid #7c3aed">' +
+      '<div style="font-size:10px;color:#64748b;margin-bottom:4px">إجمالي مصفى صلاح الدين</div>' +
+      '<div style="font-size:16px;font-weight:900;color:#7c3aed">'+fmtM(amtS)+'</div>' +
+      '<div style="font-size:10px;color:#94a3b8">'+fmt(totS)+' طن</div>' +
+    '</div>' +
+    '<div class="card" style="text-align:center;border-top:4px solid #1e3a8a;background:#eff6ff">' +
+      '<div style="font-size:10px;color:#1e3a8a;font-weight:700;margin-bottom:4px">💰 الإجمالي الكلي</div>' +
+      '<div style="font-size:18px;font-weight:900;color:#1e3a8a">'+fmtM(amtK+amtS)+'</div>' +
+      '<div style="font-size:11px;color:#059669;font-weight:700">مستلم: '+fmtM(recKtot+recStot)+'</div>' +
+      '<div style="font-size:11px;color:#dc2626;font-weight:700">متبقي: '+fmtM(Math.abs(remK+remS))+(remK+remS<=0?' ✅':' ⚠️')+'</div>' +
+    '</div>' +
+  '</div>';
+
+  var filterBar = '<div class="card no-print" style="margin-bottom:14px;background:#f8fafc;padding:12px">' +
+    '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">' +
+      '<div><label class="lbl">📅 من</label><input class="inp" type="date" id="ra_from" value="'+wf+'" style="width:150px" onchange="S.wFrom=this.value;renderContent()"></div>' +
+      '<div><label class="lbl">📅 إلى</label><input class="inp" type="date" id="ra_to" value="'+wt+'" style="width:150px" onchange="S.wTo=this.value;renderContent()"></div>' +
+      '<button class="btn btn-blue" style="font-size:12px" onclick="S.wFrom=today();S.wTo=today();renderContent()">اليوم</button>' +
+      '<button class="btn btn-gray" style="font-size:12px" onclick="setThisMonth()">هذا الشهر</button>' +
+      '<button class="btn btn-red" style="font-size:12px" onclick="S.wFrom=\'\';S.wTo=\'\';renderContent()">الكلي</button>' +
+      '<button class="btn btn-green" style="font-size:12px" onclick="exportRefineryXLSX()">📊 Excel</button>' +
+    '</div>' +
+    '<div style="margin-top:6px;font-size:12px;color:#2563eb;font-weight:700">📊 الفترة: <span style="background:#eff6ff;padding:2px 10px;border-radius:6px">'+periodLabel+'</span> | سعر الطن: <span style="background:#fef3c7;padding:2px 10px;border-radius:6px;color:#b45309">'+fmtM(PRICE)+' د.ع</span></div>' +
+  '</div>';
+
+  return '<div style="max-width:950px">' +
+    cards + filterBar +
+    buildTable('مصفى كربلاء',      '#0e7490') +
+    buildTable('مصفى صلاح الدين',  '#6d28d9') +
+  '</div>';
+};
+
+// حفظ المبلغ المستلم
+window.saveRefineryReceived = function(refinery, factory, value) {
+  var data = DB.get('refinery_received', {});
+  if(!data[refinery]) data[refinery] = {};
+  data[refinery][factory] = parseFloat(value)||0;
+  DB.set('refinery_received', data);
+  // تحديث المتبقي فوراً بدون إعادة رندر كامل
+  var PRICE = 42000;
+  var entries = DB.get('entries',[]);
+  var fe = entries.filter(function(e){ return e.factory===factory && e.refinery===refinery; });
+  var tons = fe.reduce(function(s,e){ return s+(parseFloat(e.qty_tons)||0); },0);
+  var amt  = tons * PRICE;
+  var rec  = parseFloat(value)||0;
+  var rem  = amt - rec;
+  // بحث عن خلية المتبقي وتحديثها
+  var safeRef = refinery.replace(/\s+/g,'_');
+  var safeF   = factory.replace(/\s+/g,'_').replace(/['"]/g,'');
+  var inp = document.getElementById('rec_'+safeRef+'_'+safeF);
+  if(inp) {
+    var row = inp.closest('tr');
+    if(row) {
+      var lastCell = row.cells[row.cells.length-1];
+      if(lastCell) {
+        lastCell.textContent = fmtM(Math.abs(rem)) + (rem<=0?' ✅':' ⚠️');
+        lastCell.style.color  = rem<=0 ? '#059669' : '#dc2626';
+        lastCell.style.background = rem<=0 ? '#ecfdf5' : '#fef2f2';
+      }
+    }
+  }
+};
+
+console.log('✅ Refinery account v4 — received + remaining columns');
+</script>  
 </body>
 </html>

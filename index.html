@@ -4643,40 +4643,6 @@ window.saveRefineryReceived = function(refinery, factory, value) {
 
 console.log('✅ Refinery account v4 — received + remaining columns');
 </script>  
- <!-- PATCH: نقل حساب المصفى فوق إدارة النظام -->
-<script>
-function injectRefineryNavItem() {
-  var nav = document.getElementById('sidebar-nav');
-  if(!nav) return;
-  // احذف القديم إن وجد
-  var old = document.getElementById('nav-refinery-btn');
-  if(old && old.parentNode) old.parentNode.remove();
 
-  // أنشئ الزر الجديد
-  var div = document.createElement('div');
-  div.style.cssText = 'border-top:1px solid #1e293b;margin-top:4px;padding-top:4px';
-  div.innerHTML = '<div id="nav-refinery-btn" class="nav-item ' + (S.view==='refinery_account'?'active':'') + '" style="color:#fbbf24" onclick="S.view=\'refinery_account\';renderContent();document.querySelectorAll(\'.nav-item\').forEach(function(x){x.classList.remove(\'active\');});this.classList.add(\'active\')">🏭 حساب المصفى</div>';
-
-  // ضعه فوق إدارة النظام
-  var adminItem = null;
-  nav.querySelectorAll('.nav-item').forEach(function(el){
-    if(el.textContent.includes('إدارة النظام')) adminItem = el;
-  });
-
-  if(adminItem) {
-    // أدرجه قبل الـ div الأب لـ إدارة النظام
-    var adminParent = adminItem.closest('div[style*="border-top"]') || adminItem;
-    nav.insertBefore(div, adminParent);
-  } else {
-    nav.appendChild(div);
-  }
-}
-
-// MutationObserver يعيد الحقن عند كل تغيير
-
-setTimeout(injectRefineryNavItem, 500);
-setTimeout(injectRefineryNavItem, 1500);
-console.log('✅ Refinery nav — above admin');
-</script> 
 </body>
 </html>

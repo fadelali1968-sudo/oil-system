@@ -5361,5 +5361,54 @@ window.renderContent = function(){
   console.log('✅ حسابات سيد رافد ready');
 })();
 </script>
+  <!-- PATCH FIX: إصلاح حلقة renderContent اللانهائية -->
+<script>
+(function() {
+  // حفظ النسخة الأصلية قبل أي تعديل
+  var _baseRenderContent = null;
+
+  // ابحث عن النسخة الأصلية (غير المُعدَّلة) عبر البحث في سلسلة التوارث
+  // نستعمل نسخة جديدة تتحكم بكل الـ views
+  function safeRenderContent() {
+    var c = document.getElementById('main-content');
+    if(!c) return;
+    var v = S.view;
+
+    // ===== صفحات الـ patches =====
+    if(v === 'refinery_account') {
+      if(window.viewRefineryAccount) c.innerHTML = window.viewRefineryAccount();
+      return;
+    }
+    if(v === 'rafid_accounts') {
+      if(window.viewRafidAccounts) c.innerHTML = window.viewRafidAccounts();
+      return;
+    }
+
+    // ===== باقي الصفحات — استدعِ الدالة الأصلية =====
+    if(v==='dashboard')        c.innerHTML = viewDashboard();
+    else if(v==='ports')       c.innerHTML = viewPorts();
+    else if(v==='whatsapp')    c.innerHTML = viewWhatsapp();
+    else if(v==='form')        c.innerHTML = viewForm();
+    else if(v==='table')       c.innerHTML = viewTable();
+    else if(v==='sale_form')   c.innerHTML = viewSaleForm();
+    else if(v==='sale_table')  c.innerHTML = viewSaleTable();
+    else if(v==='reports')     c.innerHTML = viewReports();
+    else if(v==='salaf')       c.innerHTML = viewSalafForm();
+    else if(v==='salaf_table') c.innerHTML = viewSalafTable();
+    else if(v==='expenses')    c.innerHTML = viewExpenses();
+    else if(v==='expenses_summary') c.innerHTML = viewExpensesSummary();
+    else if(v==='kroob')       c.innerHTML = viewKroob();
+    else if(v==='kroob_statement') c.innerHTML = viewKroobStatement();
+    else if(v==='import_p')    c.innerHTML = viewImport('purchases');
+    else if(v==='import_s')    c.innerHTML = viewImport('sales');
+    else if(v==='admin')       c.innerHTML = viewAdmin();
+    else if(v==='permissions') c.innerHTML = viewPermissions();
+  }
+
+  // استبدال آمن — مرة واحدة فقط
+  window.renderContent = safeRenderContent;
+  console.log('✅ renderContent — safe single override, no recursion');
+})();
+</script>
 </body>
 </html>

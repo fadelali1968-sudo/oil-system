@@ -3816,5 +3816,92 @@ window.copyKroobWhatsapp = function() {
 };
 console.log('✅ WhatsApp format updated — horizontal with receiver');
 </script>
+<!-- PATCH FIX v2: إظهار عمولة الدينار والدولار معاً في خلية واحدة -->
+<script>
+(function() {
+  // انتظر حتى يصبح renderKroobDailySection جاهزاً
+  function applyFix() {
+    var _orig = window.renderKroobDailySection;
+    if (!_orig) { setTimeout(applyFix, 500); return; }
+
+    window.renderKroobDailySection = function(date) {
+      // استدعِ النسخة الأصلية
+      var html = _orig(date);
+
+      // أعد بناء الصفوف مع عمولة الدولار
+      var todayList = getKroobByDate(date);
+      if (!todayList.length) return html;
+
+      var openingBal = getKroobBalanceBefore(date);
+      var balDinar  = openingBal.dinar;
+      var balDollar = openingBal.dollar;
+
+      var rows = '<tr style="background:#fffbeb">' +
+        '<td class="td" colspan="4" style="font-weight:900;color:#92400e;text-align:right">الرصيد السابق</td>' +
+        '<td class="td" colspan="5"></td>' +
+        '<td class="td" style="color:#ca8a04;font-weight:900">'+fmtM(openingBal.dinar)+'</td>' +
+        '<td class="td" style="color:#2563eb;font-weight:900">'+fmtM(openingBal.dollar)+'</td>' +
+      '</tr>';
+
+      todayList.forEach(function(e, i) {
+        var d     = parseFloat(e.amount_dinar||0);
+        var dl    = parseFloat(e.amount_dollar||0);
+        var op    = (e.operation_type||'صرف').trim();
+        var comm  = parseFloat(e.commission||0);
+        var commD = parseFloat(e.commission_dollar||0);
+        var isIn  = op==='إيداع'||op==='ايداع';
+
+        if(isIn){ balDinar+=d; balDollar+=dl; }
+        else    { balDinar-=d; balDollar-=dl; }
+        balDinar  -= comm;
+        balDollar -= commD;
+
+        // خلية العمولة تعرض الاثنين
+        var commCell = '';
+        if(comm && commD) {
+          commCell = '<span style="color:#f59e0b;font-weight:900;display:block">'+fmtM(comm)+' د.ع</span>' +
+                     '<span style="color:#2563eb;font-weight:900;display:block">$'+fmtM(commD)+'</span>';
+        } else if(comm) {
+          commCell = '<span style="color:#f59e0b;font-weight:900">'+fmtM(comm)+' د.ع</span>';
+        } else if(commD) {
+          commCell = '<span style="color:#2563eb;font-weight:900">$'+fmtM(commD)+'</span>';
+        } else {
+          commCell = '—';
+        }
+
+        rows += '<tr>' +
+          '<td class="td" style="color:#94a3b8">'+(i+1)+'</td>' +
+          '<td class="td" style="font-size:11px;text-align:right;max-width:150px">'+(e.description||'')+'</td>' +
+          '<td class="td" style="font-size:11px">'+(e.beneficiary||'')+'</td>' +
+          '<td class="td" style="font-size:11px">'+(e.receiver||'')+'</td>' +
+          '<td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">'+(isIn&&d?fmtM(d):'')+'</td>' +
+          '<td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">'+(!isIn&&d?fmtM(d):'')+'</td>' +
+          '<td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">'+(isIn&&dl?fmtM(dl):'')+'</td>' +
+          '<td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">'+(!isIn&&dl?fmtM(dl):'')+'</td>' +
+          '<td class="td"><span class="badge" style="background:'+(isIn?'#ecfdf5':'#fef2f2')+';color:'+(isIn?'#059669':'#dc2626')+'">'+op+'</span></td>' +
+          '<td class="td">'+commCell+'</td>' +
+          '<td class="td" style="color:'+(balDinar>=0?'#ca8a04':'#dc2626')+';font-weight:900">'+fmtM(balDinar)+'</td>' +
+          '<td class="td" style="color:'+(balDollar>=0?'#2563eb':'#dc2626')+';font-weight:900">'+fmtM(balDollar)+'</td>' +
+        '</tr>';
+      });
+
+      // استبدل جدول الصفوف القديم بالجديد
+      return html.replace(
+        /(<tbody>)([\s\S]*?)(<\/tbody>)/,
+        '$1' + rows + '$3'
+      );
+    };
+
+    console.log('✅ Commission dollar fix v2 applied');
+  }
+
+  // طبّق بعد تحميل الصفحة
+  if(document.readyState === 'complete') {
+    setTimeout(applyFix, 300);
+  } else {
+    window.addEventListener('load', function(){ setTimeout(applyFix, 300); });
+  }
+})();
+</script>  
 </body>
 </html>

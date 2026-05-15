@@ -5002,5 +5002,364 @@ window.renderContent = function(){
   console.log('✅ حسابات سيد رافد ready');
 })();
 </script>
+  <!-- PATCH: حسابات سيد رافد -->
+<script>
+// ===== حسابات سيد رافد =====
+
+function getRafidList() {
+  var list = DB.get('rafid_accounts', []);
+  list.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || (a.time||0)-(b.time||0); });
+  return list;
+}
+
+function calcRafidBalance(list) {
+  var opening = DB.get('rafid_opening', {dinar:0, dollar:0});
+  var balDinar  = parseFloat(opening.dinar||0);
+  var balDollar = parseFloat(opening.dollar||0);
+  return list.map(function(e) {
+    var dinar   = parseFloat(e.dinar||0);
+    var dollar  = parseFloat(e.dollar||0);
+    var comm    = parseFloat(e.commission||0);
+    var commD   = parseFloat(e.commission_dollar||0);
+    var typeD   = (e.type_dinar  || 'مدين').trim();
+    var typeDol = (e.type_dollar || 'مدين').trim();
+    if(typeD   === 'دائن') balDinar  += dinar;  else balDinar  -= dinar;
+    if(typeDol === 'دائن') balDollar += dollar; else balDollar -= dollar;
+    balDinar  -= comm;
+    balDollar -= commD;
+    return Object.assign({}, e, {bal_dinar: balDinar, bal_dollar: balDollar});
+  });
+}
+
+window.viewRafidAccounts = function() {
+  var list    = getRafidList();
+  var withBal = calcRafidBalance(list);
+  var opening = DB.get('rafid_opening', {dinar:0, dollar:0});
+  var editId  = S.rafidEditId || '';
+  var editData= editId ? list.find(function(e){ return e.id===editId; }) : null;
+  var lastRow = withBal[withBal.length-1];
+  var curBalD = lastRow ? lastRow.bal_dinar  : parseFloat(opening.dinar||0);
+  var curBalDol=lastRow ? lastRow.bal_dollar : parseFloat(opening.dollar||0);
+
+  // ===== جدول الحركات =====
+  var rows = withBal.map(function(e,i){
+    var isDainD   = (e.type_dinar  ||'مدين')==='دائن';
+    var isDainDol = (e.type_dollar ||'مدين')==='دائن';
+    var comm  = parseFloat(e.commission||0);
+    var commD = parseFloat(e.commission_dollar||0);
+    return '<tr>' +
+      '<td class="td" style="color:#94a3b8">'+(i+1)+'</td>' +
+      '<td class="td" style="font-size:11px">'+(e.date||'')+'</td>' +
+      '<td class="td" style="font-size:11px;text-align:right;max-width:160px">'+(e.description||'')+'</td>' +
+      '<td class="td" style="font-size:11px">'+(e.beneficiary||'')+'</td>' +
+      '<td class="td" style="font-size:11px">'+(e.receiver||'')+'</td>' +
+      // دائن دينار
+      '<td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">'+(isDainD&&e.dinar?fmtM(e.dinar):'')+'</td>' +
+      // مدين دينار
+      '<td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">'+(!isDainD&&e.dinar?fmtM(e.dinar):'')+'</td>' +
+      // دائن دولار
+      '<td class="td" style="background:#eff6ff;color:#2563eb;font-weight:900">'+(isDainDol&&e.dollar?fmtM(e.dollar):'')+'</td>' +
+      // مدين دولار
+      '<td class="td" style="background:#faf5ff;color:#7c3aed;font-weight:900">'+(!isDainDol&&e.dollar?fmtM(e.dollar):'')+'</td>' +
+      '<td class="td" style="font-size:11px"><span class="badge" style="background:#f1f5f9;color:#334155">'+(e.op_type||'')+'</span></td>' +
+      '<td class="td" style="color:#f59e0b;font-weight:900">'+(comm?fmtM(comm)+' د':'')+(commD?' / $'+fmtM(commD):'')+'</td>' +
+      '<td class="td" style="color:'+(e.bal_dinar>=0?'#ca8a04':'#dc2626')+';font-weight:900">'+fmtM(e.bal_dinar)+'</td>' +
+      '<td class="td" style="color:'+(e.bal_dollar>=0?'#2563eb':'#dc2626')+';font-weight:900">'+fmtM(e.bal_dollar)+'</td>' +
+      (isManager() ?
+        '<td class="td" style="white-space:nowrap">' +
+          '<button class="btn btn-gray" style="padding:3px 7px;font-size:10px;margin-left:3px" onclick="editRafid(\''+e.id+'\')">تعديل</button>' +
+          '<button class="btn btn-red" style="padding:3px 7px;font-size:10px" onclick="deleteRafid(\''+e.id+'\')">حذف</button>' +
+        '</td>' : '') +
+    '</tr>';
+  }).join('');
+
+  // ===== نموذج الإدخال =====
+  var opTypes = ['تحويل ماستر','صرف','تسليم','استلام الصيرفة','حوالة','راتب خارجي','سلف','أخرى'];
+  var opOpts  = opTypes.map(function(t){ return '<option value="'+t+'" '+(editData&&editData.op_type===t?'selected':'')+'>'+t+'</option>'; }).join('');
+
+  var form = '<div class="card" style="margin-bottom:14px;border-right:5px solid #f59e0b">' +
+    '<h3 style="font-size:13px;font-weight:900;margin-bottom:14px;color:#92400e">'+(editId?'✏️ تعديل حركة':'➕ إضافة حركة جديدة')+'</h3>' +
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">' +
+      '<div><label class="lbl">التاريخ *</label><input class="inp" id="rf_date" type="date" value="'+(editData?editData.date:today())+'"></div>' +
+      '<div style="grid-column:span 2"><label class="lbl">البيان *</label><input class="inp" id="rf_desc" placeholder="وصف الحركة..." value="'+(editData?editData.description||'':'')+'"></div>' +
+      '<div><label class="lbl">نوع العملية</label><select class="inp" id="rf_type"><option value="">اختر...</option>'+opOpts+'</select></div>' +
+      '<div><label class="lbl">الجهة المستفيدة</label><input class="inp" id="rf_benef" value="'+(editData?editData.beneficiary||'':'')+'"></div>' +
+      '<div><label class="lbl">المستلم / المسلم</label><input class="inp" id="rf_recv" value="'+(editData?editData.receiver||'':'')+'"></div>' +
+      // دينار
+      '<div><label class="lbl">💛 مبلغ الدينار</label><input class="inp" id="rf_dinar" type="number" placeholder="0" value="'+(editData?editData.dinar||'':'')+'"></div>' +
+      '<div><label class="lbl">اتجاه الدينار</label>' +
+        '<select class="inp" id="rf_type_dinar">' +
+          '<option value="مدين" '+((!editData||editData.type_dinar==='مدين')?'selected':'')+'>🔴 مدين (عليه)</option>' +
+          '<option value="دائن" '+(editData&&editData.type_dinar==='دائن'?'selected':'')+'>🟢 دائن (له)</option>' +
+        '</select>' +
+      '</div>' +
+      // دولار
+      '<div><label class="lbl">🖤 مبلغ الدولار</label><input class="inp" id="rf_dollar" type="number" placeholder="0" value="'+(editData?editData.dollar||'':'')+'"></div>' +
+      '<div><label class="lbl">اتجاه الدولار</label>' +
+        '<select class="inp" id="rf_type_dollar">' +
+          '<option value="مدين" '+((!editData||editData.type_dollar==='مدين')?'selected':'')+'>🔴 مدين (عليه)</option>' +
+          '<option value="دائن" '+(editData&&editData.type_dollar==='دائن'?'selected':'')+'>🟢 دائن (له)</option>' +
+        '</select>' +
+      '</div>' +
+      '<div><label class="lbl">عمولة دينار</label><input class="inp" id="rf_comm" type="number" placeholder="0" value="'+(editData?editData.commission||'':'')+'"></div>' +
+      '<div><label class="lbl">عمولة دولار</label><input class="inp" id="rf_comm_d" type="number" placeholder="0" value="'+(editData?editData.commission_dollar||'':'')+'"></div>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">' +
+      (editId?'<button class="btn btn-gray" onclick="S.rafidEditId=\'\';renderContent()">إلغاء</button>':'') +
+      '<button class="btn btn-amber" style="padding:10px 28px;font-size:14px" onclick="saveRafid()">'+(editId?'✅ حفظ التعديل':'💾 حفظ الحركة')+'</button>' +
+    '</div>' +
+    '<div id="rafid-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>' +
+  '</div>';
+
+  // ===== بطاقات الرصيد =====
+  var totalIn  = list.filter(function(e){ return e.type_dinar==='دائن'; }).reduce(function(s,e){ return s+parseFloat(e.dinar||0); },0);
+  var totalOut = list.filter(function(e){ return e.type_dinar!=='دائن'; }).reduce(function(s,e){ return s+parseFloat(e.dinar||0); },0);
+  var totalComm= list.reduce(function(s,e){ return s+parseFloat(e.commission||0); },0);
+  var totalCommD=list.reduce(function(s,e){ return s+parseFloat(e.commission_dollar||0); },0);
+
+  var balCards = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">' +
+    '<div class="card" style="text-align:center;border-top:4px solid #34d399"><div style="font-size:10px;color:#64748b;margin-bottom:3px">عدد الحركات</div><div style="font-size:22px;font-weight:900;color:#34d399">'+list.length+'</div></div>' +
+    '<div class="card" style="text-align:center;border-top:4px solid #059669;background:#ecfdf5"><div style="font-size:10px;color:#065f46;font-weight:700;margin-bottom:3px">🟢 إجمالي الدائن</div><div style="font-size:15px;font-weight:900;color:#059669">'+fmtM(totalIn)+'</div></div>' +
+    '<div class="card" style="text-align:center;border-top:4px solid #dc2626;background:#fef2f2"><div style="font-size:10px;color:#7f1d1d;font-weight:700;margin-bottom:3px">🔴 إجمالي المدين</div><div style="font-size:15px;font-weight:900;color:#dc2626">'+fmtM(totalOut)+'</div></div>' +
+    '<div class="card" style="text-align:center;border-top:4px solid #ca8a04;background:#fffbeb">' +
+      '<div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:3px">💛 رصيد الدينار الحالي</div>' +
+      '<div style="font-size:15px;font-weight:900;color:'+(curBalD>=0?'#ca8a04':'#dc2626')+'">'+fmtM(curBalD)+'</div>' +
+    '</div>' +
+    '<div class="card" style="text-align:center;border-top:4px solid #2563eb;background:#eff6ff">' +
+      '<div style="font-size:10px;color:#1e3a8a;font-weight:700;margin-bottom:3px">🖤 رصيد الدولار الحالي</div>' +
+      '<div style="font-size:15px;font-weight:900;color:'+(curBalDol>=0?'#2563eb':'#dc2626')+'">'+fmtM(curBalDol)+'</div>' +
+    '</div>' +
+  '</div>';
+
+  // ===== الرصيد الافتتاحي =====
+  var openingCard = '<div class="card" style="margin-bottom:14px;background:#f0fdf4;border:2px solid #34d399;padding:12px">' +
+    '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">' +
+      '<h4 style="font-size:12px;font-weight:900;color:#065f46;margin-left:10px;white-space:nowrap">💰 الرصيد الافتتاحي / الباقي من الشهر السابق:</h4>' +
+      '<div><label class="lbl">دينار</label><input class="inp" id="rf_op_dinar" type="number" value="'+opening.dinar+'" style="width:170px"></div>' +
+      '<div><label class="lbl">دولار</label><input class="inp" id="rf_op_dollar" type="number" value="'+opening.dollar+'" style="width:130px"></div>' +
+      '<button class="btn btn-green" style="font-size:12px;padding:7px 14px" onclick="saveRafidOpening()">💾 حفظ</button>' +
+      '<div style="display:flex;gap:8px;margin-right:auto">' +
+        '<label class="btn btn-amber" style="font-size:11px;padding:6px 12px;cursor:pointer">📥 استيراد Excel<input type="file" accept=".xlsx" style="display:none" onchange="importRafidXLSX(this)"></label>' +
+        '<button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="exportRafidXLSX()">📊 تصدير Excel</button>' +
+        '<button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="copyRafidWhatsapp()">📱 واتساب</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+
+  // ===== الجدول =====
+  var table = '<div class="card" style="overflow:hidden;padding:0">' +
+    '<div style="padding:12px 16px;background:#92400e;display:flex;justify-content:space-between;align-items:center">' +
+      '<span style="font-weight:900;font-size:14px;color:#fff">📋 سجل حركات حسابات سيد رافد</span>' +
+      '<span class="badge" style="background:#b45309;color:#fff">'+list.length+' حركة</span>' +
+    '</div>' +
+    '<div style="overflow-x:auto;max-height:500px;overflow-y:auto">' +
+      '<table style="width:100%;border-collapse:collapse;min-width:1100px">' +
+        '<thead style="position:sticky;top:0;z-index:1"><tr>' +
+          '<th class="th" style="background:#92400e">ت</th>' +
+          '<th class="th" style="background:#92400e">التاريخ</th>' +
+          '<th class="th" style="background:#92400e">البيان</th>' +
+          '<th class="th" style="background:#92400e">الجهة</th>' +
+          '<th class="th" style="background:#92400e">المستلم</th>' +
+          '<th class="th" style="background:#059669">🟢 دائن دينار</th>' +
+          '<th class="th" style="background:#dc2626">🔴 مدين دينار</th>' +
+          '<th class="th" style="background:#2563eb">🟢 دائن دولار</th>' +
+          '<th class="th" style="background:#7c3aed">🔴 مدين دولار</th>' +
+          '<th class="th" style="background:#92400e">نوع العملية</th>' +
+          '<th class="th" style="background:#f59e0b">العمولة</th>' +
+          '<th class="th" style="background:#92400e">رصيد دينار</th>' +
+          '<th class="th" style="background:#92400e">رصيد دولار</th>' +
+          (isManager() ? '<th class="th" style="background:#92400e">إجراء</th>' : '') +
+        '</tr></thead>' +
+        '<tbody>' +
+          '<tr style="background:#fffbeb">' +
+            '<td class="td" colspan="5" style="font-weight:900;color:#92400e;text-align:right">الرصيد الافتتاحي / الباقي من الشهر السابق</td>' +
+            '<td class="td" colspan="6"></td>' +
+            '<td class="td" style="color:#ca8a04;font-weight:900">'+fmtM(opening.dinar)+'</td>' +
+            '<td class="td" style="color:#2563eb;font-weight:900">'+fmtM(opening.dollar)+'</td>' +
+            (isManager() ? '<td class="td"></td>' : '') +
+          '</tr>' +
+          (rows||'<tr><td colspan="'+(isManager()?14:13)+'" class="td" style="padding:24px;color:#94a3b8;text-align:center">لا توجد حركات مسجلة</td></tr>') +
+        '</tbody>' +
+      '</table>' +
+    '</div>' +
+  '</div>';
+
+  return '<div style="max-width:1200px">' + balCards + openingCard + form + table + '</div>';
+};
+
+// ===== حفظ حركة =====
+window.saveRafid = function() {
+  var date    = gv('rf_date');
+  var desc    = gv('rf_desc');
+  var benef   = gv('rf_benef');
+  var recv    = gv('rf_recv');
+  var opType  = document.getElementById('rf_type')?.value||'';
+  var dinar   = parseFloat(document.getElementById('rf_dinar')?.value||0);
+  var typeDin = document.getElementById('rf_type_dinar')?.value||'مدين';
+  var dollar  = parseFloat(document.getElementById('rf_dollar')?.value||0);
+  var typeDol = document.getElementById('rf_type_dollar')?.value||'مدين';
+  var comm    = parseFloat(document.getElementById('rf_comm')?.value||0);
+  var commD   = parseFloat(document.getElementById('rf_comm_d')?.value||0);
+
+  if(!desc){ var m=el('rafid-msg'); if(m){m.style.display='block';m.style.background='#fef2f2';m.style.color='#dc2626';m.textContent='يرجى كتابة البيان';} return; }
+
+  var list   = DB.get('rafid_accounts',[]);
+  var editId = S.rafidEditId||'';
+  var entry  = {id:editId||('rf_'+Date.now()),date:date,description:desc,beneficiary:benef,receiver:recv,op_type:opType,dinar:dinar,type_dinar:typeDin,dollar:dollar,type_dollar:typeDol,commission:comm,commission_dollar:commD,accountant:currentUser.email,time:Date.now()};
+  if(editId){var idx=list.findIndex(function(e){return e.id===editId;});if(idx>=0)list[idx]=entry;else list.push(entry);}
+  else list.push(entry);
+  list.sort(function(a,b){return (a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0);});
+  DB.set('rafid_accounts',list);
+  FDB.save('rafid_accounts',entry.id,entry);
+  S.rafidEditId='';
+  var m=el('rafid-msg'); if(m){m.style.display='block';m.style.background='#ecfdf5';m.style.color='#065f46';m.textContent='✅ تم حفظ الحركة';}
+  setTimeout(function(){renderContent();},500);
+};
+
+window.editRafid   = function(id){S.rafidEditId=id;renderContent();setTimeout(function(){var f=el('rf_date');if(f)f.scrollIntoView({behavior:'smooth',block:'center'});},100);};
+window.deleteRafid = function(id){if(!confirm('حذف هذه الحركة؟'))return;DB.set('rafid_accounts',DB.get('rafid_accounts',[]).filter(function(e){return e.id!==id;}));FDB.delete('rafid_accounts',id);renderContent();};
+
+window.saveRafidOpening = function(){
+  var d=parseFloat(el('rf_op_dinar')?.value||0),dl=parseFloat(el('rf_op_dollar')?.value||0);
+  DB.set('rafid_opening',{dinar:d,dollar:dl});
+  FDB.save('rafid_opening','opening',{dinar:d,dollar:dl});
+  renderContent();
+};
+
+// ===== استيراد Excel =====
+window.importRafidXLSX = function(input) {
+  var file=input.files[0]; if(!file||typeof XLSX==='undefined')return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var wb=XLSX.read(e.target.result,{type:'array'});
+    var ws=wb.Sheets[wb.SheetNames[0]];
+    var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    // رصيد الباقي
+    var opDinar=0,opDollar=0;
+    for(var ri=0;ri<Math.min(rows.length,5);ri++){
+      var r=rows[ri]; var rs=r.map(function(v){return String(v||'');}).join('|');
+      if(rs.includes('الباقي')){
+        for(var ci=0;ci<r.length;ci++){var v=parseFloat(String(r[ci]).replace(/,/g,''));if(!isNaN(v)&&Math.abs(v)>10000&&Math.abs(v)>Math.abs(opDinar))opDinar=v;}
+        break;
+      }
+    }
+    DB.set('rafid_opening',{dinar:opDinar,dollar:opDollar});
+    // أعمدة البيانات — صف 2 هو الرأس (index 1)
+    var headers=rows[1]?rows[1].map(function(v){return String(v).trim();}):[];
+    function gc(names){for(var ni=0;ni<names.length;ni++){var idx=headers.findIndex(function(h){return h.includes(names[ni]);});if(idx>=0)return idx;}return -1;}
+    var dateC =gc(['التاريخ']),descC=gc(['البيان']),benefC=gc(['الجهه','الجهة']),recvC=gc(['المستلم']),
+        dinCC =gc(['دائن بالدينار','دائن بالدين']),dinDC=gc(['مدين بالدينار','مدين بالدين']),
+        dolCC =gc(['دائن بالدولار']),dolDC=gc(['مدين بالدولار']),
+        typeC =gc(['نوع العملية']),commC=gc(['عموله','عمولة']);
+    var list=[],imported=0;
+    for(var r2=2;r2<rows.length;r2++){
+      var row=rows[r2];
+      var num=String(row[0]).trim(); if(!num||isNaN(parseFloat(num)))continue;
+      var rawDate=dateC>=0?String(row[dateC]).trim():'';
+      var date2=''; var m1=rawDate.match(/^(\d{4})-(\d{2})-(\d{2})/);var m2=rawDate.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+      if(m1)date2=m1[1]+'-'+m1[2]+'-'+m1[3]; else if(m2)date2=m2[3]+'-'+m2[2].padStart(2,'0')+'-'+m2[1].padStart(2,'0');
+      else{var n=parseFloat(rawDate);if(!isNaN(n)&&n>40000){var dt=new Date((n-25569)*86400*1000);date2=dt.toISOString().split('T')[0];}}
+      var dinC2=dinCC>=0?parseFloat(String(row[dinCC]).replace(/,/g,''))||0:0;
+      var dinD2=dinDC>=0?parseFloat(String(row[dinDC]).replace(/,/g,''))||0:0;
+      var dolC2=dolCC>=0?parseFloat(String(row[dolCC]).replace(/,/g,''))||0:0;
+      var dolD2=dolDC>=0?parseFloat(String(row[dolDC]).replace(/,/g,''))||0:0;
+      if(!dinC2&&!dinD2&&!dolC2&&!dolD2)continue;
+      var comm2=commC>=0?parseFloat(String(row[commC]).replace(/,/g,''))||0:0;
+      var entry2={id:'rf_xl_'+r2+'_'+Date.now(),date:date2,
+        description:descC>=0?String(row[descC]).trim():'',
+        beneficiary:benefC>=0?String(row[benefC]).trim():'',
+        receiver:recvC>=0?String(row[recvC]).trim():'',
+        op_type:typeC>=0?String(row[typeC]).trim():'',
+        dinar:dinC2||dinD2, type_dinar:dinC2?'دائن':'مدين',
+        dollar:dolC2||dolD2,type_dollar:dolC2?'دائن':'مدين',
+        commission:comm2,commission_dollar:0,
+        accountant:'import',time:Date.now()+r2};
+      list.push(entry2); FDB.save('rafid_accounts',entry2.id,entry2); imported++;
+    }
+    list.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+    DB.set('rafid_accounts',list);
+    alert('✅ تم استيراد '+imported+' حركة بنجاح!');
+    input.value=''; renderContent();
+  };
+  reader.readAsArrayBuffer(file);
+};
+
+// ===== تصدير Excel =====
+window.exportRafidXLSX = function(){
+  if(typeof XLSX==='undefined')return;
+  var list=getRafidList(),withBal=calcRafidBalance(list);
+  var opening=DB.get('rafid_opening',{dinar:0,dollar:0});
+  var rows=[['ت','التاريخ','البيان','الجهة','المستلم','دائن دينار','مدين دينار','دائن دولار','مدين دولار','نوع العملية','العمولة','رصيد دينار','رصيد دولار']];
+  withBal.forEach(function(e,i){
+    var isDainD=(e.type_dinar||'مدين')==='دائن';var isDainDol=(e.type_dollar||'مدين')==='دائن';
+    rows.push([i+1,e.date,e.description,e.beneficiary||'',e.receiver||'',
+      isDainD?e.dinar:0,!isDainD?e.dinar:0,isDainDol?e.dollar:0,!isDainDol?e.dollar:0,
+      e.op_type||'',e.commission||0,e.bal_dinar,e.bal_dollar]);
+  });
+  var ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:4},{wch:13},{wch:30},{wch:18},{wch:20},{wch:14},{wch:14},{wch:14},{wch:14},{wch:18},{wch:12},{wch:16},{wch:14}];
+  var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'حسابات سيد رافد');
+  XLSX.writeFile(wb,'حسابات_سيد_رافد_'+today()+'.xlsx');
+};
+
+// ===== واتساب =====
+window.copyRafidWhatsapp = function(){
+  var list=getRafidList(),withBal=calcRafidBalance(list);
+  var opening=DB.get('rafid_opening',{dinar:0,dollar:0});
+  var last=withBal[withBal.length-1];
+  var N='\n',L='━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+  var t='💼 *حسابات سيد رافد*\n📅 *'+today()+'*\n'+L+N;
+  t+='📊 *الرصيد السابق:* 💛 '+fmtM(opening.dinar)+' د.ع'+N+L+N;
+  t+='📋 *الحركات ('+list.length+'):*\n';
+  withBal.forEach(function(e,i){
+    var isDainD=(e.type_dinar||'مدين')==='دائن';
+    var isDainDol=(e.type_dollar||'مدين')==='دائن';
+    var row=(isDainD?'🟢':'🔴')+' '+(i+1)+'. '+(e.description||'');
+    if(e.receiver) row+=' | 👤 '+e.receiver;
+    if(e.dinar)    row+=' | '+(isDainD?'💛 +':' 💛 -')+fmtM(e.dinar)+' د.ع';
+    if(e.dollar)   row+=' | '+(isDainDol?'💚 +':'💔 -')+fmtM(e.dollar)+' $';
+    if(e.commission) row+=' | عمولة: '+fmtM(e.commission);
+    t+=row+N;
+  });
+  t+=L+N+'💰 *الرصيد الحالي:*\n';
+  t+='   💛 '+fmtM(last?last.bal_dinar:opening.dinar)+' د.ع\n';
+  t+='   🖤 '+fmtM(last?last.bal_dollar:opening.dollar)+' $\n';
+  t+=L+'\n✅ نظام المراقبة v40.5';
+  if(navigator.clipboard)navigator.clipboard.writeText(t).then(function(){alert('✅ تم النسخ!');});
+  else{var tx=document.createElement('textarea');tx.value=t;document.body.appendChild(tx);tx.select();document.execCommand('copy');document.body.removeChild(tx);alert('✅ تم النسخ!');}
+};
+
+// ===== ربط الصفحة =====
+var _origRC_rafid = window.renderContent;
+window.renderContent = function(){
+  if(S.view==='rafid_accounts'){var c=el('main-content');if(c)c.innerHTML=window.viewRafidAccounts();return;}
+  if(_origRC_rafid)_origRC_rafid();
+};
+
+// ===== زر القائمة الجانبية =====
+(function(){
+  function injectRafidNav(){
+    var nav=document.getElementById('sidebar-nav'); if(!nav)return;
+    if(document.getElementById('nav-rafid-btn'))return;
+    var div=document.createElement('div');
+    div.style.cssText='border-top:1px solid #1e293b;margin-top:4px;padding-top:4px';
+    div.innerHTML='<p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">حسابات سيد رافد</p>'+
+      '<div id="nav-rafid-btn" class="nav-item" style="color:#fde68a" onclick="S.view=\'rafid_accounts\';document.querySelectorAll(\'.nav-item\').forEach(function(x){x.classList.remove(\'active\');});this.classList.add(\'active\');renderContent();">💼 حسابات سيد رافد</div>';
+    // ضعه فوق إدارة النظام
+    var placed=false;
+    nav.querySelectorAll('.nav-item').forEach(function(el){
+      if(!placed&&el.textContent.includes('إدارة النظام')){
+        var parent=el.parentNode;parent.insertBefore(div,el);placed=true;
+      }
+    });
+    if(!placed)nav.appendChild(div);
+  }
+  var _origR_rafid=window.render;
+  window.render=function(){if(_origR_rafid)_origR_rafid();setTimeout(injectRafidNav,300);};
+  setTimeout(injectRafidNav,800);
+  if(!S.rafidEditId) S.rafidEditId='';
+  console.log('✅ حسابات سيد رافد ready');
+})();
+</script>
 </body>
 </html>

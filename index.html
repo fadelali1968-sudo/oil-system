@@ -5781,5 +5781,55 @@ window.viewWhatsapp = function() {
 
 console.log('✅ Rafid daily section in الموقف الإجمالي ready');
 </script>
+  <!-- PATCH: الانتقال بـ Enter بين الحقول -->
+<script>
+(function() {
+  function applyEnterNav(container) {
+    var inputs = (container || document).querySelectorAll(
+      'input.inp:not([type="file"]):not([readonly]), select.inp, textarea.inp'
+    );
+    inputs.forEach(function(inp, idx) {
+      if(inp._enterPatched) return;
+      inp._enterPatched = true;
+      inp.addEventListener('keydown', function(e) {
+        if(e.key !== 'Enter') return;
+        e.preventDefault();
+        // ابحث عن التالي من نفس المجموعة
+        var all = Array.from((inp.closest('form') || inp.closest('.card') || document).querySelectorAll(
+          'input.inp:not([type="file"]):not([readonly]):not([disabled]), select.inp:not([disabled]), textarea.inp:not([disabled])'
+        )).filter(function(el) { return el.offsetParent !== null; }); // فقط المرئية
+        var cur = all.indexOf(inp);
+        if(cur >= 0 && cur < all.length - 1) {
+          var next = all[cur + 1];
+          next.focus();
+          if(next.select) next.select();
+        } else {
+          // آخر حقل — ابحث عن زر الحفظ وانقر عليه
+          var saveBtn = (inp.closest('.card') || document).querySelector(
+            'button.btn-blue, button.btn-green, button.btn-purple, button.btn-amber, button[onclick*="save"], button[onclick*="Save"]'
+          );
+          if(saveBtn) saveBtn.focus();
+        }
+      });
+    });
+  }
+
+  // طبّق على كل تغيير في الـ DOM
+  var _enterObs = new MutationObserver(function(mutations) {
+    mutations.forEach(function(m) {
+      m.addedNodes.forEach(function(node) {
+        if(node.nodeType === 1) applyEnterNav(node);
+      });
+    });
+  });
+  _enterObs.observe(document.body, {childList: true, subtree: true});
+
+  // طبّق على الحقول الموجودة حالياً
+  setTimeout(function(){ applyEnterNav(); }, 500);
+  setTimeout(function(){ applyEnterNav(); }, 1500);
+
+  console.log('✅ Enter key navigation applied to all input fields');
+})();
+</script>
 </body>
 </html>

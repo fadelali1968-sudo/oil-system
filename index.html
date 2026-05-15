@@ -3721,5 +3721,100 @@ window.viewWhatsapp = function() {
 
 console.log('✅ Kroob daily report patch applied');
 </script>
+  <!-- PATCH: تحديث شكل رسالة الواتساب - أفقية مع اسم المستلم -->
+<script>
+window.copyKroobWhatsapp = function() {
+  var date = S.wFrom && S.wTo && S.wFrom === S.wTo ? S.wFrom : (S.wFrom || today());
+  var todayList = getKroobByDate(date);
+  var openingBal = getKroobBalanceBefore(date);
+  var balDinar  = openingBal.dinar;
+  var balDollar = openingBal.dollar;
+
+  // حساب الرصيد الختامي
+  todayList.forEach(function(e){
+    var d  = parseFloat(e.amount_dinar||0);
+    var dl = parseFloat(e.amount_dollar||0);
+    var op = (e.operation_type||'صرف').trim();
+    var comm  = parseFloat(e.commission||0);
+    var commD = parseFloat(e.commission_dollar||0);
+    if(op==='إيداع'||op==='ايداع'){ balDinar+=d; balDollar+=dl; }
+    else { balDinar-=d; balDollar-=dl; }
+    balDinar -= comm; balDollar -= commD;
+  });
+
+  var totalComm  = todayList.reduce(function(s,e){return s+parseFloat(e.commission||0);},0);
+  var totalCommD = todayList.reduce(function(s,e){return s+parseFloat(e.commission_dollar||0);},0);
+
+  var N = '\n';
+  var line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+
+  var txt = '';
+  txt += '🏦 *كشف يومي — كروب رافد فيصل*' + N;
+  txt += '📅 *' + date + '*' + N;
+  txt += line + N;
+
+  // الرصيد السابق
+  txt += '📊 *الرصيد السابق:*' + N;
+  txt += '   💛 ' + fmtM(openingBal.dinar) + ' د.ع';
+  if(openingBal.dollar) txt += '  |  🖤 $ ' + fmtM(openingBal.dollar);
+  txt += N + line + N;
+
+  // الحركات — كل حركة في سطر واحد أفقي
+  txt += '📋 *الحركات (' + todayList.length + '):*' + N;
+  todayList.forEach(function(e, i){
+    var op    = (e.operation_type||'صرف').trim();
+    var isIn  = op==='إيداع'||op==='ايداع';
+    var icon  = isIn ? '🟢' : (op==='حواله' ? '🔵' : '🔴');
+    var d     = parseFloat(e.amount_dinar||0);
+    var dl    = parseFloat(e.amount_dollar||0);
+    var comm  = parseFloat(e.commission||0);
+    var commD = parseFloat(e.commission_dollar||0);
+    var desc  = e.description || '';
+    var benef = e.beneficiary || '';
+    var recv  = e.receiver    || '';
+
+    // سطر أفقي: أيقونة | رقم | البيان | الجهة | المستلم | النوع | المبلغ | العمولة
+    var row = icon + ' ' + (i+1) + '.';
+    if(desc)  row += ' ' + desc;
+    if(benef) row += ' | 🏢 ' + benef;
+    if(recv)  row += ' | 👤 ' + recv;
+    row += ' | ' + op;
+    if(d)  row += ' | 💛 ' + fmtM(d) + ' د.ع';
+    if(dl) row += ' | 🖤 $ ' + fmtM(dl);
+    if(comm)  row += ' | عمولة: ' + fmtM(comm) + ' د.ع';
+    if(commD) row += ' | عمولة $: ' + fmtM(commD);
+    txt += row + N;
+  });
+
+  txt += line + N;
+
+  // العموالات
+  if(totalComm || totalCommD) {
+    txt += '💸 *عمولة اليوم:*';
+    if(totalComm)  txt += ' ' + fmtM(totalComm) + ' د.ع';
+    if(totalCommD) txt += '  |  $ ' + fmtM(totalCommD);
+    txt += N;
+  }
+
+  // الرصيد الختامي
+  txt += line + N;
+  txt += '💰 *الرصيد الحالي:*' + N;
+  txt += '   💛 ' + fmtM(balDinar) + ' د.ع';
+  if(balDollar) txt += '  |  🖤 $ ' + fmtM(balDollar);
+  txt += N;
+  txt += line + N;
+  txt += '✅ نظام المراقبة v40.5';
+
+  if(navigator.clipboard) {
+    navigator.clipboard.writeText(txt).then(function(){ alert('✅ تم نسخ الكشف!'); });
+  } else {
+    var t = document.createElement('textarea');
+    t.value = txt; document.body.appendChild(t); t.select();
+    document.execCommand('copy'); document.body.removeChild(t);
+    alert('✅ تم النسخ!');
+  }
+};
+console.log('✅ WhatsApp format updated — horizontal with receiver');
+</script>
 </body>
 </html>

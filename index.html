@@ -1697,10 +1697,22 @@ function saveUserPermissions(emailOrEl) {
 
 function deleteUser(email) {
   if (!email) return;
-  if (!confirm('حذف المستخدم؟')) return;
-  var u = DB.get('users', {}); delete u[uid(email)]; DB.set('users', u); renderContent();
+  if (!confirm('حذف ' + email + '؟\nسيُحذف من Firebase نهائياً.')) return;
+  var key = uid(email);
+  var u = DB.get('users', {});
+  delete u[key];
+  DB.set('users', u);
+  var deleted = DB.get('deleted_users', []);
+  if (!deleted.includes(key)) { deleted.push(key); DB.set('deleted_users', deleted); }
+  if (window._fbReady) {
+    try { window._fb.deleteDoc(window._fb.doc(window._fb.db, 'users', key)); } catch(e) {}
+  }
+  setTimeout(function() {
+    var m = document.getElementById('admin-msg');
+    if (m) { m.style.display='block'; m.style.background='#ecfdf5'; m.style.color='#059669'; m.textContent='✅ تم حذف '+email+' من Firebase نهائياً'; }
+  }, 200);
+  renderContent();
 }
-
 
 function clearKroobData() {
   if(!confirm('مسح جميع حركات الكروب؟')) return;

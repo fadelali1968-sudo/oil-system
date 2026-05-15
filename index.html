@@ -4673,8 +4673,7 @@ function injectRefineryNavItem() {
 }
 
 // MutationObserver يعيد الحقن عند كل تغيير
-var _rafObs = new MutationObserver(function(){ injectRefineryNavItem(); });
-_rafObs.observe(document.body, { childList:true, subtree:true });
+
 setTimeout(injectRefineryNavItem, 500);
 setTimeout(injectRefineryNavItem, 1500);
 console.log('✅ Refinery nav — above admin');

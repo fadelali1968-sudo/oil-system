@@ -5468,5 +5468,118 @@ window.clearRafidData = function() {
 
 console.log('✅ Rafid clear button — safe DOM injection');
 </script>
+  <!-- PATCH FIX: إصلاح عمولة الدولار في استيراد حسابات سيد رافد -->
+<script>
+window.importRafidXLSX = function(input) {
+  var file = input.files[0];
+  if(!file || typeof XLSX === 'undefined') return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var wb   = XLSX.read(e.target.result, {type:'array'});
+    var ws   = wb.Sheets[wb.SheetNames[0]];
+    var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+    var headers = rows[1] ? rows[1].map(function(v){ return String(v||'').trim(); }) : [];
+    function gc(names) {
+      for(var ni=0; ni<names.length; ni++) {
+        var idx = headers.findIndex(function(h){ return h.includes(names[ni]); });
+        if(idx >= 0) return idx;
+      }
+      return -1;
+    }
+
+    var balDinarCol   = gc(['رصيد الدينار']);
+    var balDollarCol  = gc(['رصيد الدولار']);
+    var dainDinarCol  = gc(['دائن بالدينار']);
+    var madinDinarCol = gc(['مدين بالدينار']);
+    var dainDollarCol = gc(['دائن بالدولار']);
+    var madinDollarCol= gc(['مدين بالدولار']);
+    var dateCol       = gc(['التاريخ']);
+    var descCol       = gc(['البيان']);
+    var benefCol      = gc(['الجهه','الجهة']);
+    var recvCol       = gc(['المستلم']);
+    var typeCol       = gc(['نوع العملية']);
+    var commCol       = gc(['عموله','عمولة']);
+
+    // ===== الرصيد الافتتاحي من صف "الباقي" =====
+    var opDinar = 0, opDollar = 0;
+    for(var ri=0; ri<Math.min(rows.length,8); ri++) {
+      var rowStr = rows[ri].map(function(v){ return String(v||''); }).join('|');
+      if(rowStr.includes('الباقي')) {
+        // اقرأ رصيد الدينار مباشرة (سالب أو موجب)
+        if(balDinarCol >= 0) {
+          var rd = parseFloat(String(rows[ri][balDinarCol]||'').replace(/,/g,''));
+          if(!isNaN(rd)) opDinar = rd;
+        }
+        if(balDollarCol >= 0) {
+          var rdol = parseFloat(String(rows[ri][balDollarCol]||'').replace(/,/g,''));
+          if(!isNaN(rdol)) opDollar = rdol;
+        }
+        console.log('Opening balance — Dinar:', opDinar, 'Dollar:', opDollar);
+        break;
+      }
+    }
+    DB.set('rafid_opening', {dinar: opDinar, dollar: opDollar});
+    if(window._fbReady) FDB.save('rafid_opening', 'opening', {dinar: opDinar, dollar: opDollar});
+
+    // ===== استيراد الحركات =====
+    var list = [], imported = 0;
+    for(var r=2; r<rows.length; r++) {
+      var row2 = rows[r];
+      var num  = String(row2[0]).trim();
+      if(!num || isNaN(parseFloat(num))) continue;
+
+      var rawDate = dateCol>=0 ? String(row2[dateCol]).trim() : '';
+      var date2 = '';
+      var m1=rawDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      var m2=rawDate.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+      if(m1) date2=m1[1]+'-'+m1[2]+'-'+m1[3];
+      else if(m2) date2=m2[3]+'-'+m2[2].padStart(2,'0')+'-'+m2[1].padStart(2,'0');
+      else { var n=parseFloat(rawDate); if(!isNaN(n)&&n>40000){var dt=new Date((n-25569)*86400*1000);date2=dt.toISOString().split('T')[0];} }
+
+      var dainD   = dainDinarCol >=0 ? parseFloat(String(row2[dainDinarCol] ||'').replace(/,/g,''))||0 : 0;
+      var madinD  = madinDinarCol>=0 ? parseFloat(String(row2[madinDinarCol]||'').replace(/,/g,''))||0 : 0;
+      var dainDol = dainDollarCol >=0 ? parseFloat(String(row2[dainDollarCol] ||'').replace(/,/g,''))||0 : 0;
+      var madinDol= madinDollarCol>=0 ? parseFloat(String(row2[madinDollarCol]||'').replace(/,/g,''))||0 : 0;
+      if(!dainD && !madinD && !dainDol && !madinDol) continue;
+
+      var comm = commCol>=0 ? parseFloat(String(row2[commCol]||'').replace(/,/g,''))||0 : 0;
+
+      // تحديد عملة العمولة: إذا كانت العملية بالدولار → عمولة دولار، إذا بالدينار → عمولة دينار
+      var isDollarTx = (dainDol > 0 || madinDol > 0) && dainD === 0 && madinD === 0;
+      var commDinar  = isDollarTx ? 0    : comm;
+      var commDollar = isDollarTx ? comm : 0;
+
+      var entry = {
+        id: 'rf_xl_'+r+'_'+Date.now(),
+        date: date2,
+        description: descCol>=0 ? String(row2[descCol]).trim() : '',
+        beneficiary: benefCol>=0 ? String(row2[benefCol]).trim() : '',
+        receiver:    recvCol>=0  ? String(row2[recvCol]).trim()  : '',
+        op_type:     typeCol>=0  ? String(row2[typeCol]).trim()  : '',
+        dinar:       dainD  || madinD,
+        type_dinar:  dainD  ? 'دائن' : 'مدين',
+        dollar:      dainDol || madinDol,
+        type_dollar: dainDol ? 'دائن' : 'مدين',
+        commission:        commDinar,
+        commission_dollar: commDollar,
+        accountant: 'import',
+        time: Date.now() + r
+      };
+      list.push(entry);
+      FDB.save('rafid_accounts', entry.id, entry);
+      imported++;
+    }
+
+    list.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+    DB.set('rafid_accounts', list);
+    alert('✅ تم الاستيراد: '+imported+' حركة\nالرصيد الافتتاحي: '+opDinar.toLocaleString()+' د.ع');
+    input.value = '';
+    renderContent();
+  };
+  reader.readAsArrayBuffer(file);
+};
+console.log('✅ importRafidXLSX v3 — correct commission currency');
+</script>
 </body>
 </html>

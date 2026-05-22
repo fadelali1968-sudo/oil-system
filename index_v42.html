@@ -598,12 +598,14 @@ function copyWhatsappPurchases(){
   const facts=sf==='الكل'?FACTORIES:[sf];
   const periodLabel=wf&&wt?wf+' → '+wt:wf?'من '+wf:wt?'إلى '+wt:'الكلي';
   let total={cars:0,tons:0,liters:0,kg:0};
-  for(const f of facts){const d=analysis[f].total;total.cars+=d.cars;total.tons+=d.tons;total.liters+=d.liters;total.kg+=d.kg;}
   let txt=`*🛢️ الموقف الكلي للمشتريات*\n📅 ${periodLabel}\n\n`;
-  txt+=`🚛 السيارات: *${total.cars}*\n`;
-  txt+=`⚖️ الطن: *${fmt(total.tons)}*\n`;
-  txt+=`💧 اللتر: *${fmt(total.liters)}*\n`;
-  txt+=`🔢 الكغم: *${fmt(total.kg)}*`;
+  for(const f of facts){
+    const d=analysis[f].total;
+    if(!d.cars)continue;
+    txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر\n`;
+    total.cars+=d.cars;total.tons+=d.tons;total.liters+=d.liters;total.kg+=d.kg;
+  }
+  txt+=`\n📊 *الإجمالي: ${total.cars} سيارة | ${fmt(total.tons)} طن | ${fmt(total.liters)} لتر*`;
   navigator.clipboard?.writeText(txt).catch(()=>{});
   showToast('تم نسخ رسالة المشتريات','success');
 }
@@ -614,11 +616,14 @@ function copyWhatsappSales(){
   const facts=sf==='الكل'?FACTORIES:[sf];
   const periodLabel=wf&&wt?wf+' → '+wt:wf?'من '+wf:wt?'إلى '+wt:'الكلي';
   let total={cars:0,kaban:0,money:0};
-  for(const f of facts){const d=saleAn[f].total;total.cars+=d.cars;total.kaban+=d.kaban;total.money+=d.money;}
   let txt=`*📦 الموقف الكلي للمبيعات*\n📅 ${periodLabel}\n\n`;
-  txt+=`🚛 السيارات: *${total.cars}*\n`;
-  txt+=`⚖️ الكبان: *${fmtKaban(total.kaban)}*\n`;
-  txt+=`💰 الإجمالي: *${fmtM(total.money)}*`;
+  for(const f of facts){
+    const d=saleAn[f].total;
+    if(!d.cars)continue;
+    txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;
+    total.cars+=d.cars;total.kaban+=d.kaban;total.money+=d.money;
+  }
+  txt+=`\n📊 *الإجمالي: ${total.cars} سيارة | ${fmtKaban(total.kaban)} كبان*`;
   navigator.clipboard?.writeText(txt).catch(()=>{});
   showToast('تم نسخ رسالة المبيعات','success');
 }

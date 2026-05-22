@@ -535,9 +535,13 @@ function viewWhatsapp() {
   const sRows=facts.map((f,i)=>{const d=saleAn[f].total;return`<tr><td class="td-p" style="color:#94a3b8">${i+1}</td><td class="td-p" style="font-weight:900">${f}</td><td class="td-p">${d.cars}</td><td class="td-p" style="color:#7c3aed;font-weight:900">${fmtKaban(d.kaban)}</td><td class="td-p" style="color:#1e3a8a;font-weight:900">${fmtM(d.money)}</td></tr>`;}).join('');
 
   let html = `
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px" class="no-print">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px" class="no-print">
     <h2 style="font-size:15px;font-weight:900">📊 الموقف الإجمالي</h2>
-    <button class="btn btn-green" onclick="copyWhatsapp()">📱 نسخ للواتساب</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-blue" onclick="copyWhatsappPurchases()" title="نسخ المشتريات فقط">📱 نسخ المشتريات</button>
+      <button class="btn" style="background:#7c3aed;color:#fff" onclick="copyWhatsappSales()" title="نسخ المبيعات فقط">📱 نسخ المبيعات</button>
+      <button class="btn btn-green" onclick="copyWhatsapp()" title="نسخ الكل معاً">📋 نسخ الكل</button>
+    </div>
   </div>
   <div class="card no-print" style="margin-bottom:14px;background:#f8fafc;padding:14px">
     <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
@@ -585,7 +589,65 @@ function copyWhatsapp(){
   for(const f of facts){const d=saleAn[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
   txt+=`\n✅ نظام المراقبة v42.0`;
   navigator.clipboard?.writeText(txt).catch(()=>{});
-  const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}
+  showToast('تم نسخ الموقف الكامل','success');
+}
+
+function copyWhatsappPurchases(){
+  const wf=S.wFrom,wt=S.wTo;
+  const analysis=getAnalysis(wf,wt),sf=S.selectedFactory;
+  const facts=sf==='الكل'?FACTORIES:[sf];
+  const periodLabel=wf&&wt?wf+' → '+wt:wf?'من '+wf:wt?'إلى '+wt:'الكلي';
+  let txt=`*🛢️ موقف المشتريات*\n📅 ${periodLabel}\n\n`;
+  let total={cars:0,tons:0,liters:0,kg:0};
+  for(const f of facts){
+    const d=analysis[f].total;
+    if(!d.cars)continue;
+    txt+=`🏭 *${f}*\n`;
+    txt+=`   🚛 السيارات: ${d.cars}\n`;
+    txt+=`   ⚖️ الطن: ${fmt(d.tons)}\n`;
+    txt+=`   💧 اللتر: ${fmt(d.liters)}\n`;
+    txt+=`   🔢 الكغم: ${fmt(d.kg)}\n\n`;
+    total.cars+=d.cars;total.tons+=d.tons;total.liters+=d.liters;total.kg+=d.kg;
+  }
+  if(facts.length>1&&total.cars){
+    txt+=`━━━━━━━━━━━━━━\n`;
+    txt+=`📊 *الإجمالي الكلي*\n`;
+    txt+=`   🚛 السيارات: ${total.cars}\n`;
+    txt+=`   ⚖️ الطن: ${fmt(total.tons)}\n`;
+    txt+=`   💧 اللتر: ${fmt(total.liters)}\n`;
+    txt+=`   🔢 الكغم: ${fmt(total.kg)}\n`;
+  }
+  txt+=`\n✅ نظام المراقبة v42.0`;
+  navigator.clipboard?.writeText(txt).catch(()=>{});
+  showToast('تم نسخ رسالة المشتريات','success');
+}
+
+function copyWhatsappSales(){
+  const wf=S.wFrom,wt=S.wTo;
+  const saleAn=getSaleAnalysis(wf,wt),sf=S.selectedFactory;
+  const facts=sf==='الكل'?FACTORIES:[sf];
+  const periodLabel=wf&&wt?wf+' → '+wt:wf?'من '+wf:wt?'إلى '+wt:'الكلي';
+  let txt=`*📦 موقف المبيعات*\n📅 ${periodLabel}\n\n`;
+  let total={cars:0,kaban:0,money:0};
+  for(const f of facts){
+    const d=saleAn[f].total;
+    if(!d.cars)continue;
+    txt+=`🏭 *${f}*\n`;
+    txt+=`   🚛 السيارات: ${d.cars}\n`;
+    txt+=`   ⚖️ الكبان: ${fmtKaban(d.kaban)}\n`;
+    txt+=`   💰 الإجمالي: ${fmtM(d.money)}\n\n`;
+    total.cars+=d.cars;total.kaban+=d.kaban;total.money+=d.money;
+  }
+  if(facts.length>1&&total.cars){
+    txt+=`━━━━━━━━━━━━━━\n`;
+    txt+=`📊 *الإجمالي الكلي*\n`;
+    txt+=`   🚛 السيارات: ${total.cars}\n`;
+    txt+=`   ⚖️ الكبان: ${fmtKaban(total.kaban)}\n`;
+    txt+=`   💰 الإجمالي: ${fmtM(total.money)}\n`;
+  }
+  txt+=`\n✅ نظام المراقبة v42.0`;
+  navigator.clipboard?.writeText(txt).catch(()=>{});
+  showToast('تم نسخ رسالة المبيعات','success');
 }
 
 // ===== نموذج المشتريات =====

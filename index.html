@@ -1938,6 +1938,7 @@ function viewAdmin(){
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button class="btn btn-blue" style="font-size:13px;padding:10px 24px" onclick="exportFullBackup()">📤 تصدير نسخة احتياطية</button>
       <label class="btn btn-green" style="font-size:13px;padding:10px 24px;cursor:pointer">📥 استعادة من نسخة احتياطية<input type="file" accept=".json" style="display:none" onchange="importFullBackup(this)"></label>
+      <button id="sync-fb-btn" class="btn" style="font-size:13px;padding:10px 24px;background:#0f172a;color:#34d399" onclick="syncAllToFirebase()">☁️ رفع كل البيانات إلى Firebase</button>
     </div>
   </div>
   <div class="card" style="border:2px solid #dc2626">
@@ -2093,6 +2094,46 @@ function importFullBackup(input){
     }catch(err){showToast('خطأ في قراءة الملف: '+err.message,'error');}
   };
   reader.readAsText(file);
+}
+
+// ===== رفع كل البيانات إلى Firebase =====
+async function syncAllToFirebase(){
+  if(!window._fbReady){showToast('Firebase غير متصل','error');return;}
+  const btn=document.getElementById('sync-fb-btn');
+  if(btn){btn.textContent='⏳ جاري الرفع...';btn.disabled=true;}
+  let total=0,errors=0;
+  try{
+    const entries=DB.get('entries',[]);
+    for(const x of entries){try{await FDB.save('entries',x.id,x);total++;}catch(e){errors++;}}
+
+    const sales=DB.get('sales',[]);
+    for(const x of sales){try{await FDB.save('sales',x.id,x);total++;}catch(e){errors++;}}
+
+    const salaf=DB.get('salaf',[]);
+    for(const x of salaf){try{await FDB.save('salaf',x.id,x);total++;}catch(e){errors++;}}
+
+    const expenses=DB.get('expenses',[]);
+    for(const x of expenses){try{await FDB.save('expenses',x.id,x);total++;}catch(e){errors++;}}
+
+    const kroob=DB.get('kroob',[]);
+    for(const x of kroob){try{await FDB.save('kroob',x.id,x);total++;}catch(e){errors++;}}
+
+    const rafid=DB.get('rafid_accounts',[]);
+    for(const x of rafid){try{await FDB.save('rafid_accounts',x.id,x);total++;}catch(e){errors++;}}
+
+    const kroobOp=DB.get('kroob_opening',null);
+    if(kroobOp){try{await FDB.save('kroob_opening','opening',kroobOp);total++;}catch(e){errors++;}}
+
+    const rafidOp=DB.get('rafid_opening',null);
+    if(rafidOp){try{await FDB.save('rafid_opening','opening',rafidOp);total++;}catch(e){errors++;}}
+
+    const drivers=DB.get('drivers',{});
+    for(const[k,v] of Object.entries(drivers)){try{await FDB.save('drivers',k.replace(/\s+/g,'_'),v);total++;}catch(e){errors++;}}
+
+    const msg=errors?`✅ رُفع ${total} سجل ⚠️ ${errors} خطأ`:`✅ تم رفع ${total} سجل إلى Firebase بنجاح`;
+    showToast(msg,errors?'warning':'success',4000);
+  }catch(e){showToast('خطأ: '+e.message,'error');}
+  if(btn){btn.textContent='☁️ رفع كل البيانات إلى Firebase';btn.disabled=false;}
 }
 
 // ===== إدارة الصلاحيات =====

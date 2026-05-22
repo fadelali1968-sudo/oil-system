@@ -597,26 +597,13 @@ function copyWhatsappPurchases(){
   const analysis=getAnalysis(wf,wt),sf=S.selectedFactory;
   const facts=sf==='الكل'?FACTORIES:[sf];
   const periodLabel=wf&&wt?wf+' → '+wt:wf?'من '+wf:wt?'إلى '+wt:'الكلي';
-  let txt=`*🛢️ موقف المشتريات*\n📅 ${periodLabel}\n\n`;
   let total={cars:0,tons:0,liters:0,kg:0};
-  for(const f of facts){
-    const d=analysis[f].total;
-    if(!d.cars)continue;
-    txt+=`🏭 *${f}*\n`;
-    txt+=`   🚛 السيارات: ${d.cars}\n`;
-    txt+=`   ⚖️ الطن: ${fmt(d.tons)}\n`;
-    txt+=`   💧 اللتر: ${fmt(d.liters)}\n`;
-    txt+=`   🔢 الكغم: ${fmt(d.kg)}\n\n`;
-    total.cars+=d.cars;total.tons+=d.tons;total.liters+=d.liters;total.kg+=d.kg;
-  }
-  if(facts.length>1&&total.cars){
-    txt+=`━━━━━━━━━━━━━━\n`;
-    txt+=`📊 *الإجمالي الكلي*\n`;
-    txt+=`   🚛 السيارات: ${total.cars}\n`;
-    txt+=`   ⚖️ الطن: ${fmt(total.tons)}\n`;
-    txt+=`   💧 اللتر: ${fmt(total.liters)}\n`;
-    txt+=`   🔢 الكغم: ${fmt(total.kg)}\n`;
-  }
+  for(const f of facts){const d=analysis[f].total;total.cars+=d.cars;total.tons+=d.tons;total.liters+=d.liters;total.kg+=d.kg;}
+  let txt=`*🛢️ موقف المشتريات*\n📅 ${periodLabel}\n\n`;
+  txt+=`🚛 السيارات: *${total.cars}*\n`;
+  txt+=`⚖️ الطن: *${fmt(total.tons)}*\n`;
+  txt+=`💧 اللتر: *${fmt(total.liters)}*\n`;
+  txt+=`🔢 الكغم: *${fmt(total.kg)}*\n`;
   txt+=`\n✅ نظام المراقبة v42.0`;
   navigator.clipboard?.writeText(txt).catch(()=>{});
   showToast('تم نسخ رسالة المشتريات','success');
@@ -627,24 +614,12 @@ function copyWhatsappSales(){
   const saleAn=getSaleAnalysis(wf,wt),sf=S.selectedFactory;
   const facts=sf==='الكل'?FACTORIES:[sf];
   const periodLabel=wf&&wt?wf+' → '+wt:wf?'من '+wf:wt?'إلى '+wt:'الكلي';
-  let txt=`*📦 موقف المبيعات*\n📅 ${periodLabel}\n\n`;
   let total={cars:0,kaban:0,money:0};
-  for(const f of facts){
-    const d=saleAn[f].total;
-    if(!d.cars)continue;
-    txt+=`🏭 *${f}*\n`;
-    txt+=`   🚛 السيارات: ${d.cars}\n`;
-    txt+=`   ⚖️ الكبان: ${fmtKaban(d.kaban)}\n`;
-    txt+=`   💰 الإجمالي: ${fmtM(d.money)}\n\n`;
-    total.cars+=d.cars;total.kaban+=d.kaban;total.money+=d.money;
-  }
-  if(facts.length>1&&total.cars){
-    txt+=`━━━━━━━━━━━━━━\n`;
-    txt+=`📊 *الإجمالي الكلي*\n`;
-    txt+=`   🚛 السيارات: ${total.cars}\n`;
-    txt+=`   ⚖️ الكبان: ${fmtKaban(total.kaban)}\n`;
-    txt+=`   💰 الإجمالي: ${fmtM(total.money)}\n`;
-  }
+  for(const f of facts){const d=saleAn[f].total;total.cars+=d.cars;total.kaban+=d.kaban;total.money+=d.money;}
+  let txt=`*📦 موقف المبيعات*\n📅 ${periodLabel}\n\n`;
+  txt+=`🚛 السيارات: *${total.cars}*\n`;
+  txt+=`⚖️ الكبان: *${fmtKaban(total.kaban)}*\n`;
+  txt+=`💰 الإجمالي: *${fmtM(total.money)}*\n`;
   txt+=`\n✅ نظام المراقبة v42.0`;
   navigator.clipboard?.writeText(txt).catch(()=>{});
   showToast('تم نسخ رسالة المبيعات','success');

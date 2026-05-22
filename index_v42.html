@@ -2161,6 +2161,28 @@ function viewAdmin(){
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><div><label class="lbl">البريد الإلكتروني *</label><input class="inp" id="new_email" placeholder="user@example.com"></div><div><label class="lbl">كلمة السر *</label><input class="inp" id="new_pass" type="password" placeholder="Password123"></div><div><label class="lbl">الدور *</label><select class="inp" id="new_role"><option value="accountant">محاسب</option><option value="manager">مدير</option></select></div><div style="grid-column:span 3"><label class="lbl">المعمل المسؤول عنه *</label><select class="inp" id="new_factory_sel"><option value="الكل">الكل</option>${FACTORIES.map(f=>`<option value="${f}">${f}</option>`).join('')}</select></div></div><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-blue" onclick="addUser()">إضافة المستخدم</button></div><div id="user-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>
   </div>
   <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px"><div style="padding:12px 16px;background:#0f172a;font-weight:900;font-size:13px;color:#94a3b8">المستخدمون المسجلون</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">الـ ID</th><th class="th">البريد</th><th class="th">الدور</th><th class="th">المعمل</th><th class="th">حذف</th></tr></thead><tbody>${userRows}</tbody></table></div></div>
+  <div class="card" style="margin-bottom:14px;border:2px solid #059669">
+    <h3 style="font-size:14px;font-weight:900;margin-bottom:14px;color:#065f46;display:flex;align-items:center;gap:8px">
+      <span style="background:#ECFDF5;padding:5px 10px;border-radius:8px">💾</span> النسخ الاحتياطي والاستعادة
+    </h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:16px">
+        <p style="font-size:12px;font-weight:900;color:#065F46;margin-bottom:6px">📥 تصدير نسخة احتياطية</p>
+        <p style="font-size:11px;color:#6B7280;margin-bottom:12px">يحفظ كل البيانات (مشتريات، مبيعات، سلف، مصاريف، كروب...) كملف JSON</p>
+        <button class="btn btn-green" style="width:100%;justify-content:center" onclick="exportBackup()">💾 تنزيل نسخة احتياطية</button>
+      </div>
+      <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:16px">
+        <p style="font-size:12px;font-weight:900;color:#9A3412;margin-bottom:6px">📤 استعادة من نسخة احتياطية</p>
+        <p style="font-size:11px;color:#6B7280;margin-bottom:12px">يستعيد جميع البيانات من ملف JSON — سيستبدل البيانات الحالية</p>
+        <label style="display:flex;align-items:center;justify-content:center;gap:8px;background:#D97706;color:#fff;padding:9px 20px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;width:100%;box-sizing:border-box">
+          📂 اختر ملف الاستعادة
+          <input type="file" accept=".json" onchange="importBackup(this)" style="display:none">
+        </label>
+      </div>
+    </div>
+    <div id="backup-msg" style="display:none;margin-top:10px;padding:10px;border-radius:8px;font-size:12px;font-weight:700;text-align:center"></div>
+  </div>
+
   <div class="card" style="border:2px solid #dc2626">
     <h3 style="font-size:14px;font-weight:900;margin-bottom:10px;color:#dc2626">⚠️ خيارات إدارة البيانات</h3>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
@@ -2191,6 +2213,44 @@ function _buildAdminDelBtns(){
     sb.appendChild(b2);
   });
 }
+// ===== النسخ الاحتياطي =====
+function exportBackup(){
+  const keys=['entries','sales','drivers','salaf','expenses','kroob','kroob_opening','rafid_accounts','rafid_opening','refinery_received','factories','notifs'];
+  const backup={_version:'42.0',_date:new Date().toISOString(),_by:currentUser?.email||'unknown'};
+  keys.forEach(k=>{ const v=DB.get(k,null); if(v!==null) backup[k]=v; });
+  const json=JSON.stringify(backup,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='backup_oil_system_'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('تم تنزيل النسخة الاحتياطية بنجاح ✅','success');
+}
+
+function importBackup(input){
+  const file=input.files[0]; if(!file) return;
+  if(!confirm('⚠️ سيتم استبدال جميع البيانات الحالية بالنسخة الاحتياطية. هل أنت متأكد؟')) { input.value=''; return; }
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const backup=JSON.parse(e.target.result);
+      if(!backup._version){ showToast('الملف غير صالح','error'); return; }
+      const keys=['entries','sales','drivers','salaf','expenses','kroob','kroob_opening','rafid_accounts','rafid_opening','refinery_received','factories'];
+      let restored=0;
+      keys.forEach(k=>{ if(backup[k]!==undefined){ DB.set(k,backup[k]); restored++; } });
+      if(backup.factories) FACTORIES=backup.factories;
+      const msg=document.getElementById('backup-msg');
+      if(msg){ msg.style.display='block'; msg.style.background='#ECFDF5'; msg.style.color='#065F46'; msg.textContent='✅ تمت الاستعادة بنجاح — '+restored+' مجموعة بيانات — تاريخ النسخة: '+(backup._date||'—').slice(0,10); }
+      showToast('تمت استعادة النسخة الاحتياطية بنجاح','success',4000);
+      input.value='';
+      setTimeout(()=>renderContent(),1500);
+    } catch(err){ showToast('خطأ في قراءة الملف: '+err.message,'error'); }
+  };
+  reader.readAsText(file);
+}
+
 function addFactory(){const n=gv('new_factory');if(!n)return;let f=DB.get('factories',FACTORIES);if(f.includes(n)){showToast('موجود مسبقاً','warning');return;}f.push(n);DB.set('factories',f);FACTORIES=f;renderContent();}
 function deleteFactory(name){if(!confirm('حذف معمل: '+name+'?'))return;let f=DB.get('factories',FACTORIES).filter(x=>x!==name);DB.set('factories',f);FACTORIES=f;renderContent();}
 async function addUser(){

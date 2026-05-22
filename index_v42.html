@@ -619,7 +619,7 @@ function renderContent() {
   else if(v==='kroob_statement') c.innerHTML = viewKroobStatement();
   else if(v==='import_p')      c.innerHTML = viewImport('purchases');
   else if(v==='import_s')      c.innerHTML = viewImport('sales');
-  else if(v==='admin')         c.innerHTML = viewAdmin();
+  else if(v==='admin')         { c.innerHTML = viewAdmin(); setTimeout(()=>listFirebaseBackups().then(renderFbBackupsList).catch(()=>renderFbBackupsList([])), 600); }
   else if(v==='permissions')   c.innerHTML = viewPermissions();
   else if(v==='refinery_account') c.innerHTML = viewRefineryAccount();
   else if(v==='rafid_accounts')   c.innerHTML = viewRafidAccounts();
@@ -2185,6 +2185,13 @@ function viewAdmin(){
       </div>
     </div>
     <div id="backup-msg" style="display:none;margin-top:10px;padding:10px;border-radius:8px;font-size:12px;font-weight:700;text-align:center"></div>
+    <!-- نسخ Firebase السحابة -->
+    <div style="margin-top:14px">
+      <p style="font-size:12px;font-weight:900;color:#1E40AF;margin-bottom:8px">☁️ النسخ على Firebase (السحابة):</p>
+      <div id="fb-backups-list" style="display:flex;flex-direction:column;gap:6px;min-height:36px">
+        <div style="font-size:11px;color:#94A3B8;text-align:center;padding:8px">⏳ جاري التحميل...</div>
+      </div>
+    </div>
     <!-- النسخ المحلية المحفوظة -->
     <div style="margin-top:14px">
       <p style="font-size:12px;font-weight:900;color:#065F46;margin-bottom:8px">🗂️ النسخ التلقائية المحفوظة (آخر 7 أيام):</p>
@@ -2519,23 +2526,84 @@ function saveLocalBackup(dateStr) {
   const backup = { _version:'42.0', _date:new Date().toISOString(), _by:'auto' };
   BACKUP_KEYS.forEach(k => { const v=DB.get(k,null); if(v!==null) backup[k]=v; });
   DB.set('auto_backup_'+dateStr, backup);
-  // احتفظ بآخر 7 نسخ فقط
-  const allKeys = Object.keys(localStorage)
-    .filter(k => k.startsWith('oil_auto_backup_'))
-    .sort().reverse();
-  allKeys.slice(7).forEach(k => localStorage.removeItem(k));
+  const allKeys = Object.keys(localStorage).filter(k=>k.startsWith('oil_auto_backup_')).sort().reverse();
+  allKeys.slice(7).forEach(k=>localStorage.removeItem(k));
+}
+
+async function saveFirebaseBackup(dateStr) {
+  if(!window._fbReady) return;
+  try {
+    // حفظ البيانات كل مجموعة في وثيقة منفصلة
+    const saves = BACKUP_KEYS.map(k => {
+      const v = DB.get(k, null);
+      if(v === null) return Promise.resolve();
+      return FDB.save('backups', dateStr+'__'+k, { key:k, date:dateStr, data:v, _saved:Date.now() });
+    });
+    // وثيقة الميتاداتا
+    saves.push(FDB.save('backups', dateStr+'__meta', {
+      date:dateStr, _version:'42.0', _by:currentUser?.email||'auto', _saved:Date.now(),
+      collections: BACKUP_KEYS
+    }));
+    await Promise.all(saves);
+    showToast('☁️ تم رفع النسخة إلى Firebase', 'info', 3000);
+  } catch(e) { console.warn('Firebase backup error:', e); }
+}
+
+async function listFirebaseBackups() {
+  if(!window._fbReady) return [];
+  try {
+    const all = await FDB.getAll('backups');
+    if(!all) return [];
+    // استخرج وثائق الميتاداتا فقط
+    return all.filter(d=>d.key===undefined&&d.date).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
+  } catch(e) { return []; }
+}
+
+function renderFbBackupsList(list) {
+  const el2 = document.getElementById('fb-backups-list');
+  if(!el2) return;
+  if(!list || !list.length) {
+    el2.innerHTML = '<p style="font-size:11px;color:#94A3B8;text-align:center;padding:8px">لا توجد نسخ على Firebase بعد — ستُرفع تلقائياً عند فتح البرنامج كل يوم</p>';
+    return;
+  }
+  const t = new Date().toISOString().slice(0,10);
+  el2.innerHTML = list.map(d=>{
+    const isToday = d.date===t;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:${isToday?'#EFF6FF':'#F8FAFC'};border:1px solid ${isToday?'#BFDBFE':'#E2E8F0'};border-radius:8px">
+      <div>
+        <span style="font-size:12px;font-weight:900;color:${isToday?'#1E40AF':'#334155'}">${isToday?'⭐ اليوم — ':''} ${d.date}</span>
+        <span style="font-size:10px;color:#94A3B8;margin-right:8px">☁️ Firebase</span>
+      </div>
+      <button class="btn btn-blue" style="font-size:10px;padding:4px 10px" onclick="restoreFirebaseBackup('${d.date}')">استعادة</button>
+    </div>`;
+  }).join('');
+}
+
+async function restoreFirebaseBackup(dateStr) {
+  if(!window._fbReady) { showToast('Firebase غير متصل','error'); return; }
+  if(!confirm('استعادة نسخة '+dateStr+' من Firebase؟ سيتم استبدال البيانات الحالية.')) return;
+  showToast('⏳ جاري الاسترجاع من Firebase...','info',4000);
+  try {
+    const all = await FDB.getAll('backups');
+    if(!all) { showToast('لا توجد بيانات','error'); return; }
+    const docs = all.filter(d=>d.date===dateStr&&d.key&&d.data!==undefined);
+    if(!docs.length) { showToast('لم تُوجد نسخة بهذا التاريخ','error'); return; }
+    docs.forEach(d=>DB.set(d.key, d.data));
+    const fac = docs.find(d=>d.key==='factories');
+    if(fac) FACTORIES = fac.data;
+    showToast('✅ تمت الاستعادة من Firebase — '+dateStr,'success',4000);
+    setTimeout(()=>renderContent(),1000);
+  } catch(e) { showToast('خطأ: '+e.message,'error'); }
 }
 
 function checkAutoBackup() {
   const today = new Date().toISOString().slice(0,10);
   const last  = DB.get('last_auto_backup', '');
-  if(last === today) return; // تم اليوم بالفعل
+  if(last === today) return;
 
-  // حفظ نسخة في localStorage
   saveLocalBackup(today);
   DB.set('last_auto_backup', today);
 
-  // تنزيل ملف JSON تلقائياً بعد 4 ثوانٍ من الفتح
   setTimeout(() => {
     const backup = DB.get('auto_backup_'+today, {});
     const json = JSON.stringify(backup, null, 2);
@@ -2546,6 +2614,8 @@ function checkAutoBackup() {
     a.download = 'backup_auto_'+today+'.json';
     a.click();
     URL.revokeObjectURL(url);
+    // رفع إلى Firebase
+    saveFirebaseBackup(today);
     showToast('💾 تم حفظ النسخة الاحتياطية التلقائية ليوم '+today, 'success', 5000);
     // تحديث مؤشر الهيدر
     const ind = document.getElementById('backup-indicator');

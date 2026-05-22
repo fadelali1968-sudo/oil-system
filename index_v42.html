@@ -29,62 +29,246 @@
   document.dispatchEvent(new Event('fb-ready'));
 </script>
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: 'Cairo', sans-serif; background: #f1f5f9; }
-  .inp { width:100%; border:1.5px solid #e2e8f0; border-radius:10px; padding:9px 12px; font-family:'Cairo',sans-serif; font-size:13px; font-weight:700; text-align:right; background:#fff; color:#0f172a; outline:none; transition:border .15s; }
-  .inp:focus { border-color:#2563eb; }
-  .inp[readonly] { background:#f8fafc; color:#94a3b8; }
-  .btn { padding:9px 20px; border-radius:10px; font-family:'Cairo',sans-serif; font-weight:700; font-size:13px; cursor:pointer; border:none; transition:opacity .15s, transform .1s; }
-  .btn:hover { opacity:.88; } .btn:active { transform:scale(.97); }
-  .btn-blue { background:#2563eb; color:#fff; }
-  .btn-green { background:#059669; color:#fff; }
-  .btn-red { background:#dc2626; color:#fff; }
-  .btn-amber { background:#d97706; color:#fff; }
-  .btn-purple { background:#7c3aed; color:#fff; }
-  .btn-gray { background:#f1f5f9; color:#334155; border:1px solid #e2e8f0; }
-  .nav-item { display:block; padding:5px 8px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:700; color:#94a3b8; transition:background .15s; margin-bottom:1px; }
-  .nav-item:hover { background:rgba(255,255,255,.08); }
-  .nav-item.active { background:#2563eb; color:#fff; }
-  .nav-item.active-purple { background:#7c3aed; color:#fff; }
-  .card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; }
-  .th { background:#0f172a; color:#94a3b8; padding:10px 8px; font-size:11px; font-weight:700; text-align:center; white-space:nowrap; }
-  .th-p { background:#4c1d95; color:#c4b5fd; padding:10px 8px; font-size:11px; font-weight:700; text-align:center; white-space:nowrap; }
-  .td { padding:8px 6px; font-size:12px; font-weight:700; text-align:center; border-bottom:1px solid #f1f5f9; color:#0f172a; }
-  tr:hover .td { background:#eff6ff; }
-  tr:hover .td-p { background:#f5f3ff; }
-  .td-p { padding:8px 6px; font-size:12px; font-weight:700; text-align:center; border-bottom:1px solid #f5f3ff; color:#0f172a; }
-  .lbl { display:block; font-size:11px; color:#64748b; font-weight:700; margin-bottom:5px; }
-  .badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
-  .no-scrollbar::-webkit-scrollbar { display:none; }
-  #sidebar-nav::-webkit-scrollbar { width:4px; }
-  #sidebar-nav::-webkit-scrollbar-track { background:transparent; }
-  #sidebar-nav::-webkit-scrollbar-thumb { background:#475569; border-radius:3px; }
-  .notif-badge { position:absolute; top:-6px; right:-6px; background:#dc2626; color:#fff; border-radius:50%; width:18px; height:18px; font-size:10px; font-weight:900; display:flex; align-items:center; justify-content:center; animation:pulse 1.5s infinite; }
-  @keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.2);} }
-  .notif-panel { position:fixed; top:70px; left:20px; width:320px; max-height:400px; background:#fff; border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,.2); z-index:9999; overflow:hidden; border:1px solid #e2e8f0; }
-  .notif-item { padding:12px 14px; border-bottom:1px solid #f1f5f9; font-size:12px; animation:slideIn .3s ease; }
-  @keyframes slideIn { from{opacity:0;transform:translateX(-10px);} to{opacity:1;transform:translateX(0);} }
-  .salaf-person { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:10px; cursor:pointer; transition:background .15s; border:2px solid transparent; }
-  .salaf-person:hover { background:#fffbeb; border-color:#f59e0b; }
-  .salaf-person.active { background:#fffbeb; border-color:#f59e0b; }
-  .mobile-menu-btn { display:none; background:#1e3a8a; border:none; color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:18px; }
-  .mobile-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:999; }
-  .mobile-overlay.show { display:block; }
-  @media print { aside, header, .no-print { display:none !important; } main { margin:0 !important; padding:0 !important; width:100% !important; } .print-header { display:block !important; } }
-  .print-header { display:none; }
-  @media (max-width:768px) { aside { position:fixed !important; right:-225px; transition:right .3s; z-index:1000; height:100vh; } aside.open { right:0 !important; } .mobile-menu-btn { display:flex !important; } #main-content { padding:10px !important; } .card { padding:12px !important; border-radius:10px !important; } .inp { font-size:16px !important; } table { font-size:11px !important; } .td,.td-p { padding:5px 3px !important; } }
-  .inp { color:#0f172a; }
+  /* ── Design Tokens ──────────────────────────────────── */
+  :root {
+    --sb-bg:       #0B1426;
+    --sb-header:   #060D1E;
+    --sb-border:   #1A2A44;
+    --sb-hover:    rgba(255,255,255,.06);
+    --sb-active:   #1E40AF;
+    --sb-active-p: #5B21B6;
+    --primary:     #2563EB;
+    --primary-dk:  #1D4ED8;
+    --primary-lt:  #EFF6FF;
+    --purple:      #7C3AED;
+    --purple-lt:   #F5F3FF;
+    --green:       #059669;
+    --amber:       #D97706;
+    --red:         #DC2626;
+    --bg:          #F0F4FA;
+    --surface:     #FFFFFF;
+    --border:      #E2E8F0;
+    --border-lt:   #F1F5F9;
+    --text:        #0F172A;
+    --text-2:      #475569;
+    --text-muted:  #94A3B8;
+    --radius:      10px;
+    --radius-lg:   14px;
+    --shadow-sm:   0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+    --shadow:      0 4px 14px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.04);
+    --shadow-lg:   0 12px 32px rgba(0,0,0,.13),0 4px 10px rgba(0,0,0,.06);
+    --tr:          .2s cubic-bezier(.4,0,.2,1);
+  }
 
-  /* ===== Toast Notifications ===== */
-  #toast-container{position:fixed;bottom:24px;left:24px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
-  .toast{display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:12px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;color:#fff;min-width:260px;max-width:380px;box-shadow:0 8px 24px rgba(0,0,0,.2);animation:toastIn .3s ease;pointer-events:all;}
-  .toast.success{background:#059669;}
-  .toast.error{background:#dc2626;}
-  .toast.warning{background:#d97706;}
-  .toast.info{background:#2563eb;}
-  .toast.hiding{animation:toastOut .3s ease forwards;}
-  @keyframes toastIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
-  @keyframes toastOut{from{opacity:1;transform:translateY(0);}to{opacity:0;transform:translateY(20px);}}
+  /* ── Base ───────────────────────────────────────────── */
+  * { box-sizing:border-box; }
+  body { font-family:'Cairo',sans-serif; background:var(--bg); color:var(--text); }
+
+  /* ── Inputs ─────────────────────────────────────────── */
+  .inp {
+    width:100%; border:1.5px solid var(--border); border-radius:var(--radius);
+    padding:9px 13px; font-family:'Cairo',sans-serif; font-size:13px; font-weight:700;
+    text-align:right; background:var(--surface); color:var(--text);
+    outline:none; transition:border var(--tr),box-shadow var(--tr),background var(--tr);
+  }
+  .inp:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.13); background:#FAFCFF; }
+  .inp[readonly] { background:#F8FAFC; color:var(--text-muted); cursor:default; }
+  .inp::placeholder { color:var(--text-muted); font-weight:400; }
+
+  /* ── Buttons ────────────────────────────────────────── */
+  .btn {
+    padding:9px 20px; border-radius:var(--radius);
+    font-family:'Cairo',sans-serif; font-weight:700; font-size:13px;
+    cursor:pointer; border:none; transition:all var(--tr);
+    display:inline-flex; align-items:center; gap:5px; white-space:nowrap;
+  }
+  .btn:hover  { transform:translateY(-1px); filter:brightness(1.07); }
+  .btn:active { transform:translateY(0) scale(.97); filter:brightness(.96); }
+  .btn-blue   { background:var(--primary);  color:#fff; box-shadow:0 2px 8px rgba(37,99,235,.28); }
+  .btn-blue:hover  { background:var(--primary-dk); box-shadow:0 4px 14px rgba(37,99,235,.36); }
+  .btn-green  { background:var(--green);   color:#fff; box-shadow:0 2px 8px rgba(5,150,105,.28); }
+  .btn-red    { background:var(--red);     color:#fff; box-shadow:0 2px 8px rgba(220,38,38,.24); }
+  .btn-amber  { background:var(--amber);   color:#fff; box-shadow:0 2px 8px rgba(217,119,6,.24); }
+  .btn-purple { background:var(--purple);  color:#fff; box-shadow:0 2px 8px rgba(124,58,237,.28); }
+  .btn-gray   { background:#F1F5F9; color:#334155; border:1.5px solid var(--border); box-shadow:var(--shadow-sm); }
+  .btn-gray:hover { background:#E8EEF6; }
+
+  /* ── Sidebar Nav Items ──────────────────────────────── */
+  .nav-item {
+    display:flex; align-items:center; gap:7px;
+    padding:7px 10px; border-radius:8px; cursor:pointer;
+    font-size:11.5px; font-weight:700; color:#8BA0BF;
+    transition:all var(--tr); margin-bottom:1px;
+  }
+  .nav-item:hover { background:var(--sb-hover); color:#C5D4E8; }
+  .nav-item.active        { background:var(--sb-active);   color:#fff; box-shadow:0 2px 10px rgba(30,64,175,.45); }
+  .nav-item.active-purple { background:var(--sb-active-p); color:#fff; box-shadow:0 2px 10px rgba(91,33,182,.45); }
+
+  /* ── Cards ──────────────────────────────────────────── */
+  .card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius-lg); padding:20px;
+    box-shadow:var(--shadow-sm);
+  }
+
+  /* ── Tables ─────────────────────────────────────────── */
+  .th {
+    background:linear-gradient(135deg,#0F172A 0%,#1E293B 100%);
+    color:#94A3B8; padding:11px 8px; font-size:11px; font-weight:700;
+    text-align:center; white-space:nowrap; letter-spacing:.3px;
+  }
+  .th-p {
+    background:linear-gradient(135deg,#3B0764 0%,#4C1D95 100%);
+    color:#C4B5FD; padding:11px 8px; font-size:11px; font-weight:700;
+    text-align:center; white-space:nowrap; letter-spacing:.3px;
+  }
+  .td {
+    padding:9px 7px; font-size:12px; font-weight:700;
+    text-align:center; border-bottom:1px solid #F5F8FF;
+    color:var(--text); transition:background var(--tr);
+  }
+  tr:nth-child(even) .td { background:#FAFBFF; }
+  tr:hover .td { background:#EFF6FF !important; }
+  .td-p {
+    padding:9px 7px; font-size:12px; font-weight:700;
+    text-align:center; border-bottom:1px solid #FBF8FF;
+    color:var(--text); transition:background var(--tr);
+  }
+  tr:nth-child(even) .td-p { background:#FDFAFF; }
+  tr:hover .td-p { background:#F5F3FF !important; }
+
+  /* ── Misc ───────────────────────────────────────────── */
+  .lbl  { display:block; font-size:11px; color:#64748B; font-weight:700; margin-bottom:5px; }
+  .badge { display:inline-flex; align-items:center; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+
+  /* ── Scrollbars ─────────────────────────────────────── */
+  .no-scrollbar::-webkit-scrollbar { display:none; }
+  #sidebar-nav::-webkit-scrollbar       { width:3px; }
+  #sidebar-nav::-webkit-scrollbar-track { background:transparent; }
+  #sidebar-nav::-webkit-scrollbar-thumb { background:#2A3F5C; border-radius:3px; }
+  ::-webkit-scrollbar       { width:6px; height:6px; }
+  ::-webkit-scrollbar-track { background:#F1F5F9; }
+  ::-webkit-scrollbar-thumb { background:#CBD5E1; border-radius:3px; }
+  ::-webkit-scrollbar-thumb:hover { background:#94A3B8; }
+
+  /* ── Notification ───────────────────────────────────── */
+  .notif-badge {
+    position:absolute; top:-6px; right:-6px;
+    background:var(--red); color:#fff; border-radius:50%;
+    width:18px; height:18px; font-size:10px; font-weight:900;
+    display:flex; align-items:center; justify-content:center;
+    animation:pulse 1.5s infinite; border:2px solid #fff;
+  }
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.18)} }
+  .notif-panel {
+    position:fixed; top:66px; left:20px; width:320px; max-height:420px;
+    background:var(--surface); border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-lg); z-index:9999; overflow:hidden;
+    border:1px solid var(--border);
+  }
+  .notif-item {
+    padding:12px 16px; border-bottom:1px solid var(--border-lt);
+    font-size:12px; animation:slideIn .25s ease;
+  }
+  .notif-item:hover { background:#F8FAFC; }
+  @keyframes slideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+
+  /* ── Salaf Person ───────────────────────────────────── */
+  .salaf-person {
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px; border-radius:var(--radius);
+    cursor:pointer; transition:all var(--tr); border:2px solid transparent;
+  }
+  .salaf-person:hover  { background:#FFFBEB; border-color:#FCD34D; }
+  .salaf-person.active { background:#FFFBEB; border-color:#F59E0B; box-shadow:0 0 0 3px rgba(245,158,11,.13); }
+
+  /* ── Mobile ─────────────────────────────────────────── */
+  .mobile-menu-btn { display:none; background:#1E3A8A; border:none; color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:18px; }
+  .mobile-overlay  { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:999; }
+  .mobile-overlay.show { display:block; }
+
+  /* ── Print ──────────────────────────────────────────── */
+  @media print { aside,header,.no-print { display:none !important; } main { margin:0 !important; padding:0 !important; width:100% !important; } .print-header { display:block !important; } }
+  .print-header { display:none; }
+
+  /* ── Responsive ─────────────────────────────────────── */
+  @media (max-width:768px) {
+    aside { position:fixed !important; right:-240px; transition:right .3s; z-index:1000; height:100vh; }
+    aside.open { right:0 !important; }
+    .mobile-menu-btn { display:flex !important; }
+    #main-content { padding:10px !important; }
+    .card { padding:12px !important; border-radius:10px !important; }
+    .inp { font-size:16px !important; }
+    table { font-size:11px !important; }
+    .td,.td-p { padding:5px 3px !important; }
+  }
+
+  /* ── Toast ──────────────────────────────────────────── */
+  #toast-container { position:fixed; bottom:24px; left:24px; z-index:99999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+  .toast {
+    display:flex; align-items:center; gap:10px; padding:13px 18px;
+    border-radius:12px; font-family:'Cairo',sans-serif; font-size:13px; font-weight:700;
+    color:#fff; min-width:260px; max-width:380px;
+    box-shadow:var(--shadow-lg); animation:toastIn .3s ease; pointer-events:all;
+  }
+  .toast.success { background:linear-gradient(135deg,#059669,#047857); }
+  .toast.error   { background:linear-gradient(135deg,#DC2626,#B91C1C); }
+  .toast.warning { background:linear-gradient(135deg,#D97706,#B45309); }
+  .toast.info    { background:linear-gradient(135deg,#2563EB,#1D4ED8); }
+  .toast.hiding  { animation:toastOut .3s ease forwards; }
+  @keyframes toastIn  { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes toastOut { from{opacity:1;transform:translateY(0)} to{opacity:0;transform:translateY(20px)} }
+
+  /* ── KPI Cards ──────────────────────────────────────── */
+  .kpi-card {
+    background:var(--surface); border-radius:var(--radius-lg);
+    padding:20px 18px; box-shadow:var(--shadow); border:1px solid var(--border);
+    text-align:center; position:relative; overflow:hidden;
+    transition:transform var(--tr),box-shadow var(--tr);
+  }
+  .kpi-card:hover { transform:translateY(-3px); box-shadow:var(--shadow-lg); }
+  .kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+  .kpi-blue::before   { background:linear-gradient(90deg,#2563EB,#60A5FA); }
+  .kpi-cyan::before   { background:linear-gradient(90deg,#0891B2,#38BDF8); }
+  .kpi-green::before  { background:linear-gradient(90deg,#059669,#34D399); }
+  .kpi-amber::before  { background:linear-gradient(90deg,#D97706,#FCD34D); }
+  .kpi-purple::before { background:linear-gradient(90deg,#7C3AED,#A78BFA); }
+  .kpi-icon {
+    width:44px; height:44px; border-radius:12px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px; margin:0 auto 10px;
+  }
+  .kpi-value { font-size:28px; font-weight:900; line-height:1.1; }
+  .kpi-label { font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:8px; }
+  .kpi-sub   { font-size:11px; color:var(--text-muted); margin-top:6px; }
+
+  /* ── Section Header ─────────────────────────────────── */
+  .sec-hd {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px; background:#F8FAFC; border-bottom:1px solid var(--border);
+  }
+  .filter-bar {
+    padding:10px 16px; background:#F8FAFC; border-bottom:1px solid var(--border);
+    display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+  }
+
+  /* ── Factory Performance Cards ──────────────────────── */
+  .fact-card {
+    background:var(--surface); border-radius:var(--radius-lg);
+    border:1px solid var(--border); box-shadow:var(--shadow-sm);
+    overflow:hidden; transition:transform var(--tr),box-shadow var(--tr);
+  }
+  .fact-card:hover { transform:translateY(-2px); box-shadow:var(--shadow); }
+  .fact-card-hd {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 16px; border-bottom:1px solid var(--border-lt);
+    background:linear-gradient(135deg,#F8FAFF 0%,#F0F4FF 100%);
+  }
+  .fact-stat {
+    border-radius:10px; padding:12px;
+  }
+  .fact-stat-p { background:#EFF6FF; }
+  .fact-stat-s { background:#F5F3FF; }
 </style>
 </head>
 <body>
@@ -317,26 +501,47 @@ function render() {
 
   document.getElementById('app').innerHTML =
     '<div style="display:flex;height:100vh;overflow:hidden">' +
-      '<aside style="width:225px;background:#0f172a;display:flex;flex-direction:column;flex-shrink:0;z-index:50">' +
-        '<div style="padding:10px;background:#020617;border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
-          '<div style="width:34px;height:34px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:11px;margin:0 auto 5px">OIL</div>' +
-          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v42.0</p>' +
-          '<p style="font-size:10px;color:#94a3b8;margin-top:2px;font-weight:900;letter-spacing:0.5px">'+(isM?'المدققين':'محاسب: '+currentUser.factory)+'</p>' +
-        '</div>' +
-        '<nav id="sidebar-nav" style="flex:1;padding:8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
-        '<div style="padding:6px;flex-shrink:0"><button class="btn btn-red" style="width:100%;font-size:11px;padding:6px" onclick="logout()">🚪 تسجيل الخروج</button></div>' +
-      '</aside>' +
-      '<div style="flex:1;display:flex;flex-direction:column;overflow:hidden">' +
-        '<header class="no-print" style="height:54px;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 10px 0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">' +
-          '<button class="mobile-menu-btn no-print" onclick="toggleMobileMenu()" style="margin-left:10px">☰</button>' +
-          (S.view!=='kroob'&&S.view!=='kroob_statement'?'<div style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700">المعمل:</span>'+factSel+'</div>':'') +
-          '<div style="display:flex;align-items:center;gap:10px">' +
-          (isM?'<div style="position:relative;cursor:pointer" onclick="toggleNotif()"><div style="width:38px;height:38px;background:#f1f5f9;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;border:1px solid #e2e8f0">🔔</div><div id="notif-badge" class="notif-badge" style="display:none">0</div></div>':'') +
-          '<div id="clock" style="background:#0f172a;color:#34d399;padding:5px 14px;border-radius:8px;font-size:13px;font-weight:900;font-family:monospace;letter-spacing:2px">00:00:00</div>' +
+      /* ── Sidebar ── */
+      '<aside style="width:240px;background:linear-gradient(180deg,#0B1426 0%,#0D1B38 100%);display:flex;flex-direction:column;flex-shrink:0;z-index:50;border-left:1px solid #1A2A44">' +
+        /* Logo */
+        '<div style="padding:14px 14px 12px;background:#060D1E;border-bottom:1px solid #1A2A44;flex-shrink:0">' +
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+            '<div style="width:38px;height:38px;background:linear-gradient(135deg,#2563EB,#1D4ED8);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px;flex-shrink:0;box-shadow:0 4px 12px rgba(37,99,235,.45)">⛽</div>' +
+            '<div>' +
+              '<p style="font-size:12.5px;font-weight:900;color:#E2E8F0;line-height:1.2">نظام المراقبة</p>' +
+              '<p style="font-size:10px;color:#3B82F6;font-weight:700;letter-spacing:.6px">v42.0 • Oil System</p>' +
+            '</div>' +
           '</div>' +
-          '<div style="font-size:11px;color:#94a3b8;font-weight:700">'+currentUser.email+'</div>' +
+          '<div style="padding:6px 10px;background:rgba(37,99,235,.1);border:1px solid rgba(59,130,246,.2);border-radius:8px;font-size:10px;color:#93C5FD;font-weight:700;text-align:center">' +
+            (isM?'👑 صلاحية المدير':'👤 محاسب: '+currentUser.factory) +
+          '</div>' +
+        '</div>' +
+        /* Nav */
+        '<nav id="sidebar-nav" style="flex:1;padding:10px 8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
+        /* Logout */
+        '<div style="padding:10px 8px;flex-shrink:0;border-top:1px solid #1A2A44">' +
+          '<button class="btn btn-red" style="width:100%;font-size:11px;padding:8px;justify-content:center;border-radius:8px" onclick="logout()">🚪 تسجيل الخروج</button>' +
+        '</div>' +
+      '</aside>' +
+      /* ── Main area ── */
+      '<div style="flex:1;display:flex;flex-direction:column;overflow:hidden">' +
+        /* Header */
+        '<header class="no-print" style="height:58px;background:#fff;border-bottom:1px solid #E2E8F0;padding:0 16px 0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">' +
+          '<div style="display:flex;align-items:center;gap:12px">' +
+            '<button class="mobile-menu-btn no-print" onclick="toggleMobileMenu()">☰</button>' +
+            (S.view!=='kroob'&&S.view!=='kroob_statement'?'<div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:#64748B;font-weight:700;padding:4px 10px;background:#F1F5F9;border-radius:6px">المعمل</span>'+factSel+'</div>':'') +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:10px">' +
+            (isM?'<div style="position:relative;cursor:pointer" onclick="toggleNotif()"><div style="width:36px;height:36px;background:#F1F5F9;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;border:1.5px solid #E2E8F0;transition:all .2s" onmouseover="this.style.background=\'#EFF6FF\'" onmouseout="this.style.background=\'#F1F5F9\'">🔔</div><div id="notif-badge" class="notif-badge" style="display:none">0</div></div>':'') +
+            '<div id="clock" style="background:linear-gradient(135deg,#0F172A,#1E293B);color:#34D399;padding:6px 16px;border-radius:8px;font-size:13px;font-weight:900;font-family:monospace;letter-spacing:2px;box-shadow:0 2px 8px rgba(0,0,0,.15)">00:00:00</div>' +
+            '<button id="fs-btn" title="ملء الشاشة" onclick="toggleFullscreen()" style="width:36px;height:36px;background:#F1F5F9;border:1.5px solid #E2E8F0;border-radius:9px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .2s" onmouseover="this.style.background=\'#EFF6FF\'" onmouseout="this.style.background=\'#F1F5F9\'">⛶</button>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px">' +
+            '<div style="width:32px;height:32px;background:linear-gradient(135deg,#2563EB,#7C3AED);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:900">'+currentUser.email.charAt(0).toUpperCase()+'</div>' +
+            '<span style="font-size:11px;color:#64748B;font-weight:700">'+currentUser.email+'</span>' +
+          '</div>' +
         '</header>' +
-        '<div id="main-content" style="flex:1;overflow-y:auto;padding:18px" class="no-scrollbar"></div>' +
+        '<div id="main-content" style="flex:1;overflow-y:auto;padding:20px" class="no-scrollbar"></div>' +
       '</div>' +
     '</div>';
 
@@ -357,30 +562,35 @@ function buildNav(isM) {
     return `<div class="nav-item ${activeClass}" ${style?`style="${style}"`:''}  onclick="${onclick}">${label}</div>`;
   }
   let nav = '';
+  const navSep = (label, color='#3B5270') =>
+    `<div style="margin:8px 2px 4px;display:flex;align-items:center;gap:6px">
+       <div style="flex:1;height:1px;background:#1A2A44"></div>
+       <span style="font-size:9px;color:${color};font-weight:900;letter-spacing:1.2px;text-transform:uppercase;white-space:nowrap">${label}</span>
+       <div style="flex:1;height:1px;background:#1A2A44"></div>
+     </div>`;
+
   nav += ni('dashboard','🏠 اللوحة الرئيسية','');
-  nav += isM ? ni('whatsapp','📊 الموقف الإجمالي','color:#34d399') : '';
+  nav += isM ? ni('whatsapp','📊 الموقف الإجمالي','color:#34D399') : '';
   // قسم المشتريات
-  nav += '<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#475569;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المشتريات</p>';
-  if(!isFactoryAccountant) nav += ni('form','مشتريات منتوج','');
-  nav += ni('table','سجل بيانات المشتريات','');
-  nav += isM ? ni('import_p',"📥 استيراد مشتريات",'color:#34d399') : '';
-  nav += '</div>';
+  nav += navSep('المشتريات');
+  if(!isFactoryAccountant) nav += ni('form','🛢️ مشتريات منتوج','');
+  nav += ni('table','📋 سجل المشتريات','');
+  nav += isM ? ni('import_p','📥 استيراد مشتريات','color:#34D399') : '';
   // قسم المبيعات
-  nav += '<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#a78bfa;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المبيعات</p>';
-  if(!isFactoryAccountant) nav += ni('sale_form','مبيعات منتوج','color:#a78bfa');
-  nav += ni('sale_table','سجل بيانات المبيعات','color:#a78bfa');
-  nav += isM ? ni('import_s',"📥 استيراد مبيعات",'color:#c4b5fd') : '';
-  nav += '</div>';
+  nav += navSep('المبيعات','#7C5FC0');
+  if(!isFactoryAccountant) nav += ni('sale_form','📦 مبيعات منتوج','color:#a78bfa');
+  nav += ni('sale_table','📋 سجل المبيعات','color:#a78bfa');
+  nav += isM ? ni('import_s','📥 استيراد مبيعات','color:#c4b5fd') : '';
   // الأقسام التالية مخفية لمحاسبي المعامل
   if(!isFactoryAccountant){
-    nav += isM ? `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('reports','📄 التقارير والطباعة','color:#fbbf24')}</div>` : '';
-    if(hasPerm('salaf')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المالية</p>${ni('salaf','💰 السلف','color:#fbbf24')}${ni('salaf_table','📋 ملخص السلف','color:#fbbf24')}</div>`;
-    if(hasPerm('expenses')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#f87171;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المصاريف</p>${ni('expenses','📋 المصاريف','color:#f87171')}${ni('expenses_summary','📊 تسوية المصاريف','color:#f87171')}</div>`;
-    if(hasPerm('kroob')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#34d399;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">الكروب / الصيرفة</p>${ni('kroob','🏦 كروب رافد فيصل','color:#34d399')}${ni('kroob_statement','📜 كشف الحساب','color:#34d399')}</div>`;
-    if(isM) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">حسابات سيد رافد</p>${ni('rafid_accounts','💼 حسابات سيد رافد','color:#fde68a')}${ni('rafid_statement','📜 كشف الحساب','color:#fde68a')}</div>`;
-    if(isM) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('refinery_account','🏭 حساب المصفى','color:#fbbf24')}</div>`;
+    nav += isM ? navSep('التقارير','#92743A') + ni('reports','📄 التقارير والطباعة','color:#fbbf24') : '';
+    if(hasPerm('salaf')) nav += navSep('المالية','#92743A') + ni('salaf','💰 السلف','color:#fbbf24') + ni('salaf_table','📑 ملخص السلف','color:#fbbf24');
+    if(hasPerm('expenses')) nav += navSep('المصاريف','#7A3535') + ni('expenses','📋 المصاريف','color:#f87171') + ni('expenses_summary','📊 تسوية المصاريف','color:#f87171');
+    if(hasPerm('kroob')) nav += navSep('الكروب / الصيرفة','#1F6B52') + ni('kroob','🏦 كروب رافد فيصل','color:#34d399') + ni('kroob_statement','📜 كشف الحساب','color:#34d399');
+    if(isM) nav += navSep('حسابات سيد رافد','#856318') + ni('rafid_accounts','💼 حسابات سيد رافد','color:#fde68a') + ni('rafid_statement','📜 كشف الحساب','color:#fde68a');
+    if(isM) nav += navSep('المصافي','#92743A') + ni('refinery_account','🏭 حساب المصفى','color:#fbbf24');
   }
-  if(isM) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('admin','⚙️ إدارة النظام','color:#93c5fd')}${ni('permissions','🔐 الصلاحيات','color:#c084fc')}</div>`;
+  if(isM) nav += navSep('الإدارة','#2A4A8A') + ni('admin','⚙️ إدارة النظام','color:#93c5fd') + ni('permissions','🔐 الصلاحيات','color:#c084fc');
   return nav;
 }
 
@@ -430,42 +640,67 @@ function viewDashboard() {
   const totalTons=facts.reduce((s,f)=>s+analysis[f].total.tons,0);
   const totalKg=facts.reduce((s,f)=>s+analysis[f].total.kg,0);
 
-  const kpiCards=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:20px">
-    <div class="card" style="text-align:center;border-top:4px solid #2563eb">
-      <div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:6px">🚛 سيارات المشتريات</div>
-      <div style="font-size:32px;font-weight:900;color:#2563eb">${totalCars}</div>
-      <div style="font-size:11px;color:#94a3b8;margin-top:4px">اليوم: <b style="color:#2563eb">${todayCars}</b> سيارة</div>
+  const kpiCards=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:14px;margin-bottom:22px">
+    <div class="kpi-card kpi-blue">
+      <div class="kpi-icon" style="background:#EFF6FF">🚛</div>
+      <div class="kpi-label">سيارات المشتريات</div>
+      <div class="kpi-value" style="color:#2563EB">${totalCars}</div>
+      <div class="kpi-sub">اليوم: <b style="color:#2563EB">${todayCars}</b> سيارة</div>
     </div>
-    <div class="card" style="text-align:center;border-top:4px solid #0891b2">
-      <div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:6px">⚖️ إجمالي الطن</div>
-      <div style="font-size:22px;font-weight:900;color:#0891b2">${fmt(totalTons)}</div>
-      <div style="font-size:10px;color:#94a3b8;margin-top:4px">طن</div>
+    <div class="kpi-card kpi-cyan">
+      <div class="kpi-icon" style="background:#ECFEFF">⚖️</div>
+      <div class="kpi-label">إجمالي الطن</div>
+      <div class="kpi-value" style="color:#0891B2;font-size:22px">${fmt(totalTons)}</div>
+      <div class="kpi-sub">طن</div>
     </div>
-    <div class="card" style="text-align:center;border-top:4px solid #059669">
-      <div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:6px">💧 إجمالي اللترات</div>
-      <div style="font-size:22px;font-weight:900;color:#059669">${fmt(totalLiters)}</div>
-      <div style="font-size:10px;color:#94a3b8;margin-top:4px">لتر</div>
+    <div class="kpi-card kpi-green">
+      <div class="kpi-icon" style="background:#ECFDF5">💧</div>
+      <div class="kpi-label">إجمالي اللترات</div>
+      <div class="kpi-value" style="color:#059669;font-size:22px">${fmt(totalLiters)}</div>
+      <div class="kpi-sub">لتر</div>
     </div>
-    <div class="card" style="text-align:center;border-top:4px solid #d97706;background:#fffbeb">
-      <div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:6px">⚡ إجمالي الكغم</div>
-      <div style="font-size:22px;font-weight:900;color:#d97706">${fmt(totalKg)}</div>
-      <div style="font-size:10px;color:#92400e;margin-top:4px">كيلوغرام</div>
+    <div class="kpi-card kpi-amber">
+      <div class="kpi-icon" style="background:#FFFBEB">⚡</div>
+      <div class="kpi-label">إجمالي الكغم</div>
+      <div class="kpi-value" style="color:#D97706;font-size:22px">${fmt(totalKg)}</div>
+      <div class="kpi-sub">كيلوغرام</div>
     </div>
-    <div class="card" style="text-align:center;border-top:4px solid #7c3aed">
-      <div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:6px">📦 سيارات المبيعات</div>
-      <div style="font-size:32px;font-weight:900;color:#7c3aed">${totalSaleCars}</div>
-      <div style="font-size:12px;color:#7c3aed;font-weight:900;margin-top:6px;background:#f5f3ff;border-radius:8px;padding:4px 8px">الكبان: <span style="font-size:16px;font-weight:900">${fmtKaban(totalKaban)}</span></div>
+    <div class="kpi-card kpi-purple">
+      <div class="kpi-icon" style="background:#F5F3FF">📦</div>
+      <div class="kpi-label">سيارات المبيعات</div>
+      <div class="kpi-value" style="color:#7C3AED">${totalSaleCars}</div>
+      <div style="margin-top:8px;background:#F5F3FF;border-radius:8px;padding:5px 10px;font-size:12px;color:#7C3AED;font-weight:900">الكبان: <span style="font-size:16px">${fmtKaban(totalKaban)}</span></div>
     </div>
   </div>`;
 
-  const factoryCards=`<h3 style="font-size:14px;font-weight:900;margin-bottom:14px;color:#0f172a">تفاصيل أداء المعامل</h3>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
-  ${facts.map(f=>{const d=analysis[f],sd=saleAn[f];return`<div class="card" style="border-right:5px solid #2563eb">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f1f5f9"><span style="font-weight:900;color:#2563eb;font-size:13px">${f}</span><span class="badge" style="background:#ecfdf5;color:#059669;font-size:10px">مُشغَّل ✓</span></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div style="background:#eff6ff;border-radius:8px;padding:10px"><p style="font-size:10px;color:#2563eb;font-weight:700;text-align:center;margin-bottom:6px">إجمالي المشتريات</p>${sr('السيارات',d.total.cars)}${sr('طن',fmt(d.total.tons),'#059669')}${sr('المبلغ',fmtM(d.total.money),'#1e3a8a')}</div>
-      <div style="background:#f5f3ff;border-radius:8px;padding:10px"><p style="font-size:10px;color:#7c3aed;font-weight:700;text-align:center;margin-bottom:6px">إجمالي المبيعات</p>${sr('السيارات',sd.total.cars)}${sr('كبان',fmtKaban(sd.total.kaban),'#7c3aed')}${sr('المبلغ',fmtM(sd.total.money),'#1e3a8a')}</div>
-    </div></div>`;}).join('')}
+  const factoryCards=`
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <h3 style="font-size:14px;font-weight:900;color:#0F172A;display:flex;align-items:center;gap:8px">
+      <span style="width:28px;height:28px;background:linear-gradient(135deg,#2563EB,#7C3AED);border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:13px">🏭</span>
+      أداء المعامل
+    </h3>
+    <span class="badge" style="background:#EFF6FF;color:#2563EB">${facts.length} معمل</span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px">
+  ${facts.map(f=>{const d=analysis[f],sd=saleAn[f];return`<div class="fact-card">
+    <div class="fact-card-hd">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="width:8px;height:32px;background:linear-gradient(180deg,#2563EB,#7C3AED);border-radius:4px"></div>
+        <span style="font-weight:900;color:#1E40AF;font-size:13px">${f}</span>
+      </div>
+      <span class="badge" style="background:#ECFDF5;color:#059669;font-size:10px">✓ مُشغَّل</span>
+    </div>
+    <div style="padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fact-stat fact-stat-p">
+        <p style="font-size:10px;color:#2563EB;font-weight:700;text-align:center;margin-bottom:8px;letter-spacing:.3px">🛢️ المشتريات</p>
+        ${sr('السيارات',d.total.cars)}${sr('طن',fmt(d.total.tons),'#059669')}${sr('المبلغ',fmtM(d.total.money),'#1E40AF')}
+      </div>
+      <div class="fact-stat fact-stat-s">
+        <p style="font-size:10px;color:#7C3AED;font-weight:700;text-align:center;margin-bottom:8px;letter-spacing:.3px">📦 المبيعات</p>
+        ${sr('السيارات',sd.total.cars)}${sr('كبان',fmtKaban(sd.total.kaban),'#7C3AED')}${sr('المبلغ',fmtM(sd.total.money),'#1E40AF')}
+      </div>
+    </div>
+  </div>`;}).join('')}
   </div>`;
 
   return kpiCards+factoryCards;
@@ -784,15 +1019,15 @@ function viewTable(){
     ${isM?`<td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 8px;font-size:10px;margin-left:3px" onclick="editEntry('${e.id}')">✏️</button><button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteEntry('${e.id}')">🗑️</button></td>`:''}
   </tr>`).join('');
   return `<div class="card" style="overflow:hidden;padding:0">
-    <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border-bottom:1px solid #e2e8f0">
-      <span style="font-weight:900;font-size:14px;color:#1e40af">سجل بيانات المشتريات — ${sf} <span class="badge" style="background:#eff6ff;color:#2563eb">${total} سجل</span></span>
+    <div class="sec-hd">
+      <span style="font-weight:900;font-size:14px;color:#1E40AF;display:flex;align-items:center;gap:8px">🛢️ سجل المشتريات — ${sf} <span class="badge" style="background:#EFF6FF;color:#2563EB">${total} سجل</span></span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-green no-print" style="font-size:11px;padding:7px 12px" onclick="exportXLSX('purchases')">📊 Excel</button>
         <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="window.print()">🖨️</button>
         <button class="btn btn-red no-print" style="font-size:11px;padding:7px 12px" onclick="generatePDF('purchases')">📄 PDF</button>
       </div>
     </div>
-    <div style="padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <div class="filter-bar">
       <input class="inp" id="p_search" placeholder="🔍 بحث..." value="${S.pSearch||''}" style="flex:1;min-width:200px;max-width:300px" oninput="S.pSearch=this.value;S.pPage=1;renderContent()">
       <select class="inp" style="width:160px" onchange="S.pRefinery=this.value;S.pPage=1;renderContent()"><option value="" ${!S.pRefinery?'selected':''}>كل المصافي</option><option value="مصفى كربلاء" ${S.pRefinery==='مصفى كربلاء'?'selected':''}>مصفى كربلاء</option><option value="مصفى صلاح الدين" ${S.pRefinery==='مصفى صلاح الدين'?'selected':''}>مصفى صلاح الدين</option></select>
       <select class="inp" style="width:120px" onchange="S.pType=this.value;S.pPage=1;renderContent()"><option value="" ${!S.pType?'selected':''}>كل الأنواع</option><option value="HFO" ${S.pType==='HFO'?'selected':''}>HFO</option><option value="VR" ${S.pType==='VR'?'selected':''}>VR</option></select>
@@ -838,14 +1073,14 @@ function viewSaleTable(){
     ${isM?`<td class="td-p" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 8px;font-size:10px;margin-left:3px" onclick="editSale('${e.id}')">✏️</button><button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteSale('${e.id}')">🗑️</button></td>`:''}
   </tr>`).join('');
   return `<div class="card" style="overflow:hidden;padding:0">
-    <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;background:#faf5ff;border-bottom:1px solid #e9d5ff">
-      <span style="font-weight:900;font-size:14px;color:#6d28d9">سجل بيانات المبيعات — ${sf} <span class="badge" style="background:#f5f3ff;color:#7c3aed">${total} سجل</span> <span class="badge" style="background:#f5f3ff;color:#7c3aed">الكبان: ${fmtKaban(totKaban)}</span></span>
+    <div class="sec-hd" style="background:#FAF5FF;border-bottom:1px solid #E9D5FF">
+      <span style="font-weight:900;font-size:14px;color:#6D28D9;display:flex;align-items:center;gap:8px">📦 سجل المبيعات — ${sf} <span class="badge" style="background:#F5F3FF;color:#7C3AED">${total} سجل</span> <span class="badge" style="background:#F5F3FF;color:#7C3AED">الكبان: ${fmtKaban(totKaban)}</span></span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-blue no-print" style="font-size:11px;padding:7px 12px" onclick="exportXLSX('sales')">📊 Excel</button>
         <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="window.print()">🖨️</button>
       </div>
     </div>
-    <div style="padding:10px 14px;background:#faf5ff;border-bottom:1px solid #e9d5ff;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <div class="filter-bar" style="background:#FAF5FF;border-color:#E9D5FF">
       <input class="inp" placeholder="🔍 بحث..." value="${S.sSearch||''}" style="flex:1;min-width:200px;max-width:300px" oninput="S.sSearch=this.value;S.sPage=1;renderContent()">
       <select class="inp" style="width:150px" onchange="S.sTypeFilter=this.value;S.sPage=1;renderContent()"><option value="" ${!S.sTypeFilter?'selected':''}>كل الأنواع</option><option value="فلانكوت" ${S.sTypeFilter==='فلانكوت'?'selected':''}>فلانكوت</option><option value="HFO" ${S.sTypeFilter==='HFO'?'selected':''}>HFO</option><option value="VR" ${S.sTypeFilter==='VR'?'selected':''}>VR</option></select>
     </div>
@@ -2091,22 +2326,58 @@ function applyEnterNav(){
 // ===== انتقال الصفحات =====
 function go(view){S.view=view;S.editEntry=null;S.editSale=null;render();}
 function setFactory(f){S.selectedFactory=f;renderContent();}
+
+// ===== ملء الشاشة =====
+function toggleFullscreen(){
+  if(!document.fullscreenElement){
+    document.documentElement.requestFullscreen().catch(()=>{});
+  } else {
+    document.exitFullscreen().catch(()=>{});
+  }
+}
+document.addEventListener('fullscreenchange',()=>{
+  const btn=document.getElementById('fs-btn');
+  if(btn) btn.textContent = document.fullscreenElement ? '⛶' : '⛶';
+});
+// F11 shortcut
+document.addEventListener('keydown',e=>{
+  if(e.key==='F11'){e.preventDefault();toggleFullscreen();}
+});
 function toggleMobileMenu(){const aside=document.querySelector('aside'),overlay=document.getElementById('mobile-overlay');if(aside){aside.classList.toggle('open');}if(overlay){overlay.classList.toggle('show');}}
 
 // ===== تسجيل الدخول =====
 function renderLogin(){
   document.getElementById('app').innerHTML=`
-  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%)">
-    <div style="background:#fff;border-radius:20px;padding:40px;width:360px;box-shadow:0 25px 60px rgba(0,0,0,.3)">
-      <div style="text-align:center;margin-bottom:28px">
-        <div style="width:60px;height:60px;background:#2563eb;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:18px;margin:0 auto 12px">OIL</div>
-        <h2 style="font-size:18px;font-weight:900;color:#0f172a">نظام المراقبة v42.0</h2>
-        <p style="font-size:12px;color:#94a3b8;margin-top:4px">إدارة المشتريات النفطية</p>
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#060D1E 0%,#0B1A3E 40%,#0F1F4A 100%);position:relative;overflow:hidden">
+    <!-- Decorative blobs -->
+    <div style="position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(37,99,235,.14),transparent 70%);top:-180px;right:-100px;pointer-events:none"></div>
+    <div style="position:absolute;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.10),transparent 70%);bottom:-150px;left:-120px;pointer-events:none"></div>
+    <div style="position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.025) 1px,transparent 1px);background-size:32px 32px;pointer-events:none"></div>
+
+    <div style="background:#fff;border-radius:22px;padding:44px 40px;width:400px;box-shadow:0 32px 80px rgba(0,0,0,.55);position:relative;z-index:1">
+      <!-- Header -->
+      <div style="text-align:center;margin-bottom:32px">
+        <div style="width:68px;height:68px;background:linear-gradient(135deg,#2563EB,#1D4ED8);border-radius:18px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;margin:0 auto 16px;box-shadow:0 10px 28px rgba(37,99,235,.38)">⛽</div>
+        <h2 style="font-size:20px;font-weight:900;color:#0F172A;letter-spacing:-.3px">نظام المراقبة v42.0</h2>
+        <p style="font-size:12px;color:#94A3B8;margin-top:6px;font-weight:600">إدارة المشتريات النفطية — Oil System</p>
+        <div style="width:48px;height:3px;background:linear-gradient(90deg,#2563EB,#7C3AED);border-radius:3px;margin:12px auto 0"></div>
       </div>
-      <div style="margin-bottom:14px"><label class="lbl">📧 البريد الإلكتروني</label><input class="inp" id="login_email" type="email" placeholder="user@example.com" value="fadel.manger@gmail.com" style="font-size:14px"></div>
-      <div style="margin-bottom:20px"><label class="lbl">🔐 كلمة السر</label><input class="inp" id="login_pass" type="password" placeholder="••••••••" value="admin123" style="font-size:14px" onkeydown="if(event.key==='Enter')doLogin()"></div>
-      <button class="btn btn-blue" style="width:100%;padding:12px;font-size:15px" onclick="doLogin()">🚀 تسجيل الدخول</button>
-      <div style="margin-top:10px;background:#eff6ff;border-radius:8px;padding:8px 12px;font-size:10px;color:#1e40af;font-weight:700;text-align:center">🔐 مؤمّن بـ Firebase Authentication</div>
+
+      <!-- Form -->
+      <div style="margin-bottom:16px">
+        <label class="lbl" style="font-size:12px;margin-bottom:6px">📧 البريد الإلكتروني</label>
+        <input class="inp" id="login_email" type="email" placeholder="user@example.com" value="fadel.manger@gmail.com" style="font-size:14px;padding:11px 14px">
+      </div>
+      <div style="margin-bottom:24px">
+        <label class="lbl" style="font-size:12px;margin-bottom:6px">🔐 كلمة السر</label>
+        <input class="inp" id="login_pass" type="password" placeholder="••••••••" value="admin123" style="font-size:14px;padding:11px 14px" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="btn btn-blue" style="width:100%;padding:13px;font-size:15px;justify-content:center;border-radius:12px;letter-spacing:.3px" onclick="doLogin()">🚀 تسجيل الدخول</button>
+
+      <!-- Footer note -->
+      <div style="margin-top:16px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:9px 14px;font-size:10.5px;color:#1E40AF;font-weight:700;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px">
+        🔐 مؤمّن بـ Firebase Authentication
+      </div>
     </div>
   </div>`;
 }

@@ -1788,6 +1788,8 @@ function viewRefineryAccount(){
       <td class="td" style="color:#2563eb;font-weight:900;font-size:16px">${byFactory[f].cars}</td>
       <td class="td" style="color:#059669;font-weight:900;font-size:15px">${fmt(byFactory[f].tons)}</td>
       <td class="td" style="color:#1e3a8a;font-weight:900;font-size:15px">${fmtM(byFactory[f].amount)}</td>
+      <td class="td"></td>
+      <td class="td"></td>
     </tr>`).join('');
 
     const totalRow=`<tr style="background:#92400e;color:#fff">
@@ -1795,7 +1797,8 @@ function viewRefineryAccount(){
       <td class="td" style="color:#fff;font-weight:900;font-size:20px">${filtered.length}<br><span style="font-size:11px;color:#fde68a">سيارة</span></td>
       <td class="td" style="color:#6ee7b7;font-weight:900;font-size:18px">${fmt(grandTons)}<br><span style="font-size:11px;color:#fde68a">طن</span></td>
       <td class="td" style="color:#fbbf24;font-weight:900;font-size:18px">${fmtM(grandAmount)}<br><span style="font-size:11px;color:#fde68a">المبلغ المستحق</span></td>
-
+      <td class="td" style="color:#34d399;font-weight:900;font-size:16px">${fmtM(grandReceived)}<br><span style="font-size:11px;color:#fde68a">إجمالي المستلم</span></td>
+      <td class="td" style="color:${grandRemaining>0?'#fca5a5':'#6ee7b7'};font-weight:900;font-size:16px">${fmtM(Math.abs(grandRemaining))}<br><span style="font-size:11px;color:#fde68a">${grandRemaining>0?'⚠️ المتبقي':'✅ مسوى'}</span></td>
     </tr>`;
 
     return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:16px;border:2px solid ${color}">
@@ -1815,6 +1818,8 @@ function viewRefineryAccount(){
             <th class="th" style="font-size:13px">السيارات</th>
             <th class="th" style="font-size:13px">الطن</th>
             <th class="th" style="font-size:13px">إجمالي المبلغ</th>
+            <th class="th" style="font-size:13px">إجمالي المستلم</th>
+            <th class="th" style="font-size:13px">المتبقي</th>
           </tr></thead>
           <tbody>${factRows}${totalRow}</tbody>
         </table>

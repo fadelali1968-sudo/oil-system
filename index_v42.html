@@ -332,6 +332,7 @@ function render() {
           (S.view!=='kroob'&&S.view!=='kroob_statement'?'<div style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700">المعمل:</span>'+factSel+'</div>':'') +
           '<div style="display:flex;align-items:center;gap:10px">' +
           (isM?'<div style="position:relative;cursor:pointer" onclick="toggleNotif()"><div style="width:38px;height:38px;background:#f1f5f9;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;border:1px solid #e2e8f0">🔔</div><div id="notif-badge" class="notif-badge" style="display:none">0</div></div>':'') +
+          '<div id="sync-status-badge" style="background:#0f172a;color:#94a3b8;padding:4px 10px;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer" onclick="syncAllToFirebase()" title="اضغط للمزامنة الآن">☁️ --:--</div>' +
           '<div id="clock" style="background:#0f172a;color:#34d399;padding:5px 14px;border-radius:8px;font-size:13px;font-weight:900;font-family:monospace;letter-spacing:2px">00:00:00</div>' +
           '</div>' +
           '<div style="font-size:11px;color:#94a3b8;font-weight:700">'+currentUser.email+'</div>' +
@@ -341,6 +342,7 @@ function render() {
     '</div>';
 
   setInterval(()=>{const c=el('clock');if(c){const n=new Date();c.textContent=[n.getHours(),n.getMinutes(),n.getSeconds()].map(v=>String(v).padStart(2,'0')).join(':');}},1000);
+  startAutoSync();
   renderContent();
 }
 
@@ -2096,11 +2098,31 @@ function importFullBackup(input){
   reader.readAsText(file);
 }
 
+// ===== المزامنة التلقائية كل ساعة =====
+let _autoSyncTimer = null;
+const AUTO_SYNC_INTERVAL = 60 * 60 * 1000; // ساعة واحدة
+
+function startAutoSync(){
+  if(_autoSyncTimer) clearInterval(_autoSyncTimer);
+  _autoSyncTimer = setInterval(async ()=>{
+    if(!currentUser||!window._fbReady) return;
+    console.log('🔄 مزامنة تلقائية...');
+    await syncAllToFirebase(true);
+  }, AUTO_SYNC_INTERVAL);
+  console.log('✅ المزامنة التلقائية مفعّلة (كل ساعة)');
+}
+
+function updateSyncBadge(text, color){
+  const badge = document.getElementById('sync-status-badge');
+  if(badge){ badge.textContent = text; badge.style.background = color||'#0f172a'; }
+}
+
 // ===== رفع كل البيانات إلى Firebase =====
-async function syncAllToFirebase(){
-  if(!window._fbReady){showToast('Firebase غير متصل','error');return;}
+async function syncAllToFirebase(silent=false){
+  if(!window._fbReady){if(!silent)showToast('Firebase غير متصل','error');return;}
   const btn=document.getElementById('sync-fb-btn');
-  if(btn){btn.textContent='⏳ جاري الرفع...';btn.disabled=true;}
+  if(btn&&!silent){btn.textContent='⏳ جاري الرفع...';btn.disabled=true;}
+  updateSyncBadge('☁️ جاري...','#0891b2');
   let total=0,errors=0;
   try{
     const entries=DB.get('entries',[]);
@@ -2130,10 +2152,19 @@ async function syncAllToFirebase(){
     const drivers=DB.get('drivers',{});
     for(const[k,v] of Object.entries(drivers)){try{await FDB.save('drivers',k.replace(/\s+/g,'_'),v);total++;}catch(e){errors++;}}
 
-    const msg=errors?`✅ رُفع ${total} سجل ⚠️ ${errors} خطأ`:`✅ تم رفع ${total} سجل إلى Firebase بنجاح`;
-    showToast(msg,errors?'warning':'success',4000);
-  }catch(e){showToast('خطأ: '+e.message,'error');}
-  if(btn){btn.textContent='☁️ رفع كل البيانات إلى Firebase';btn.disabled=false;}
+    const now=new Date();
+    const timeStr=[now.getHours(),now.getMinutes()].map(v=>String(v).padStart(2,'0')).join(':');
+    DB.set('last_sync_time',timeStr+' '+today());
+    updateSyncBadge('☁️ '+timeStr, errors?'#d97706':'#059669');
+
+    const msg=errors?`☁️ مزامنة: ${total} سجل ⚠️ ${errors} خطأ`:`☁️ مزامنة: ${total} سجل — ${timeStr}`;
+    if(!silent) showToast(msg,errors?'warning':'success',4000);
+    else showToast(msg,'info',3000);
+  }catch(e){
+    updateSyncBadge('☁️ خطأ','#dc2626');
+    if(!silent)showToast('خطأ: '+e.message,'error');
+  }
+  if(btn&&!silent){btn.textContent='☁️ رفع كل البيانات إلى Firebase';btn.disabled=false;}
 }
 
 // ===== إدارة الصلاحيات =====

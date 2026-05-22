@@ -534,6 +534,7 @@ function render() {
           '<div style="display:flex;align-items:center;gap:10px">' +
             (isM?'<div style="position:relative;cursor:pointer" onclick="toggleNotif()"><div style="width:36px;height:36px;background:#F1F5F9;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;border:1.5px solid #E2E8F0;transition:all .2s" onmouseover="this.style.background=\'#EFF6FF\'" onmouseout="this.style.background=\'#F1F5F9\'">🔔</div><div id="notif-badge" class="notif-badge" style="display:none">0</div></div>':'') +
             '<div id="clock" style="background:linear-gradient(135deg,#0F172A,#1E293B);color:#34D399;padding:6px 16px;border-radius:8px;font-size:13px;font-weight:900;font-family:monospace;letter-spacing:2px;box-shadow:0 2px 8px rgba(0,0,0,.15)">00:00:00</div>' +
+            '<div id="backup-indicator" title="آخر نسخة احتياطية" style="font-size:10px;font-weight:700;padding:5px 10px;border-radius:8px;background:#F1F5F9;color:#64748B;cursor:pointer;border:1px solid #E2E8F0" onclick="go(\'admin\')">💾 ...</div>' +
             '<button id="fs-btn" title="ملء الشاشة" onclick="toggleFullscreen()" style="width:36px;height:36px;background:#F1F5F9;border:1.5px solid #E2E8F0;border-radius:9px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .2s" onmouseover="this.style.background=\'#EFF6FF\'" onmouseout="this.style.background=\'#F1F5F9\'">⛶</button>' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:8px">' +
@@ -546,6 +547,9 @@ function render() {
     '</div>';
 
   setInterval(()=>{const c=el('clock');if(c){const n=new Date();c.textContent=[n.getHours(),n.getMinutes(),n.getSeconds()].map(v=>String(v).padStart(2,'0')).join(':');}},1000);
+  // تحديث مؤشر النسخة الاحتياطية
+  const ind=el('backup-indicator');
+  if(ind){const last=DB.get('last_auto_backup','');const isToday=last===today();ind.textContent='💾 '+(last||'—');ind.style.background=isToday?'#ECFDF5':'#FFF7ED';ind.style.color=isToday?'#059669':'#D97706';ind.title='آخر نسخة احتياطية: '+(last||'لا توجد');}
   renderContent();
 }
 
@@ -2181,6 +2185,28 @@ function viewAdmin(){
       </div>
     </div>
     <div id="backup-msg" style="display:none;margin-top:10px;padding:10px;border-radius:8px;font-size:12px;font-weight:700;text-align:center"></div>
+    <!-- النسخ المحلية المحفوظة -->
+    <div style="margin-top:14px">
+      <p style="font-size:12px;font-weight:900;color:#065F46;margin-bottom:8px">🗂️ النسخ التلقائية المحفوظة (آخر 7 أيام):</p>
+      <div id="local-backups-list" style="display:flex;flex-direction:column;gap:6px">
+        ${(()=>{
+          const list=Object.keys(localStorage).filter(k=>k.startsWith('oil_auto_backup_')).sort().reverse();
+          if(!list.length) return '<p style="font-size:11px;color:#94A3B8">لا توجد نسخ محلية بعد — ستُنشأ تلقائياً عند فتح البرنامج</p>';
+          return list.map(k=>{
+            const d=k.replace('oil_auto_backup_','');
+            const bk=DB.get('auto_backup_'+d,{});
+            const isToday=d===today();
+            return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:${isToday?'#F0FDF4':'#F8FAFC'};border:1px solid ${isToday?'#BBF7D0':'#E2E8F0'};border-radius:8px">
+              <div>
+                <span style="font-size:12px;font-weight:900;color:${isToday?'#065F46':'#334155'}">${isToday?'⭐ اليوم — ':''} ${d}</span>
+                <span style="font-size:10px;color:#94A3B8;margin-right:8px">${(bk.entries||[]).length} مشتريات | ${(bk.sales||[]).length} مبيعات</span>
+              </div>
+              <button class="btn btn-amber" style="font-size:10px;padding:4px 10px" onclick="restoreLocalBackup('${d}')">استعادة</button>
+            </div>`;
+          }).join('');
+        })()}
+      </div>
+    </div>
   </div>
 
   <div class="card" style="border:2px solid #dc2626">
@@ -2465,8 +2491,8 @@ async function doLogin(){
     currentUser={...user,uid:k};
     S.selectedFactory=user.factory==='الكل'?'الكل':(user.factory||'الكل');
     DB.set('last_user',currentUser);
-    if(isManager())syncFromCloud().then(()=>render());
-    else render();
+    if(isManager())syncFromCloud().then(()=>{ render(); setTimeout(checkAutoBackup,2000); });
+    else { render(); setTimeout(checkAutoBackup,2000); }
   } catch(err){
     let msg='خطأ في تسجيل الدخول';
     if(err.code==='auth/user-not-found'||err.code==='auth/invalid-credential')msg='البريد الإلكتروني أو كلمة السر غير صحيحة';
@@ -2484,6 +2510,70 @@ function logout(){
   currentUser=null;DB.set('last_user',null);
   S={view:'dashboard',selectedFactory:'الكل',filterFrom:'',filterTo:'',editEntry:null,editSale:null,wFrom:'',wTo:'',pSearch:'',pRefinery:'',pType:'',sSearch:'',sTypeFilter:'',salafPerson:'',salafEditId:'',expFactory:'',expEditId:'',expDate:'',expDinar:0,expDollar:0,expDetails:'',kroobEditId:'',rafidEditId:''};
   renderLogin();
+}
+
+// ===== النسخ الاحتياطي التلقائي =====
+const BACKUP_KEYS = ['entries','sales','drivers','salaf','expenses','kroob','kroob_opening','rafid_accounts','rafid_opening','refinery_received','factories'];
+
+function saveLocalBackup(dateStr) {
+  const backup = { _version:'42.0', _date:new Date().toISOString(), _by:'auto' };
+  BACKUP_KEYS.forEach(k => { const v=DB.get(k,null); if(v!==null) backup[k]=v; });
+  DB.set('auto_backup_'+dateStr, backup);
+  // احتفظ بآخر 7 نسخ فقط
+  const allKeys = Object.keys(localStorage)
+    .filter(k => k.startsWith('oil_auto_backup_'))
+    .sort().reverse();
+  allKeys.slice(7).forEach(k => localStorage.removeItem(k));
+}
+
+function checkAutoBackup() {
+  const today = new Date().toISOString().slice(0,10);
+  const last  = DB.get('last_auto_backup', '');
+  if(last === today) return; // تم اليوم بالفعل
+
+  // حفظ نسخة في localStorage
+  saveLocalBackup(today);
+  DB.set('last_auto_backup', today);
+
+  // تنزيل ملف JSON تلقائياً بعد 4 ثوانٍ من الفتح
+  setTimeout(() => {
+    const backup = DB.get('auto_backup_'+today, {});
+    const json = JSON.stringify(backup, null, 2);
+    const blob = new Blob([json], {type:'application/json'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'backup_auto_'+today+'.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('💾 تم حفظ النسخة الاحتياطية التلقائية ليوم '+today, 'success', 5000);
+    // تحديث مؤشر الهيدر
+    const ind = document.getElementById('backup-indicator');
+    if(ind) { ind.title='آخر نسخة: '+today; ind.style.background='#ECFDF5'; ind.style.color='#059669'; ind.textContent='💾 '+today; }
+  }, 4000);
+}
+
+function getLocalBackups() {
+  return Object.keys(localStorage)
+    .filter(k => k.startsWith('oil_auto_backup_'))
+    .sort().reverse()
+    .map(k => {
+      const dateStr = k.replace('oil_auto_backup_','');
+      const data = DB.get('auto_backup_'+dateStr, {});
+      const entries = (data.entries||[]).length;
+      const sales   = (data.sales||[]).length;
+      return { date:dateStr, entries, sales, data };
+    });
+}
+
+function restoreLocalBackup(dateStr) {
+  const backup = DB.get('auto_backup_'+dateStr, null);
+  if(!backup) { showToast('النسخة غير موجودة','error'); return; }
+  if(!confirm('استعادة نسخة '+dateStr+'؟ سيتم استبدال البيانات الحالية.')) return;
+  BACKUP_KEYS.forEach(k => { if(backup[k]!==undefined) DB.set(k, backup[k]); });
+  if(backup.factories) FACTORIES = backup.factories;
+  showToast('✅ تمت الاستعادة من نسخة '+dateStr, 'success', 4000);
+  setTimeout(() => renderContent(), 1000);
 }
 
 // ===== التشغيل الرئيسي =====

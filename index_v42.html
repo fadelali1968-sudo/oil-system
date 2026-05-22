@@ -346,6 +346,9 @@ function render() {
 
 function buildNav(isM) {
   const v = S.view;
+  const role = currentUser?.role || '';
+  // محاسب المعمل = دور "محاسب" وليس مديراً وليس محاسب شركة (factory !== 'الكل')
+  const isFactoryAccountant = (role === 'محاسب') && !isM && (currentUser?.factory !== 'الكل');
   function ni(view,label,color,action){
     const isActive=v===view;
     const onclick=action||`go('${view}')`;
@@ -356,25 +359,27 @@ function buildNav(isM) {
   let nav = '';
   nav += ni('dashboard','🏠 اللوحة الرئيسية','');
   nav += isM ? ni('whatsapp','📊 الموقف الإجمالي','color:#34d399') : '';
-  // موقف الموانئ محذوف
+  // قسم المشتريات
   nav += '<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#475569;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المشتريات</p>';
-  nav += ni('form','مشتريات منتوج','');
+  if(!isFactoryAccountant) nav += ni('form','مشتريات منتوج','');
   nav += ni('table','سجل بيانات المشتريات','');
   nav += isM ? ni('import_p',"📥 استيراد مشتريات",'color:#34d399') : '';
   nav += '</div>';
+  // قسم المبيعات
   nav += '<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#a78bfa;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المبيعات</p>';
-  nav += ni('sale_form','مبيعات منتوج','color:#a78bfa');
+  if(!isFactoryAccountant) nav += ni('sale_form','مبيعات منتوج','color:#a78bfa');
   nav += ni('sale_table','سجل بيانات المبيعات','color:#a78bfa');
   nav += isM ? ni('import_s',"📥 استيراد مبيعات",'color:#c4b5fd') : '';
   nav += '</div>';
-  nav += isM ? `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('reports','📄 التقارير والطباعة','color:#fbbf24')}</div>` : '';
-  if(hasPerm('salaf')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المالية</p>${ni('salaf','💰 السلف','color:#fbbf24')}${ni('salaf_table','📋 ملخص السلف','color:#fbbf24')}</div>`;
-  if(hasPerm('expenses')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#f87171;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المصاريف</p>${ni('expenses','📋 المصاريف','color:#f87171')}${ni('expenses_summary','📊 تسوية المصاريف','color:#f87171')}</div>`;
-  if(hasPerm('kroob')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#34d399;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">الكروب / الصيرفة</p>${ni('kroob','🏦 كروب رافد فيصل','color:#34d399')}${ni('kroob_statement','📜 كشف الحساب','color:#34d399')}</div>`;
-  // حسابات سيد رافد
-  nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">حسابات سيد رافد</p>${ni('rafid_accounts','💼 حسابات سيد رافد','color:#fde68a')}${ni('rafid_statement','📜 كشف الحساب','color:#fde68a')}</div>`;
-  // حساب المصفى
-  nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('refinery_account','🏭 حساب المصفى','color:#fbbf24')}</div>`;
+  // الأقسام التالية مخفية لمحاسبي المعامل
+  if(!isFactoryAccountant){
+    nav += isM ? `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('reports','📄 التقارير والطباعة','color:#fbbf24')}</div>` : '';
+    if(hasPerm('salaf')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المالية</p>${ni('salaf','💰 السلف','color:#fbbf24')}${ni('salaf_table','📋 ملخص السلف','color:#fbbf24')}</div>`;
+    if(hasPerm('expenses')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#f87171;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المصاريف</p>${ni('expenses','📋 المصاريف','color:#f87171')}${ni('expenses_summary','📊 تسوية المصاريف','color:#f87171')}</div>`;
+    if(hasPerm('kroob')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#34d399;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">الكروب / الصيرفة</p>${ni('kroob','🏦 كروب رافد فيصل','color:#34d399')}${ni('kroob_statement','📜 كشف الحساب','color:#34d399')}</div>`;
+    nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">حسابات سيد رافد</p>${ni('rafid_accounts','💼 حسابات سيد رافد','color:#fde68a')}${ni('rafid_statement','📜 كشف الحساب','color:#fde68a')}</div>`;
+    nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('refinery_account','🏭 حساب المصفى','color:#fbbf24')}</div>`;
+  }
   if(isM) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('admin','⚙️ إدارة النظام','color:#93c5fd')}${ni('permissions','🔐 الصلاحيات','color:#c084fc')}</div>`;
   return nav;
 }

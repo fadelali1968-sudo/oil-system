@@ -319,10 +319,25 @@ function render() {
   document.getElementById('app').innerHTML =
     '<div style="display:flex;height:100vh;overflow:hidden">' +
       '<aside style="width:225px;background:#0f172a;display:flex;flex-direction:column;flex-shrink:0;z-index:50">' +
-        '<div style="padding:10px;background:#020617;border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
-          '<img src="app-icon.png" style="width:48px;height:48px;border-radius:12px;margin:0 auto 5px;display:block;box-shadow:0 2px 8px rgba(0,0,0,0.4)" onerror="this.outerHTML=\'<div style=&quot;width:48px;height:48px;background:#2563eb;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:12px;margin:0 auto 5px&quot;>OIL</div>\'">' +
-          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v42.0</p>' +
-          '<p style="font-size:10px;color:#94a3b8;margin-top:2px;font-weight:900;letter-spacing:0.5px">'+(isM?'المدققين':'محاسب: '+currentUser.factory)+'</p>' +
+        '<div style="padding:16px 12px 14px;background:linear-gradient(180deg,#020617 0%,#0f172a 100%);border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
+          '<div style="position:relative;display:inline-block;margin-bottom:10px">' +
+            '<div style="width:72px;height:72px;border-radius:18px;overflow:hidden;margin:0 auto;box-shadow:0 0 0 2px #1d4ed8,0 0 18px rgba(37,99,235,0.55),0 6px 16px rgba(0,0,0,0.7)">' +
+              '<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" style="width:72px;height:72px;display:block">' +
+                '<defs>' +
+                  '<linearGradient id="sb_bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#1e3a8a"/><stop offset="100%" style="stop-color:#0f172a"/></linearGradient>' +
+                  '<linearGradient id="sb_drop" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#fbbf24"/><stop offset="100%" style="stop-color:#d97706"/></linearGradient>' +
+                '</defs>' +
+                '<rect width="512" height="512" rx="96" fill="url(#sb_bg)"/>' +
+                '<path d="M256 100 C256 100 160 210 160 295 C160 348 203 390 256 390 C309 390 352 348 352 295 C352 210 256 100 256 100Z" fill="url(#sb_drop)" opacity="0.95"/>' +
+                '<ellipse cx="220" cy="240" rx="18" ry="30" fill="white" opacity="0.25" transform="rotate(-20,220,240)"/>' +
+                '<g transform="translate(256,295)" opacity="0.7"><circle r="55" fill="none" stroke="#93c5fd" stroke-width="8"/><circle r="35" fill="none" stroke="#93c5fd" stroke-width="8"/><rect x="-8" y="-65" width="16" height="20" rx="3" fill="#93c5fd"/><rect x="-8" y="45" width="16" height="20" rx="3" fill="#93c5fd"/><rect x="45" y="-8" width="20" height="16" rx="3" fill="#93c5fd"/><rect x="-65" y="-8" width="20" height="16" rx="3" fill="#93c5fd"/><rect x="28" y="-58" width="16" height="20" rx="3" fill="#93c5fd" transform="rotate(45,36,-48)"/><rect x="-44" y="-58" width="16" height="20" rx="3" fill="#93c5fd" transform="rotate(-45,-36,-48)"/><rect x="28" y="38" width="16" height="20" rx="3" fill="#93c5fd" transform="rotate(-45,36,48)"/><rect x="-44" y="38" width="16" height="20" rx="3" fill="#93c5fd" transform="rotate(45,-36,48)"/></g>' +
+                '<text x="256" y="455" text-anchor="middle" font-family="Arial Black" font-size="52" font-weight="900" fill="#fbbf24" letter-spacing="8">OIL</text>' +
+              '</svg>' +
+            '</div>' +
+          '</div>' +
+          '<p style="font-size:13px;font-weight:900;color:#e2e8f0;margin-bottom:4px;letter-spacing:0.3px">نظام المراقبة</p>' +
+          '<span style="font-size:9px;color:#fbbf24;font-weight:700;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.25);padding:2px 10px;border-radius:20px;letter-spacing:1px">v42.0</span>' +
+          '<p style="font-size:10px;color:#64748b;margin-top:8px;font-weight:700">'+(isM?'👥 المدققين':'🏭 '+currentUser.factory)+'</p>' +
         '</div>' +
         '<nav id="sidebar-nav" style="flex:1;padding:8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
         '<div style="padding:6px;flex-shrink:0"><button class="btn btn-red" style="width:100%;font-size:11px;padding:6px" onclick="logout()">🚪 تسجيل الخروج</button></div>' +

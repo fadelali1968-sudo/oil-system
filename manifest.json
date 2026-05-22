@@ -1,0 +1,26 @@
+{
+  "name": "نظام المشتريات النفطية v42.0",
+  "short_name": "نظام النفط",
+  "description": "نظام إدارة المشتريات النفطية",
+  "start_url": "/oil-system/index_v42.html",
+  "scope": "/oil-system/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "app-icon.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "app.ico",
+      "sizes": "256x256 128x128 64x64 48x48 32x32 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

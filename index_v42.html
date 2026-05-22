@@ -342,7 +342,7 @@ function render() {
               '</svg>' +
             '</div>' +
           '</div>' +
-          '<p style="font-size:13px;font-weight:900;color:#e2e8f0;margin-bottom:4px;letter-spacing:0.3px">نظام المراقبة</p>' +
+          '<p style="font-size:13px;font-weight:900;color:#e2e8f0;margin-bottom:4px;letter-spacing:0.3px">نظام المشتريات النفطية</p>' +
           '<span style="font-size:9px;color:#fbbf24;font-weight:700;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.25);padding:2px 10px;border-radius:20px;letter-spacing:1px">v42.0</span>' +
           '<p style="font-size:10px;color:#64748b;margin-top:8px;font-weight:700">'+(isM?'👥 المدققين':'🏭 '+currentUser.factory)+'</p>' +
         '</div>' +
@@ -587,7 +587,7 @@ function copyWhatsapp(){
   for(const f of facts){const d=analysis[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmt(d.kg)} كغم\n`;}
   txt+=`\n*📦 المبيعات:*\n`;
   for(const f of facts){const d=saleAn[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
-  txt+=`\n✅ نظام المراقبة v42.0`;
+  txt+=`\n✅ نظام المشتريات النفطية v42.0`;
   navigator.clipboard?.writeText(txt).catch(()=>{});
   showToast('تم نسخ الموقف الكامل','success');
 }
@@ -1587,7 +1587,7 @@ function renderKroobDailySection(date){
   todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isIn2=op2==='إيداع'||op2==='ايداع';let r='\n'+(isIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 $'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
   waTextK+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextK+=' | $'+fmtM(balDollar);
-  waTextK+='\n✅ نظام المراقبة v42.0';
+  waTextK+='\n✅ نظام المشتريات النفطية v42.0';
   window._kroobWaText=waTextK;
 
   return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #34d399"><div style="padding:12px 16px;background:#ecfdf5;border-bottom:1px solid #6ee7b7;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#065f46">🏦 كشف الكروب اليومي — ${date}</span><span class="badge" style="background:#d1fae5;color:#059669;margin-right:8px">${todayList.length} حركة</span></div><button class="btn btn-green" style="font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._kroobWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._kroobWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
@@ -1624,7 +1624,7 @@ function renderRafidDailySection(date){
   todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(e2.type_dollar==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
   waTextR+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextR+=' | $'+fmtM(balDollar);
-  waTextR+='\n✅ نظام المراقبة v42.0';
+  waTextR+='\n✅ نظام المشتريات النفطية v42.0';
   window._rafidWaText=waTextR;
 
   return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #f59e0b"><div style="padding:12px 16px;background:#92400e;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#fff">💼 كشف حسابات سيد رافد — ${date}</span><span class="badge" style="background:rgba(255,255,255,0.2);color:#fff;margin-right:8px">${todayList.length} حركة</span></div><button class="btn" style="background:#f59e0b;color:#fff;font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._rafidWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._rafidWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
@@ -1953,7 +1953,7 @@ function sendRefineryWhatsapp(){
     lines.push((grandRemaining>0?'⚠️':'✅')+' المتبقي: '+fmtM(Math.abs(grandRemaining))+' د.ع '+(grandRemaining>0?'(غير مسوى)':'(مسوى)'));
     lines.push(sep);
   });
-  lines.push('✅ نظام المراقبة v42.0');
+  lines.push('✅ نظام المشتريات النفطية v42.0');
   var msg=lines.join(NL);
   var phone='9647703277743';
   var encoded=encodeURIComponent(msg);
@@ -2296,7 +2296,7 @@ function renderLogin(){
     <div style="background:#fff;border-radius:20px;padding:40px;width:360px;box-shadow:0 25px 60px rgba(0,0,0,.3)">
       <div style="text-align:center;margin-bottom:28px">
         <div style="width:60px;height:60px;background:#2563eb;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:18px;margin:0 auto 12px">OIL</div>
-        <h2 style="font-size:18px;font-weight:900;color:#0f172a">نظام المراقبة v42.0</h2>
+        <h2 style="font-size:18px;font-weight:900;color:#0f172a">نظام المشتريات النفطية v42.0</h2>
         <p style="font-size:12px;color:#94a3b8;margin-top:4px">إدارة المشتريات النفطية</p>
       </div>
       <div style="margin-bottom:14px"><label class="lbl">📧 البريد الإلكتروني</label><input class="inp" id="login_email" type="email" placeholder="user@example.com" value="fadel.manger@gmail.com" style="font-size:14px"></div>

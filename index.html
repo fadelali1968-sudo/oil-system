@@ -16,6 +16,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -1238,7 +1239,7 @@ function exportExpensesXLSX(factory){if(typeof XLSX==='undefined')return;const l
 
 // ===== نظام الكروب =====
 function getKroobList(){let list=DB.get('kroob',[]);list.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));return list;}
-function calcKroobBalance(list){const opening=DB.get('kroob_opening',{dinar:0,dollar:0});let balDinar=parseFloat(opening.dinar||0),balDollar=parseFloat(opening.dollar||0);return list.map(e=>{const d=parseFloat(e.amount_dinar||0),dl=parseFloat(e.amount_dollar||0),op=(e.operation_type||'صرف').trim(),com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0);if(op==='إيداع'||op==='ايداع'){balDinar+=d;balDollar+=dl;}else{balDinar-=d;balDollar-=dl;}balDinar-=com;balDollar-=commD;return{...e,bal_dinar:balDinar,bal_dollar:balDollar};});}
+function calcKroobBalance(list){const opening=DB.get('kroob_opening',{dinar:0,dollar:0});let balDinar=parseFloat(opening.dinar||0),balDollar=parseFloat(opening.dollar||0);return list.map(e=>{const d=parseFloat(e.amount_dinar||0),dl=parseFloat(e.amount_dollar||0),op=(e.operation_type||'صرف').trim(),com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0);const dnarDir=e.dinar_type||(op==='إيداع'||op==='ايداع'?'دائن':'مدين');const dolDir=e.dollar_type||dnarDir;if(dnarDir==='دائن')balDinar+=d;else balDinar-=d;if(dolDir==='دائن')balDollar+=dl;else balDollar-=dl;balDinar-=com;balDollar-=commD;return{...e,bal_dinar:balDinar,bal_dollar:balDollar};});}
 
 function viewKroob(){
   const editId=S.kroobEditId||'',allList=getKroobList(),listWithBal=calcKroobBalance(allList),editData=editId?allList.find(e=>e.id===editId):null;
@@ -1269,21 +1270,8 @@ function viewKroob(){
 </tbody></table></div></div></div>`;
 }
 
-function viewKroobStatement(){
-  const allList=getKroobList(),listWithBal=calcKroobBalance(allList),opening=DB.get('kroob_opening',{dinar:0,dollar:0});
-  const months={};
-  listWithBal.forEach(e=>{const m=(e.date||'').slice(0,7);if(!months[m])months[m]=[];months[m].push(e);});
-  const monthCards=Object.keys(months).sort().reverse().map(m=>{const mList=months[m];const totalIn=mList.reduce((s,e)=>s+(e.operation_type==='إيداع'||e.operation_type==='ايداع'?parseFloat(e.amount_dinar||0):0),0);const totalOut=mList.reduce((s,e)=>s+(e.operation_type!=='إيداع'&&e.operation_type!=='ايداع'?parseFloat(e.amount_dinar||0):0),0);const lastBal=mList[mList.length-1];
-    return`<div class="card" style="margin-bottom:12px;border-right:5px solid #34d399"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-weight:900;font-size:14px;color:#065f46">📅 ${m}</span><span class="badge" style="background:#ecfdf5;color:#059669">${mList.length} حركة</span></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:12px"><div style="background:#ecfdf5;border-radius:8px;padding:8px;text-align:center"><div style="color:#065f46;font-weight:700;margin-bottom:3px">إجمالي الإيداع</div><div style="font-weight:900;color:#059669">${fmtM(totalIn)} د.ع</div></div><div style="background:#fef2f2;border-radius:8px;padding:8px;text-align:center"><div style="color:#7f1d1d;font-weight:700;margin-bottom:3px">إجمالي الصرف</div><div style="font-weight:900;color:#dc2626">${fmtM(totalOut)} د.ع</div></div><div style="background:#fffbeb;border-radius:8px;padding:8px;text-align:center"><div style="color:#92400e;font-weight:700;margin-bottom:3px">رصيد الدينار</div><div style="font-weight:900;color:${lastBal?lastBal.bal_dinar>=0?'#ca8a04':'#dc2626':'#64748b'}">${fmtM(lastBal?lastBal.bal_dinar:0)} د.ع</div></div><div style="background:#f8fafc;border-radius:8px;padding:8px;text-align:center"><div style="color:#0f172a;font-weight:700;margin-bottom:3px">رصيد الدولار</div><div style="font-weight:900;color:${lastBal?lastBal.bal_dollar>=0?'#0f172a':'#dc2626':'#64748b'}">${fmtM(lastBal?lastBal.bal_dollar:0)} $</div></div></div></div>`;}).join('');
-    // إجماليات الكروب
-  const grandIn=allList.filter(e=>e.operation_type==='إيداع'||e.operation_type==='ايداع').reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);
-  const grandOut=allList.filter(e=>e.operation_type!=='إيداع'&&e.operation_type!=='ايداع').reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);
-  const grandComm=allList.reduce((s,e)=>s+parseFloat(e.commission||0),0);
-  const lastRowK=listWithBal[listWithBal.length-1];
-  const curBalD=lastRowK?lastRowK.bal_dinar:parseFloat(opening.dinar||0);
-  const curBalDol=lastRowK?lastRowK.bal_dollar:parseFloat(opening.dollar||0);
-return`<h2 style="font-size:15px;font-weight:900;margin-bottom:16px;color:#065f46">📜 كشف الحساب — كروب رافد فيصل</h2><div class="card" style="margin-bottom:18px;border:2px solid #34d399;background:#f0fdf4"><h3 style="font-size:14px;font-weight:900;color:#065f46;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #6ee7b7">📊 ملخص إجمالي — كروب رافد فيصل</h3><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px"><div style="background:#ecfdf5;border-radius:12px;padding:14px;text-align:center;border:2px solid #6ee7b7"><div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">🟢 إجمالي الإيداع</div><div style="font-size:20px;font-weight:900;color:#059669">${fmtM(grandIn)}</div><div style="font-size:10px;color:#065f46;margin-top:3px">د.ع</div></div><div style="background:#fef2f2;border-radius:12px;padding:14px;text-align:center;border:2px solid #fca5a5"><div style="font-size:11px;color:#7f1d1d;font-weight:700;margin-bottom:6px">🔴 إجمالي الصرف</div><div style="font-size:20px;font-weight:900;color:#dc2626">${fmtM(grandOut)}</div><div style="font-size:10px;color:#7f1d1d;margin-top:3px">د.ع</div></div><div style="background:${curBalD>=0?'#fffbeb':'#fef2f2'};border-radius:12px;padding:14px;text-align:center;border:2px solid ${curBalD>=0?'#fde68a':'#fca5a5'}"><div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">💛 الرصيد الحالي</div><div style="font-size:22px;font-weight:900;color:${curBalD>=0?'#ca8a04':'#dc2626'}">${fmtM(curBalD)}</div><div style="font-size:10px;margin-top:3px">${curBalD>=0?'✅':'⚠️'}</div></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px"><div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px">عدد الحركات</div><div style="font-size:22px;font-weight:900;color:#0f172a">${allList.length}</div></div><div style="background:#fffbeb;border-radius:10px;padding:12px;text-align:center;border:1px solid #fde68a"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">الرصيد الافتتاحي</div><div style="font-size:14px;font-weight:900;color:#ca8a04">${fmtM(opening.dinar)} د.ع</div></div><div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px">🖤 رصيد الدولار</div><div style="font-size:14px;font-weight:900;color:${curBalDol>=0?'#0f172a':'#dc2626'}">${fmtM(curBalDol)} $</div></div><div style="background:#fef3c7;border-radius:10px;padding:12px;text-align:center;border:1px solid #fde68a"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">إجمالي العمولات</div><div style="font-size:14px;font-weight:900;color:#f59e0b">${fmtM(grandComm)} د.ع</div></div></div></div><h3 style="font-size:13px;font-weight:900;margin-bottom:12px;color:#065f46">📅 الكشف الشهري</h3>${monthCards||'<div class="card" style="text-align:center;color:#94a3b8;padding:30px">لا توجد حركات</div>'}`;
-}
+function viewKroobStatement(){return viewSayrafaReconcile('kroob');}
+function viewRafidStatement(){return viewSayrafaReconcile('rafid');}
 
 function saveKroob(){
   const date=gv('kr_date'),desc=gv('kr_desc'),op_type=document.getElementById('kr_type')?.value||'صرف';
@@ -1337,23 +1325,20 @@ function importKroobXLSX(input){
     // Row 2: الرصيد الباقي من الشهر السابق
     // Row 3+: البيانات
     
-    // قراءة الرصيد الافتتاحي من Row 0
+    // قراءة الرصيد الافتتاحي — يبحث في الصفوف الأولى عن "السابق" أو "الباقي"
     let opDinar=0, opDollar=0;
-    const row0=rows[0]||[];
-    // رصيد الدينار في index 10, رصيد الدولار في index 12 من Row 0
-    if(row0[10]&&!isNaN(parseFloat(String(row0[10]).replace(/,/g,''))))
-      opDinar=parseFloat(String(row0[10]).replace(/,/g,''));
-    if(row0[12]&&!isNaN(parseFloat(String(row0[12]).replace(/,/g,''))))
-      opDollar=parseFloat(String(row0[12]).replace(/,/g,''));
-    
-    // بديل: الرصيد الباقي في Row 2 (index 2) - عمود رصيد الدينار[12] ودولار[11]
-    const row2=rows[2]||[];
-    const row2str=row2.join('|');
-    if(row2str.includes('الرصيد الباقي')||row2str.includes('الباقي من الشهر')){
-      const d=parseFloat(String(row2[12]||'').replace(/,/g,''));
-      const dl=parseFloat(String(row2[11]||'').replace(/,/g,''));
-      if(!isNaN(d)&&d)opDinar=d;
-      if(!isNaN(dl)&&dl)opDollar=dl;
+    for(let ri=1;ri<Math.min(rows.length,6);ri++){
+      const rr=rows[ri]||[];
+      const rstr=rr.map(v=>String(v||'')).join('|');
+      if(rstr.includes('السابق')||rstr.includes('الباقي')||rstr.includes('مدور')){
+        // رصيد الدينار في col[12]، رصيد الدولار في col[11]
+        const d=parseFloat(String(rr[12]||'').replace(/,/g,''));
+        const dl=parseFloat(String(rr[11]||'').replace(/,/g,''));
+        if(!isNaN(d)&&d!==0)opDinar=d;
+        if(!isNaN(dl)&&dl!==0)opDollar=dl;
+        console.log('Kroob opening from row '+ri+': dinar='+opDinar+' dollar='+opDollar);
+        break;
+      }
     }
     
     console.log('Kroob opening: dinar='+opDinar+' dollar='+opDollar);
@@ -1402,18 +1387,23 @@ function importKroobXLSX(input){
       const commDinar=parseFloat(String(row[14]||'').replace(/,/g,''))||0;
       const commDollar=parseFloat(String(row[15]||'').replace(/,/g,''))||0;
       
-      // تحديد المبلغ والاتجاه
+      // تحديد المبالغ واتجاه كل عملة بشكل مستقل
       const amount_dinar=dainDin||madinDin||dinarMblgh||0;
       const amount_dollar=dainDol||madinDol||dolarMblgh||0;
-      // النوع: إيداع إذا كان دائن، صرف إذا كان مدين
-      const isDeposit=dainDin>0||(opType&&(opType.includes('إيداع')||opType.includes('ايداع')));
-      const operation_type=isDeposit?'إيداع':(opType||'صرف');
-      
+      // اتجاه الدينار: دائن إذا كان في عمود الدائن أو استلام
+      const dinarIsDain=dainDin>0||(opType&&(opType.includes('إيداع')||opType.includes('ايداع')||opType.includes('استلام')));
+      // اتجاه الدولار: مستقل عن الدينار
+      const dollarIsDain=dainDol>0;
+      const dinar_type=dinarIsDain?'دائن':'مدين';
+      const dollar_type=dollarIsDain?'دائن':(amount_dollar>0?'مدين':dinar_type);
+      const operation_type=dinarIsDain?'إيداع':(opType||'صرف');
+
       if(!amount_dinar&&!amount_dollar&&!desc)continue;
-      
+
       const id='kr_xl_'+r+'_'+Date.now();
       kroob.push({id,date,description:desc,operation_type,beneficiary:benef,receiver:recv,
         amount_dinar,amount_dollar,commission:commDinar,commission_dollar:commDollar,
+        dinar_type,dollar_type,
         accountant:'import',time:Date.now()+r});
       imported++;
     }
@@ -1633,41 +1623,523 @@ function renderRafidDailySection(date){
 }
 
 // ===== كشف حساب سيد رافد =====
-function viewRafidStatement(){
-  const allList=getRafidList(),withBal=calcRafidBalance(allList),opening=DB.get('rafid_opening',{dinar:0,dollar:0});
-  const lastRow=withBal[withBal.length-1];
-  const curBalD=lastRow?lastRow.bal_dinar:parseFloat(opening.dinar||0);
-  const curBalDol=lastRow?lastRow.bal_dollar:parseFloat(opening.dollar||0);
-  const grandDainD=allList.filter(e=>e.type_dinar==='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
-  const grandMadinD=allList.filter(e=>e.type_dinar!=='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
-  const grandComm=allList.reduce((s,e)=>s+parseFloat(e.commission||0),0);
-  const grandCommDol=allList.reduce((s,e)=>s+parseFloat(e.commission_dollar||0),0);
-  const months={};
-  withBal.forEach(e=>{const m=(e.date||'').slice(0,7);if(!months[m])months[m]=[];months[m].push(e);});
-  const monthCards=Object.keys(months).sort().reverse().map(m=>{
-    const mList=months[m];
-    const mDainD=mList.filter(e=>e.type_dinar==='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
-    const mMadinD=mList.filter(e=>e.type_dinar!=='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
-    const lastBal=mList[mList.length-1];
-    return`<div class="card" style="margin-bottom:12px;border-right:5px solid #f59e0b"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-weight:900;font-size:14px;color:#92400e">📅 ${m}</span><span class="badge" style="background:#fef3c7;color:#b45309">${mList.length} حركة</span></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:12px"><div style="background:#ecfdf5;border-radius:8px;padding:10px;text-align:center"><div style="color:#065f46;font-weight:700;margin-bottom:3px;font-size:10px">🟢 دائن دينار</div><div style="font-weight:900;color:#059669">${fmtM(mDainD)}</div></div><div style="background:#fef2f2;border-radius:8px;padding:10px;text-align:center"><div style="color:#7f1d1d;font-weight:700;margin-bottom:3px;font-size:10px">🔴 مدين دينار</div><div style="font-weight:900;color:#dc2626">${fmtM(mMadinD)}</div></div><div style="background:#fffbeb;border-radius:8px;padding:10px;text-align:center"><div style="color:#92400e;font-weight:700;margin-bottom:3px;font-size:10px">💛 رصيد الدينار</div><div style="font-weight:900;color:${lastBal?lastBal.bal_dinar>=0?'#ca8a04':'#dc2626':'#64748b'}">${fmtM(lastBal?lastBal.bal_dinar:0)}</div></div><div style="background:#eff6ff;border-radius:8px;padding:10px;text-align:center"><div style="color:#1e3a8a;font-weight:700;margin-bottom:3px;font-size:10px">🖤 رصيد الدولار</div><div style="font-weight:900;color:${lastBal?lastBal.bal_dollar>=0?'#2563eb':'#dc2626':'#64748b'}">${fmtM(lastBal?lastBal.bal_dollar:0)}</div></div></div></div>`;
-  }).join('');
-  return`<h2 style="font-size:15px;font-weight:900;margin-bottom:16px;color:#92400e">📜 كشف الحساب — حسابات سيد رافد</h2>
-  <div class="card" style="margin-bottom:18px;border:2px solid #f59e0b;background:#fffbeb">
-    <h3 style="font-size:14px;font-weight:900;color:#92400e;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #fde68a">📊 ملخص إجمالي</h3>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">
-      <div style="background:#ecfdf5;border-radius:12px;padding:14px;text-align:center;border:2px solid #6ee7b7"><div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">🟢 إجمالي الدائن</div><div style="font-size:20px;font-weight:900;color:#059669">${fmtM(grandDainD)}</div><div style="font-size:10px;color:#065f46;margin-top:3px">د.ع</div></div>
-      <div style="background:#fef2f2;border-radius:12px;padding:14px;text-align:center;border:2px solid #fca5a5"><div style="font-size:11px;color:#7f1d1d;font-weight:700;margin-bottom:6px">🔴 إجمالي المدين</div><div style="font-size:20px;font-weight:900;color:#dc2626">${fmtM(grandMadinD)}</div><div style="font-size:10px;color:#7f1d1d;margin-top:3px">د.ع</div></div>
-      <div style="background:${curBalD>=0?'#fffbeb':'#fef2f2'};border-radius:12px;padding:14px;text-align:center;border:2px solid ${curBalD>=0?'#fde68a':'#fca5a5'}"><div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:6px">💛 الرصيد الحالي</div><div style="font-size:22px;font-weight:900;color:${curBalD>=0?'#ca8a04':'#dc2626'}">${fmtM(curBalD)}</div><div style="font-size:10px;margin-top:3px">${curBalD>=0?'✅':'⚠️'}</div></div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
-      <div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px">عدد الحركات</div><div style="font-size:22px;font-weight:900;color:#0f172a">${allList.length}</div></div>
-      <div style="background:#fffbeb;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">الرصيد الافتتاحي</div><div style="font-size:14px;font-weight:900;color:#ca8a04">${fmtM(opening.dinar)} د.ع</div></div>
-      <div style="background:#fef3c7;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">عمولات دينار</div><div style="font-size:14px;font-weight:900;color:#f59e0b">${fmtM(grandComm)} د.ع</div></div>
-      <div style="background:#fef3c7;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">عمولات دولار</div><div style="font-size:14px;font-weight:900;color:#f59e0b">${fmtM(grandCommDol)} $</div></div>
+// ===== صفحة مطابقة الصيرفة =====
+function viewSayrafaReconcile(acct){
+  const isK=acct==='kroob';
+  const curr=S.sayrafaCurr||'iqd';
+  const isUsd=curr==='usd';
+  const title=isK?'كروب رافد فيصل':'حسابات سيد رافد';
+  const color=isK?'#34d399':'#fbbf24';
+  const bcolor=isK?(isUsd?'#1d4ed8':'#059669'):(isUsd?'#1d4ed8':'#d97706');
+  const icon=isK?'🏦':'💼';
+  const currLabel=isUsd?'💵 دولار USD':'💛 دينار IQD';
+  if(!window._pdfJsInited){
+    window._pdfJsInited=true;
+    const chk=()=>{if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}else{setTimeout(chk,300);}};
+    setTimeout(chk,400);
+  }
+  const ck=`${acct}_${curr}`;
+  const meta=DB.get(`sayrafa_${ck}_meta`,null);
+  const sayData=DB.get(`sayrafa_${ck}_data`,null);
+  let reconcileHTML='';
+  if(sayData&&sayData.transactions&&sayData.transactions.length){
+    const internalList=isK?getKroobList():getRafidList();
+    const results=reconcileWithSayrafa(sayData.transactions,internalList,acct,curr);
+    reconcileHTML=renderReconcileResults(results,sayData,acct,curr);
+  }else{
+    reconcileHTML=`<div class="card" style="text-align:center;padding:50px 20px;border:2px dashed #334155"><p style="font-size:15px;color:#64748b;margin-bottom:8px">📄 ارفع ملف PDF من الصيرفة للبدء بمطابقة ${currLabel}</p><p style="font-size:11px;color:#475569">يدعم ملفات كشف الحساب الخاصة بـ ${title}</p></div>`;
+  }
+  const tabBtn=(c,lbl)=>`<button onclick="S.sayrafaCurr='${c}';renderContent()" style="padding:8px 18px;border-radius:8px;border:2px solid ${curr===c?bcolor:'#334155'};background:${curr===c?bcolor:'transparent'};color:${curr===c?'#fff':'#94a3b8'};cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;transition:all 0.2s">${lbl}</button>`;
+  return`<h2 style="font-size:15px;font-weight:900;margin-bottom:16px;color:${color}">🔄 مطابقة الصيرفة — ${icon} ${title}</h2>
+  <div style="display:flex;gap:8px;margin-bottom:14px">
+    ${tabBtn('iqd','💛 دينار IQD')}
+    ${tabBtn('usd','💵 دولار USD')}
+  </div>
+  <div class="card" style="margin-bottom:16px;border:2px solid ${bcolor}">
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div style="flex:1">
+        <h3 style="font-size:13px;font-weight:900;color:${color};margin-bottom:6px">📄 كشف الصيرفة — ${currLabel} (PDF)</h3>
+        ${meta?`<div style="font-size:11px;color:#94a3b8">📋 <strong style="color:#e2e8f0">${meta.fileName||''}</strong> &nbsp;|&nbsp; الفترة: <strong style="color:${color}">${meta.dateFrom||''} → ${meta.dateTo||''}</strong> &nbsp;|&nbsp; <span>${meta.count||0} حركة</span></div>`:`<div style="font-size:11px;color:#475569">لم يتم رفع ملف بعد</div>`}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label for="pdf_input_${ck}" style="display:inline-flex;align-items:center;gap:6px;background:${bcolor};color:#fff;padding:8px 16px;border-radius:8px;cursor:pointer;font-weight:700;font-size:12px">📂 ${meta?'تغيير الملف':'رفع ملف PDF'}</label>
+        <input type="file" id="pdf_input_${ck}" accept=".pdf" style="display:none" onchange="loadSayrafaPDF(this,'${acct}','${curr}')">
+        ${meta?`<button class="btn" style="background:#450a0a;color:#fca5a5;font-size:11px;padding:6px 12px" onclick="clearSayrafaData('${acct}','${curr}')">🗑 مسح</button>`:''}
+        ${sayData&&sayData.transactions?`<button class="btn" style="background:#052e16;color:#34d399;font-size:11px;padding:6px 12px" onclick="exportReconcileXLSX('${acct}','${curr}')">📥 Excel</button>`:''}
+      </div>
     </div>
   </div>
-  <h3 style="font-size:13px;font-weight:900;margin-bottom:12px;color:#92400e">📅 الكشف الشهري</h3>
-  ${monthCards||'<div class="card" style="text-align:center;color:#94a3b8;padding:30px">لا توجد حركات</div>'}`;
+  <div id="reconcile_output_${ck}">${reconcileHTML}</div>`;
+}
+
+async function loadSayrafaPDF(input,acct,curr){
+  curr=curr||S.sayrafaCurr||'iqd';
+  const file=input.files[0];if(!file)return;
+  showToast('جاري قراءة الملف...','info');
+  try{
+    let tries=0;
+    while(typeof pdfjsLib==='undefined'&&tries++<40)await new Promise(r=>setTimeout(r,250));
+    if(typeof pdfjsLib==='undefined')throw new Error('تعذر تحميل محرك PDF — تأكد من الاتصال بالإنترنت');
+    if(!pdfjsLib.GlobalWorkerOptions.workerSrc)
+      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const buf=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+    const allItems=[];
+    for(let p=1;p<=pdf.numPages;p++){
+      const page=await pdf.getPage(p);
+      const vp=page.getViewport({scale:1});
+      const tc=await page.getTextContent();
+      for(const item of tc.items){
+        if(!item.str.trim())continue;
+        allItems.push({t:item.str.trim(),x:Math.round(item.transform[4]),y:Math.round(vp.height-item.transform[5]),pg:p});
+      }
+    }
+    const parsed=parseSayrafaItems(allItems);
+    const dates=parsed.transactions.map(t=>t.date).filter(Boolean).sort();
+    const meta={fileName:file.name,dateFrom:dates[0]||'',dateTo:dates[dates.length-1]||'',count:parsed.transactions.length,openingBalance:parsed.openingBalance};
+    const ck=`${acct}_${curr}`;
+    DB.set(`sayrafa_${ck}_data`,parsed);
+    DB.set(`sayrafa_${ck}_meta`,meta);
+    const isK=acct==='kroob';
+    const internalList=isK?getKroobList():getRafidList();
+    const results=reconcileWithSayrafa(parsed.transactions,internalList,acct,curr);
+    const out=document.getElementById(`reconcile_output_${ck}`);
+    if(out)out.innerHTML=renderReconcileResults(results,parsed,acct,curr);
+    renderContent();
+    showToast(`تم قراءة ${parsed.transactions.length} حركة بنجاح ✅`,'success');
+  }catch(e){console.error(e);showToast('خطأ: '+e.message,'error');}
+}
+
+function _normDate(s){
+  // تحويل أي صيغة تاريخ إلى YYYY-MM-DD
+  s=s.trim();
+  let m;
+  if((m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/)))return s;
+  if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)))return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  if((m=s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)))return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  if((m=s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)))return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  if((m=s.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/)))return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  return s;
+}
+
+function _isDateStr(s){
+  return /^\d{4}-\d{2}-\d{2}$/.test(s)||/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)||/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(s)||/^\d{1,2}-\d{1,2}-\d{4}$/.test(s);
+}
+
+function parseSayrafaItems(items){
+  // تجميع العناصر حسب موضع Y (تسامح 8 بكسل)
+  const yMap={};
+  for(const item of items){
+    let found=false;
+    for(const ky of Object.keys(yMap)){
+      if(Math.abs(Number(ky)-item.y)<=8){yMap[ky].push(item);found=true;break;}
+    }
+    if(!found)yMap[item.y]=[item];
+  }
+  const rows=Object.entries(yMap).sort((a,b)=>Number(a[0])-Number(b[0])).map(([,r])=>r.sort((a,b)=>b.x-a.x));
+
+  // إيجاد صف العناوين — نبحث في نافذة 3 صفوف متتالية
+  let colX=null,headerIdx=-1;
+  for(let i=0;i<Math.min(rows.length,50);i++){
+    const combined=[...rows[i],...(rows[i+1]||[]),...(rows[i+2]||[])];
+    const txt=combined.map(it=>it.t).join('');
+    const hasIn=txt.includes('الوارد')||txt.includes('وارد');
+    const hasOut=txt.includes('الصادر')||txt.includes('صادر');
+    const hasBal=txt.includes('الرصيد')||txt.includes('رصيد');
+    if(hasIn&&hasOut){
+      headerIdx=i;colX={};
+      for(const it of combined){
+        const t=it.t.trim();
+        if(t==='الرصيد'||t.endsWith('الرصيد')||t==='رصيد')colX.balance=it.x;
+        else if(t==='الوارد'||t.endsWith('الوارد')||t==='وارد')colX.incoming=it.x;
+        else if(t==='الصادر'||t.endsWith('الصادر')||t==='صادر')colX.outgoing=it.x;
+        else if(t.includes('العمولة')||t==='عمولة')colX.commission=it.x;
+        else if(t.includes('نوع')||t.includes('الحركة'))colX.type=it.x;
+        else if(t.includes('ملاحظ')||t.includes('بيان'))colX.notes=it.x;
+        else if(t.includes('رقم'))colX.txNum=it.x;
+        else if(t.includes('التاريخ')||t==='تاريخ')colX.date=it.x;
+      }
+      // إذا لم يُعثر على عمود الرصيد، نستنتجه يمين الوارد بمسافة ثابتة
+      if(!colX.balance&&colX.incoming){
+        colX.balance=Math.max(colX.incoming,(colX.outgoing||0))+120;
+      }
+      console.log('Sayrafa colX:',JSON.stringify(colX),'hasBal:',hasBal);
+      break;
+    }
+  }
+
+  const transactions=[];let openingBalance=0;
+  for(let i=(headerIdx>=0?headerIdx+1:0);i<rows.length;i++){
+    const row=rows[i];if(!row.length)continue;
+    const allTxt=row.map(it=>it.t).join(' ');
+    if((allTxt.includes('الوارد')||allTxt.includes('وارد'))&&(allTxt.includes('الصادر')||allTxt.includes('صادر')))continue;
+    if(allTxt.includes('نظام الحسابات')||allTxt.includes('كشف حساب'))continue;
+    if(allTxt.includes('المجموع')||allTxt.includes('الإجمالي')||allTxt.includes('إجمالي'))continue;
+    if(allTxt.includes('لفترة')||allTxt.includes('إلى تاريخ'))continue;
+    if(allTxt.includes('رصيد سابق')||allTxt.includes('رصيد_سابق')||(allTxt.includes('السابق')&&!row.some(it=>_isDateStr(it.t)))){
+      const nums=row.filter(it=>/^-?[\d,. ]+$/.test(it.t)&&it.t.replace(/[,. -]/g,'').length>=4);
+      if(nums.length)openingBalance=_pn(nums[nums.length-1].t);
+      continue;
+    }
+    const dateItem=row.find(it=>_isDateStr(it.t));
+    if(!dateItem)continue;
+    const dateStr=_normDate(dateItem.t);
+    const tx={date:dateStr,txNum:'',notes:'',type:'',commission:0,outgoing:0,incoming:0,balance:0};
+
+    // فصل الأرقام عن النصوص في الصف (يشمل الأرقام السالبة)
+    const numItems=[];
+    for(const it of row){
+      if(it===dateItem)continue;
+      const clean=it.t.replace(/[,. ]/g,'');
+      const cleanAbs=clean.replace(/^-/,'');
+      // استبعاد أرقام سعر الصرف (مثل 154.750) من الترتيب الموضعي
+      const isRate=/^\d[\d,]*\.\d{1,3}$/.test(it.t.trim());
+      if(/^-?\d+$/.test(clean)&&cleanAbs.length>=4&&!isRate)numItems.push({it,clean:cleanAbs,x:it.x});
+    }
+    // ترتيب الأرقام من اليسار إلى اليمين (تصاعدي X)
+    numItems.sort((a,b)=>a.x-b.x);
+
+    for(const it of row){
+      if(it===dateItem)continue;
+      const clean=it.t.replace(/[,. ]/g,'');
+      const cleanAbs=clean.replace(/^-/,'');
+      const isNum=/^-?\d+$/.test(clean)&&cleanAbs.length>=4;
+      let col='notes';
+
+      if(colX&&Object.keys(colX).length>=3){
+        // استخدام مواضع الأعمدة من العنوان
+        if(isNum){
+          let minD=Infinity;
+          for(const [c,cx] of Object.entries(colX)){
+            const d=Math.abs(it.x-cx);
+            if(d<minD){minD=d;col=c;}
+          }
+          // إذا كان الرقم أبعد بكثير ويقع يمين كل الأعمدة → رصيد
+          if(col!=='balance'){
+            const maxCX=Math.max(...Object.values(colX));
+            if(it.x>maxCX+60){col='balance';}
+          }
+        } else {
+          // النصوص: اكتشاف نوع الحركة من الكلمات المعروفة
+          const t2=it.t.trim();
+          const outWords=['صرف','سحب','دفع'];
+          const inWords=['استلام','استقبل','إيداع','ايداع','وارد'];
+          if(outWords.some(w=>t2.includes(w)))col='type';
+          else if(inWords.some(w=>t2.includes(w)))col='type';
+          else{
+            let minD=Infinity;
+            for(const [c,cx] of Object.entries(colX)){
+              if(['balance','incoming','outgoing','commission'].includes(c))continue;
+              const d=Math.abs(it.x-cx);
+              if(d<minD){minD=d;col=c;}
+            }
+          }
+        }
+      } else if(isNum){
+        // fallback موضعي: آخر رقم (أعلى x) = الرصيد
+        const pos=numItems.findIndex(n=>n.it===it);
+        const total=numItems.length;
+        if(cleanAbs.length>=5&&cleanAbs.length<=7&&pos===0){col='txNum';}
+        else if(pos===total-1&&total>1){col='balance';}
+        else if(pos===total-2){col='incoming';}
+        else if(pos===total-3){col='outgoing';}
+        else if(pos===0){col='txNum';}
+        else{col='commission';}
+      } else {
+        // fallback للنصوص: اكتشاف نوع الحركة
+        const t2=it.t.trim();
+        const outWords=['صرف','سحب','دفع'];
+        const inWords=['استلام','استقبل','إيداع','ايداع'];
+        if(outWords.some(w=>t2.includes(w))||inWords.some(w=>t2.includes(w)))col='type';
+      }
+
+      if(['balance','incoming','outgoing','commission'].includes(col)&&isNum)tx[col]=_pn(it.t);
+      else if(col==='txNum'&&!tx.txNum&&/^\d+$/.test(cleanAbs))tx.txNum=it.t;
+      else if(col==='type')tx.type+=(tx.type?' ':'')+it.t;
+      else if(col==='notes'&&!isNum)tx.notes+=(tx.notes?' ':'')+it.t;
+    }
+
+    // تصحيح 1: إذا كان الصادر صغيراً جداً مقارنة بالوارد → هو عمولة وليس صادراً
+    if(tx.incoming>0&&tx.outgoing>0&&tx.outgoing<tx.incoming/50){
+      tx.commission+=tx.outgoing;tx.outgoing=0;
+    }
+    // تصحيح 2: إذا كان النوع "صرف/سحب" والمبلغ في وارد فقط → حوّله لصادر
+    if(tx.incoming>0&&tx.outgoing===0&&(tx.type.includes('صرف')||tx.type.includes('سحب'))){
+      tx.outgoing=tx.incoming;tx.incoming=0;
+    }
+
+    if(tx.date){
+      // تجاهل صفوف عنوان PDF التي لا تحتوي على أي أرقام مالية
+      if(tx.incoming===0&&tx.outgoing===0&&tx.balance===0&&!tx.txNum){
+        console.log('PDF skip empty row:',tx.date,'(no amounts)');
+      }else{
+        transactions.push(tx);
+        const itemsDbg=row.filter(it=>it!==dateItem).map(it=>{const cl=it.t.replace(/[,. ]/g,'');const isN=/^-?\d+$/.test(cl)&&cl.replace(/^-/,'').length>=4;return it.t+'@x'+it.x+(isN?'[NUM]':'');}).join(' | ');
+        console.log('PDF row:',tx.date,'in='+tx.incoming,'out='+tx.outgoing,'bal='+tx.balance,'tx='+tx.txNum,'type='+tx.type,'|| items:',itemsDbg);
+      }
+    }
+  }
+
+  // ===== تصحيح الاتجاه بناءً على تغيير الرصيد التراكمي =====
+  for(let i=0;i<transactions.length;i++){
+    const tx=transactions[i];
+    if(tx.balance===0)continue;
+    let prevBal=openingBalance;
+    let foundPrevBal=(openingBalance!==0);
+    // يعمل مع أرصدة موجبة وسالبة — يستخدم _bal للحركات المصحَّحة بـ BAL_IS_AMT
+    for(let j=i-1;j>=0;j--){
+      if(transactions[j]._bal!==undefined){prevBal=transactions[j]._bal;foundPrevBal=true;break;}
+      if(transactions[j].balance!==0){prevBal=transactions[j].balance;foundPrevBal=true;break;}
+    }
+    if(!foundPrevBal)continue;
+    const balChange=tx.balance-prevBal;
+    // إذا كان كلٌّ من الوارد والصادر مضبوطَين → يكون أحدهما سعر صرف وليس مبلغ
+    // نستخدم مقدار تغيير الرصيد لتحديد المبلغ الحقيقي
+    if(tx.incoming>0&&tx.outgoing>0){
+      const absChg=Math.abs(balChange);
+      const inDiff=Math.abs(absChg-tx.incoming);
+      const outDiff=Math.abs(absChg-tx.outgoing);
+      if(inDiff<=outDiff){
+        // الوارد أقرب لتغيير الرصيد → الصادر ضوضاء (سعر صرف مثلاً)
+        tx.commission+=tx.outgoing;tx.outgoing=0;
+        console.log('BalFix→DROP_OUT:',tx.date,'kept in='+tx.incoming,'dropped='+tx.commission,'balChg='+balChange);
+      } else {
+        // الصادر أقرب لتغيير الرصيد → الوارد ضوضاء
+        tx.commission+=tx.incoming;tx.incoming=0;
+        console.log('BalFix→DROP_IN:',tx.date,'kept out='+tx.outgoing,'dropped='+tx.commission,'balChg='+balChange);
+      }
+    }
+    // BAL_IS_AMT: خانة الرصيد تحتوي على المبلغ وليس الرصيد الجاري (2×balance ≈ |balChange|)
+    // يحدث حين ينتقل الرصيد من −X إلى +X، ويضع الـ fallback المبلغ في خانة الرصيد
+    const absChgBal=Math.abs(balChange);
+    if(tx.balance!==0&&absChgBal>0&&Math.abs(Math.abs(tx.balance)*2-absChgBal)<1){
+      const trueAmt=Math.abs(tx.balance);
+      if(balChange>0){tx.incoming=trueAmt;tx.outgoing=0;}else{tx.outgoing=trueAmt;tx.incoming=0;}
+      tx._bal=prevBal+(balChange>0?trueAmt:-trueAmt);
+      tx.balance=0;
+      console.log('BalFix→BAL_IS_AMT:',tx.date,'amt='+trueAmt,'newBal='+tx._bal,'prevBal='+prevBal,'balChg='+balChange);
+      continue;
+    }
+    const amt=tx.incoming>0?tx.incoming:(tx.outgoing>0?tx.outgoing:0);
+    if(amt===0){continue;}
+    // إذا انخفض الرصيد والحركة مُسجّلة كواردة → صادرة في الحقيقة
+    if(balChange<-1&&tx.incoming>0&&tx.outgoing===0){
+      tx.outgoing=tx.incoming;tx.incoming=0;
+      console.log('BalFix→OUT:',tx.date,'amt='+tx.outgoing,'balChg='+balChange);
+    }
+    // إذا ارتفع الرصيد والحركة مُسجّلة كصادرة → واردة في الحقيقة
+    else if(balChange>1&&tx.outgoing>0&&tx.incoming===0){
+      tx.incoming=tx.outgoing;tx.outgoing=0;
+      console.log('BalFix→IN:',tx.date,'amt='+tx.incoming,'balChg='+balChange);
+    }
+    // تصحيح المبلغ: إذا كان المبلغ المستخرج يختلف عن تغيير الرصيد بأكثر من 10%
+    // (يحدث في حركات "بيع/شراء دولار بسعر" حيث يُستخرج سعر الصرف كمبلغ بدلاً من قيمة الصفقة)
+    const finalAmt=tx.incoming>0?tx.incoming:(tx.outgoing>0?tx.outgoing:0);
+    const derivedAmt=Math.abs(balChange);
+    if(derivedAmt>0&&finalAmt>0&&Math.abs(finalAmt-derivedAmt)/derivedAmt>0.1){
+      if(balChange>0){tx.incoming=derivedAmt;tx.outgoing=0;}
+      else{tx.outgoing=derivedAmt;tx.incoming=0;}
+      console.log('BalFix→DERIVED:',tx.date,'derived='+derivedAmt,'was='+finalAmt,'balChg='+balChange);
+    }
+  }
+
+  return{transactions,openingBalance};
+}
+
+function _pn(s){
+  if(!s)return 0;
+  // في كشوفات الصيرفة العراقية، الفاصلة والنقطة كلاهما آلاف (ليست عشرية)
+  const n=parseFloat(String(s).replace(/[,،.\s]/g,''));
+  return isNaN(n)?0:n;
+}
+
+function reconcileWithSayrafa(sayTxns,internalList,acct,curr){
+  curr=curr||'iqd';
+  const isK=acct==='kroob';
+  const isUsd=curr==='usd';
+  // تحديد نطاق تواريخ ملف الصيرفة
+  const sayDates=sayTxns.map(t=>t.date).filter(Boolean).sort();
+  const minDate=sayDates[0]||'';
+  const maxDate=sayDates[sayDates.length-1]||'';
+  // فلترة السجلات الداخلية حسب النطاق والعملة
+  const inRange=(minDate&&maxDate)?internalList.filter(e=>{const d=e.date||'';return d>=minDate&&d<=maxDate;}):internalList;
+  const filtered=isK
+    ? (isUsd
+        ? inRange.filter(e=>parseFloat(e.amount_dollar||0)>0)
+        : inRange.filter(e=>parseFloat(e.amount_dinar||0)>0))
+    : inRange;
+
+  console.log('Reconcile:',acct,curr,'sayTxns='+sayTxns.length,'filtered='+filtered.length,'range='+minDate+'→'+maxDate);
+
+  const getIntAmt=(e)=>{
+    if(isK) return isUsd?parseFloat(e.amount_dollar||0):parseFloat(e.amount_dinar||0);
+    return parseFloat(e.dinar||0);
+  };
+  const getIntDir=(e)=>{
+    if(isK){
+      if(isUsd){const dt=e.dollar_type||'';if(dt)return dt==='دائن'?'in':'out';}
+      const isDep=e.operation_type==='إيداع'||e.operation_type==='ايداع';return isDep?'in':'out';
+    }
+    return e.type_dinar==='دائن'?'in':'out';
+  };
+
+  const results=[];
+  const usedInt=new Set();
+  for(const st of sayTxns){
+    const sayAmt=st.outgoing>0?st.outgoing:st.incoming;
+    const sayDir=st.outgoing>0?'out':'in';
+    let bestMatch=null,bestDiff=Infinity,bestIdx=-1;
+    for(let i=0;i<filtered.length;i++){
+      if(usedInt.has(i))continue;
+      const e=filtered[i];
+      if(e.date!==st.date)continue;
+      if(getIntDir(e)!==sayDir)continue;
+      const diff=Math.abs(sayAmt-getIntAmt(e));
+      if(diff<bestDiff){bestDiff=diff;bestMatch=e;bestIdx=i;}
+    }
+    let status='unmatched';
+    if(bestMatch){
+      if(bestDiff===0)status='matched';
+      else if(sayAmt>0&&bestDiff/sayAmt<0.15)status='partial';
+      else bestMatch=null;
+    }
+    if(bestMatch)usedInt.add(bestIdx);
+    results.push({sayrafa:st,internal:bestMatch,status,diff:bestMatch?bestDiff:sayAmt});
+  }
+
+  // المرحلة الثانية: مطابقة بالمبلغ فقط (بدون فلتر الاتجاه)
+  for(let ri=0;ri<results.length;ri++){
+    const r=results[ri];
+    if(r.status!=='unmatched'||!r.sayrafa)continue;
+    const st=r.sayrafa;
+    const sayAmt=st.outgoing>0?st.outgoing:st.incoming;
+    if(sayAmt===0)continue;
+    let bestMatch=null,bestDiff=Infinity,bestIdx=-1;
+    for(let i=0;i<filtered.length;i++){
+      if(usedInt.has(i))continue;
+      const e=filtered[i];
+      if(e.date!==st.date)continue;
+      const diff=Math.abs(sayAmt-getIntAmt(e));
+      if(diff<bestDiff){bestDiff=diff;bestMatch=e;bestIdx=i;}
+    }
+    if(bestMatch&&sayAmt>0&&bestDiff/sayAmt<0.15){
+      r.internal=bestMatch;r.status=bestDiff===0?'matched':'partial';r.diff=bestDiff;
+      usedInt.add(bestIdx);
+    }
+  }
+
+  for(let i=0;i<filtered.length;i++){
+    if(!usedInt.has(i))results.push({sayrafa:null,internal:filtered[i],status:'internal_only',diff:0});
+  }
+  return results;
+}
+
+function renderReconcileResults(results,sayData,acct,curr){
+  curr=curr||'iqd';
+  const isK=acct==='kroob';
+  const isUsd=curr==='usd';
+  const color=isK?'#34d399':'#fbbf24';
+  const unit=isUsd?'$':'د.ع';
+  const matched=results.filter(r=>r.status==='matched').length;
+  const partial=results.filter(r=>r.status==='partial').length;
+  const unmatched=results.filter(r=>r.status==='unmatched').length;
+  const intOnly=results.filter(r=>r.status==='internal_only').length;
+  const txns=sayData.transactions||[];
+  const sayDates=txns.map(t=>t.date).filter(Boolean).sort();
+  const minDate=sayDates[0]||'';const maxDate=sayDates[sayDates.length-1]||'';
+  const totalSayIn=txns.reduce((s,t)=>s+t.incoming,0);
+  const totalSayOut=txns.reduce((s,t)=>s+t.outgoing,0);
+  const internalList=isK?getKroobList():getRafidList();
+  const filteredInt=(minDate&&maxDate)?internalList.filter(e=>{
+    const d=e.date||'';if(d<minDate||d>maxDate)return false;
+    if(isK) return isUsd?(parseFloat(e.amount_dollar||0)>0):(parseFloat(e.amount_dinar||0)>0);
+    return true;
+  }):internalList;
+  let totalIntIn=0,totalIntOut=0;
+  for(const e of filteredInt){
+    let amt=0,isIn=false;
+    if(isK){
+      if(isUsd){const dt=e.dollar_type||'';isIn=dt?dt==='دائن':(e.operation_type==='إيداع'||e.operation_type==='ايداع');}
+      else{isIn=e.operation_type==='إيداع'||e.operation_type==='ايداع';}
+      amt=isUsd?parseFloat(e.amount_dollar||0):parseFloat(e.amount_dinar||0);
+    }else{isIn=e.type_dinar==='دائن';amt=parseFloat(e.dinar||0);}
+    if(isIn)totalIntIn+=amt;else totalIntOut+=amt;
+  }
+  const diffIn=totalSayIn-totalIntIn,diffOut=totalSayOut-totalIntOut;
+  const intCountLabel=filteredInt.length>0
+    ?`<span style="color:#86efac;font-size:10px">📋 سجلات داخلية في النطاق: <strong>${filteredInt.length}</strong></span>`
+    :`<span style="color:#f87171;font-size:10px;font-weight:700">⚠️ لا توجد سجلات داخلية في هذا النطاق!</span>`;
+  const periodLabel=minDate&&maxDate?`<span style="color:#94a3b8;font-size:10px">📅 فترة المطابقة: <strong style="color:#e2e8f0">${minDate}</strong> → <strong style="color:#e2e8f0">${maxDate}</strong></span> &nbsp;|&nbsp; ${intCountLabel}`:'';
+  const allOk=matched===results.length&&results.length>0;
+  const statusCard=allOk
+    ?`<div class="card" style="border:2px solid #16a34a;background:#052e16;display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding:14px"><span style="font-size:26px">✅</span><div><div style="font-size:14px;font-weight:900;color:#4ade80">الحسابات متطابقة تماماً</div><div style="font-size:11px;color:#86efac;margin-top:4px">جميع ${matched} حركة مطابقة مع الصيرفة &nbsp;|&nbsp; ${periodLabel}</div></div></div>`
+    :`<div class="card" style="border:2px solid #dc2626;background:#1f0707;display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding:14px"><span style="font-size:26px">${unmatched>0?'❌':'⚠️'}</span><div><div style="font-size:14px;font-weight:900;color:#f87171">توجد فروقات تحتاج مراجعة</div><div style="font-size:11px;color:#fca5a5;margin-top:2px">فرق الوارد: <strong>${fmtM(Math.abs(diffIn))}</strong>${diffIn!==0?(diffIn>0?' (الصيرفة أكثر)':' (الداخلي أكثر)'):' ✅'} &nbsp;|&nbsp; فرق الصادر: <strong>${fmtM(Math.abs(diffOut))}</strong>${diffOut!==0?(diffOut>0?' (الصيرفة أكثر)':' (الداخلي أكثر)'):' ✅'}</div><div style="margin-top:4px">${periodLabel}</div></div><div style="margin-right:auto;display:flex;gap:10px;flex-wrap:wrap">${matched>0?`<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:#4ade80">${matched}</div><div style="font-size:10px;color:#86efac">✅ مطابق</div></div>`:''} ${partial>0?`<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:#fbbf24">${partial}</div><div style="font-size:10px;color:#fde68a">⚠️ فرق</div></div>`:''} ${unmatched>0?`<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:#f87171">${unmatched}</div><div style="font-size:10px;color:#fca5a5">❌ غير مطابق</div></div>`:''} ${intOnly>0?`<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:#60a5fa">${intOnly}</div><div style="font-size:10px;color:#93c5fd">🔵 داخلي فقط</div></div>`:''}</div></div>`;
+  const summaryCards=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+    <div class="card" style="text-align:center;border-right:4px solid #34d399;padding:12px"><div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px">📄 وارد الصيرفة</div><div style="font-size:15px;font-weight:900;color:#34d399">${fmtM(totalSayIn)}</div><div style="font-size:9px;color:#475569;margin-top:2px">${unit}</div></div>
+    <div class="card" style="text-align:center;border-right:4px solid #f87171;padding:12px"><div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px">📄 صادر الصيرفة</div><div style="font-size:15px;font-weight:900;color:#f87171">${fmtM(totalSayOut)}</div><div style="font-size:9px;color:#475569;margin-top:2px">${unit}</div></div>
+    <div class="card" style="text-align:center;border-right:4px solid #60a5fa;padding:12px"><div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px">${isK?'🏦':'💼'} وارد الداخلي</div><div style="font-size:15px;font-weight:900;color:${Math.abs(diffIn)<1?'#60a5fa':'#f87171'}">${fmtM(totalIntIn)}</div><div style="font-size:9px;margin-top:2px;color:${Math.abs(diffIn)<1?'#34d399':'#f87171'}">${Math.abs(diffIn)<1?'✅ متطابق':'⚠️ فرق: '+fmtM(Math.abs(diffIn))}</div></div>
+    <div class="card" style="text-align:center;border-right:4px solid #fbbf24;padding:12px"><div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px">${isK?'🏦':'💼'} صادر الداخلي</div><div style="font-size:15px;font-weight:900;color:${Math.abs(diffOut)<1?'#fbbf24':'#f87171'}">${fmtM(totalIntOut)}</div><div style="font-size:9px;margin-top:2px;color:${Math.abs(diffOut)<1?'#34d399':'#f87171'}">${Math.abs(diffOut)<1?'✅ متطابق':'⚠️ فرق: '+fmtM(Math.abs(diffOut))}</div></div>
+  </div>`;
+  const getIntAmts=(e,rs)=>{
+    let intIn=0,intOut=0;
+    if(e){
+      if(isK){const dt=isUsd?(e.dollar_type||''):'';const isDep=dt?dt==='دائن':(e.operation_type==='إيداع'||e.operation_type==='ايداع');const amt=isUsd?parseFloat(e.amount_dollar||0):parseFloat(e.amount_dinar||0);if(isDep)intIn=amt;else intOut=amt;}
+      else{if(e.type_dinar==='دائن')intIn=parseFloat(e.dinar||0);else intOut=parseFloat(e.dinar||0);}
+    }
+    return{intIn,intOut};
+  };
+  const rowsHTML=results.map(r=>{
+    const st=r.sayrafa,en=r.internal,rs=r.status;
+    const rowBg=rs==='matched'?'background:#030f03':rs==='partial'?'background:#181004':rs==='unmatched'?'background:#180404':'background:#03080f';
+    const badge=rs==='matched'?`<span class="badge" style="background:#052e16;color:#4ade80;font-size:10px">✅ مطابق</span>`:rs==='partial'?`<span class="badge" style="background:#292116;color:#fde68a;font-size:10px">⚠️ فرق: ${fmtM(r.diff)}</span>`:rs==='unmatched'?`<span class="badge" style="background:#2d1515;color:#fca5a5;font-size:10px">❌ غير مطابق</span>`:`<span class="badge" style="background:#1e293b;color:#60a5fa;font-size:10px">🔵 داخلي فقط</span>`;
+    const date=st?st.date:(en?en.date:'');
+    const txNum=st?st.txNum:'';
+    const notes=st?st.notes:(en?en.description||'':'');
+    const type=st?st.type:'';
+    const{intIn,intOut}=getIntAmts(en,rs);
+    const sayInTd=st&&st.incoming>0?`<span style="color:#34d399;font-weight:700">${fmtM(st.incoming)}</span>`:`<span style="color:#334155">—</span>`;
+    const sayOutTd=st&&st.outgoing>0?`<span style="color:#f87171;font-weight:700">${fmtM(st.outgoing)}</span>`:`<span style="color:#334155">—</span>`;
+    const intInTd=en&&intIn>0?`<span style="color:#60a5fa;font-weight:700">${fmtM(intIn)}</span>`:`<span style="color:#334155">—</span>`;
+    const intOutTd=en&&intOut>0?`<span style="color:#fbbf24;font-weight:700">${fmtM(intOut)}</span>`:`<span style="color:#334155">—</span>`;
+    return`<tr style="${rowBg}"><td style="padding:7px 10px;color:#94a3b8;white-space:nowrap;border-bottom:1px solid #1e293b">${date}</td><td style="padding:7px 10px;border-bottom:1px solid #1e293b">${txNum?`<span class="badge" style="background:#1e3a8a;color:#93c5fd;font-size:10px">${txNum}</span>`:`<span style="color:#334155">—</span>`}</td><td style="padding:7px 10px;border-bottom:1px solid #1e293b;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#cbd5e1" title="${notes}">${notes||'—'}</td><td style="padding:7px 10px;border-bottom:1px solid #1e293b;color:#94a3b8;font-size:11px">${type||'—'}</td><td style="padding:7px 10px;border-bottom:1px solid #1e293b;text-align:left">${sayInTd}</td><td style="padding:7px 10px;border-bottom:1px solid #1e293b;text-align:left">${sayOutTd}</td><td style="padding:7px 10px;border-bottom:1px solid #1e293b;text-align:left">${intInTd}</td><td style="padding:7px 10px;border-bottom:1px solid #1e293b;text-align:left">${intOutTd}</td><td style="padding:7px 10px;border-bottom:1px solid #1e293b">${badge}</td></tr>`;
+  }).join('');
+  // قسم التشخيص — يُخفى عند المطابقة التامة
+  const dbgRows=(sayData.transactions||[]).map(t=>`<tr style="font-size:10px;border-bottom:1px solid #1e293b"><td style="padding:3px 6px;color:#94a3b8">${t.date}</td><td style="padding:3px 6px;color:#34d399">${t.incoming||0}</td><td style="padding:3px 6px;color:#f87171">${t.outgoing||0}</td><td style="padding:3px 6px;color:#fbbf24">${t.balance||0}</td><td style="padding:3px 6px;color:#94a3b8">${t.txNum||''}</td><td style="padding:3px 6px;color:#cbd5e1;max-width:200px;overflow:hidden;text-overflow:ellipsis">${(t.type||'')+' '+(t.notes||'')}</td></tr>`).join('');
+  const dbgHTML=allOk?'':`<details style="margin-bottom:10px"><summary style="cursor:pointer;color:#60a5fa;font-size:11px;padding:6px;background:#0f172a;border-radius:6px">🔍 تشخيص: البيانات الخام المستخرجة من PDF</summary><div style="overflow-x:auto;max-height:220px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:4px"><thead><tr style="background:#0f172a"><th style="padding:3px 6px;color:#94a3b8;text-align:right">التاريخ</th><th style="padding:3px 6px;color:#34d399;text-align:left">وارد</th><th style="padding:3px 6px;color:#f87171;text-align:left">صادر</th><th style="padding:3px 6px;color:#fbbf24;text-align:left">الرصيد</th><th style="padding:3px 6px;color:#94a3b8;text-align:left">رقم</th><th style="padding:3px 6px;color:#cbd5e1;text-align:right">النوع / البيان</th></tr></thead><tbody>${dbgRows}</tbody></table></div></details>`;
+  const tableHTML=`${dbgHTML}<div class="card" style="padding:0;overflow:hidden"><div style="padding:12px 16px;background:#0f172a;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h3 style="margin:0;font-size:13px;color:#e2e8f0">📊 جدول المطابقة التفصيلي (${results.length} سطر)</h3><div style="display:flex;gap:6px;font-size:10px">${matched>0?`<span style="padding:3px 8px;background:#052e16;color:#4ade80;border-radius:4px">✅ ${matched}</span>`:''} ${partial>0?`<span style="padding:3px 8px;background:#292116;color:#fde68a;border-radius:4px">⚠️ ${partial}</span>`:''} ${unmatched>0?`<span style="padding:3px 8px;background:#2d1515;color:#fca5a5;border-radius:4px">❌ ${unmatched}</span>`:''} ${intOnly>0?`<span style="padding:3px 8px;background:#1e293b;color:#60a5fa;border-radius:4px">🔵 ${intOnly}</span>`:''}</div></div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#0f172a"><th style="padding:8px 10px;text-align:right;color:#94a3b8;font-weight:800;border-bottom:2px solid #334155">التاريخ</th><th style="padding:8px 10px;text-align:right;color:#94a3b8;font-weight:800;border-bottom:2px solid #334155">رقم الحركة</th><th style="padding:8px 10px;text-align:right;color:#94a3b8;font-weight:800;border-bottom:2px solid #334155">البيان</th><th style="padding:8px 10px;text-align:right;color:#94a3b8;font-weight:800;border-bottom:2px solid #334155">نوع الحركة</th><th style="padding:8px 10px;text-align:left;color:#34d399;font-weight:800;border-bottom:2px solid #334155">وارد الصيرفة</th><th style="padding:8px 10px;text-align:left;color:#f87171;font-weight:800;border-bottom:2px solid #334155">صادر الصيرفة</th><th style="padding:8px 10px;text-align:left;color:#60a5fa;font-weight:800;border-bottom:2px solid #334155">وارد الداخلي</th><th style="padding:8px 10px;text-align:left;color:#fbbf24;font-weight:800;border-bottom:2px solid #334155">صادر الداخلي</th><th style="padding:8px 10px;text-align:right;color:#94a3b8;font-weight:800;border-bottom:2px solid #334155">الحالة</th></tr></thead><tbody>${rowsHTML}</tbody></table></div></div>`;
+  return statusCard+summaryCards+tableHTML;
+}
+
+function clearSayrafaData(acct,curr){
+  curr=curr||'iqd';
+  if(!confirm('مسح بيانات كشف الصيرفة المحفوظ؟'))return;
+  DB.set(`sayrafa_${acct}_${curr}_data`,null);DB.set(`sayrafa_${acct}_${curr}_meta`,null);renderContent();
+}
+
+function exportReconcileXLSX(acct,curr){
+  curr=curr||'iqd';
+  if(typeof XLSX==='undefined')return;
+  const sayData=DB.get(`sayrafa_${acct}_${curr}_data`,null);if(!sayData||!sayData.transactions)return;
+  const isK=acct==='kroob';const isUsd=curr==='usd';
+  const internalList=isK?getKroobList():getRafidList();
+  const results=reconcileWithSayrafa(sayData.transactions,internalList,acct,curr);
+  const unit=isUsd?'$':'د.ع';
+  const rows=[['التاريخ','رقم الحركة الصيرفة','البيان','نوع الحركة',`وارد الصيرفة (${unit})`,`صادر الصيرفة (${unit})`,`وارد الداخلي (${unit})`,`صادر الداخلي (${unit})`,'الفرق','الحالة']];
+  const sm={'matched':'✅ مطابق','partial':'⚠️ فرق جزئي','unmatched':'❌ غير مطابق','internal_only':'🔵 داخلي فقط'};
+  for(const r of results){
+    const st=r.sayrafa,en=r.internal;
+    let ii=0,io=0;
+    if(en){
+      if(isK){const isDep=en.operation_type==='إيداع'||en.operation_type==='ايداع';const amt=isUsd?parseFloat(en.amount_dollar||0):parseFloat(en.amount_dinar||0);if(isDep)ii=amt;else io=amt;}
+      else{if(en.type_dinar==='دائن')ii=parseFloat(en.dinar||0);else io=parseFloat(en.dinar||0);}
+    }
+    rows.push([st?st.date:(en?en.date:''),st?st.txNum:'',st?st.notes:(en?en.description||'':''),st?st.type:'',st?st.incoming:0,st?st.outgoing:0,ii,io,r.diff,sm[r.status]||'']);
+  }
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:14},{wch:14},{wch:40},{wch:16},{wch:18},{wch:18},{wch:18},{wch:18},{wch:15},{wch:16}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,`مطابقة_${curr}`);
+  XLSX.writeFile(wb,`مطابقة_الصيرفة_${acct}_${curr}_${today()}.xlsx`);
 }
 
 function importRafidXLSX(input){

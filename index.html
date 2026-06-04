@@ -153,7 +153,8 @@ async function syncFromCloud(silent=false) {
       const rafidAccounts = await FDB.getAll('rafid_accounts'); if(rafidAccounts&&rafidAccounts.length) DB.set('rafid_accounts',rafidAccounts);
       const rafidOpArr = await FDB.getAll('rafid_opening'); if(rafidOpArr&&rafidOpArr.length){const op=rafidOpArr.find(x=>x.id==='opening')||rafidOpArr[0];if(op)DB.set('rafid_opening',{dinar:parseFloat(op.dinar||0),dollar:parseFloat(op.dollar||0)});}
     }
-    const settings=await FDB.getAll('settings');if(settings&&settings.length){const fd=settings.find(x=>x.id==='factories');if(fd&&fd.list&&fd.list.length){DB.set('factories',fd.list);}}
+    const settings=await FDB.getAll('settings');if(settings&&settings.length){const fd=settings.find(x=>x.id==='factories');if(fd&&fd.list&&fd.list.length){DB.set('factories',fd.list);}const kot=settings.find(x=>x.id==='kroob_op_types');if(kot&&kot.list&&kot.list.length)DB.set('kroob_op_types',kot.list);}
+    const settlementArr=await FDB.getAll('expenses_settlement');if(settlementArr&&settlementArr.length){const stl={};settlementArr.forEach(s=>{if(s.id){const k=s.id.replace(/_/g,' ');stl[k]={received_dinar:parseFloat(s.received_dinar||0),received_dollar:parseFloat(s.received_dollar||0),updated:s.updated||0};}});if(Object.keys(stl).length)DB.set('expenses_settlement',stl);}
     if(!silent) showToast('تمت المزامنة مع Firebase','info',2000);
     return true;
   } catch(e) { console.warn('Sync error:',e); return false; }
@@ -2707,6 +2708,10 @@ async function uploadAllToFirebase(){
     const kroob=DB.get('kroob',[]);
     const rafid=DB.get('rafid_accounts',[]);
     const users=DB.get('users',{});
+    const kroobOp=DB.get('kroob_opening',{dinar:0,dollar:0});
+    const rafidOp=DB.get('rafid_opening',{dinar:0,dollar:0});
+    const settlement=DB.get('expenses_settlement',{});
+    const kroobOpTypes=DB.get('kroob_op_types',['صرف','إيداع','حواله']);
     await Promise.all([
       ...entries.map(e=>FDB.save('entries',e.id,e)),
       ...sales.map(s=>FDB.save('sales',s.id,s)),
@@ -2715,6 +2720,10 @@ async function uploadAllToFirebase(){
       ...kroob.map(k=>FDB.save('kroob',k.id,k)),
       ...rafid.map(r=>FDB.save('rafid_accounts',r.id,r)),
       ...Object.entries(users).map(([k,u])=>FDB.save('users',k,u)),
+      ...Object.entries(settlement).map(([k,v])=>FDB.save('expenses_settlement',k.replace(/\s+/g,'_'),{...v,id:k.replace(/\s+/g,'_')})),
+      FDB.save('kroob_opening','opening',{...kroobOp,id:'opening'}),
+      FDB.save('rafid_opening','opening',{...rafidOp,id:'opening'}),
+      FDB.save('settings','kroob_op_types',{id:'kroob_op_types',list:kroobOpTypes}),
     ]);
     showToast('✅ تم رفع كل البيانات إلى Firebase','success');
   }catch(e){showToast('خطأ أثناء الرفع: '+e.message,'error');}

@@ -2443,7 +2443,7 @@ function viewRefineryAccount(){
 
     const factRows=Object.keys(byFactory).map((f,i)=>`<tr>
       <td class="td" style="color:#94a3b8;font-size:14px">${i+1}</td>
-      <td class="td" style="font-weight:900;font-size:14px">${f}</td>
+      <td class="td" style="font-weight:900;font-size:14px">${esc(f)}</td>
       <td class="td" style="color:#2563eb;font-weight:900;font-size:16px">${byFactory[f].cars}</td>
       <td class="td" style="color:#059669;font-weight:900;font-size:15px">${fmt(byFactory[f].kg)}</td>
       <td class="td" style="color:#1e3a8a;font-weight:900;font-size:15px">${fmtM(byFactory[f].amount)}</td>
@@ -2621,6 +2621,18 @@ function viewAdmin(){
   const factRows=FACTORIES.map((f,i)=>`<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900">${f}</td><td class="td"><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="deleteFactory('${f}')">حذف</button></td></tr>`).join('');
   const userRows=Object.entries(users).map(([k,u])=>`<tr><td class="td" style="color:#94a3b8;font-size:11px">${k}</td><td class="td">${u.email||''}</td><td class="td"><span class="badge" style="background:${u.role==='manager'?'#eff6ff':'#f0fdf4'};color:${u.role==='manager'?'#2563eb':'#059669'}">${u.role==='manager'?'مدير':'محاسب'}</span></td><td class="td">${u.factory||'الكل'}</td><td class="td">${k!==ADMIN_UID?`<button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteUser('${k}')">حذف</button>`:''}</td></tr>`).join('');
   return`<div style="max-width:900px">
+  <div class="card" style="margin-bottom:14px;border:2px solid #2563eb">
+    <h3 style="font-size:14px;font-weight:900;margin-bottom:14px;color:#0f172a">🔐 تغيير كلمة المرور</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end">
+      <div><label class="lbl">كلمة المرور الحالية</label><div style="position:relative"><input class="inp" id="chg_old" type="password" placeholder="••••••••" style="padding-left:36px"><span onclick="togglePass('chg_old',this)" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:16px;color:#64748b;user-select:none">👁</span></div></div>
+      <div><label class="lbl">كلمة المرور الجديدة</label><div style="position:relative"><input class="inp" id="chg_new" type="password" placeholder="••••••••" style="padding-left:36px"><span onclick="togglePass('chg_new',this)" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:16px;color:#64748b;user-select:none">👁</span></div></div>
+      <div><label class="lbl">تأكيد كلمة المرور</label><div style="position:relative"><input class="inp" id="chg_confirm" type="password" placeholder="••••••••" style="padding-left:36px"><span onclick="togglePass('chg_confirm',this)" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:16px;color:#64748b;user-select:none">👁</span></div></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:10px">
+      <button class="btn btn-blue" onclick="changeMyPassword()">💾 حفظ كلمة المرور</button>
+    </div>
+    <div id="chg-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px;font-weight:700"></div>
+  </div>
   <div class="card" style="margin-bottom:14px">
     <h3 style="font-size:14px;font-weight:900;margin-bottom:14px;color:#0f172a">إضافة معمل جديد</h3>
     <div style="display:flex;gap:10px"><input class="inp" id="new_factory" placeholder="اسم المعمل..." style="flex:1"><button class="btn btn-blue" onclick="addFactory()">إضافة</button></div>
@@ -2676,6 +2688,31 @@ function _buildAdminDelBtns(){
 }
 function addFactory(){const n=gv('new_factory');if(!n)return;let f=DB.get('factories',FACTORIES);if(f.includes(n)){showToast('موجود مسبقاً','warning');return;}f.push(n);DB.set('factories',f);FACTORIES=f;FDB.save('settings','factories',{id:'factories',list:f});renderContent();}
 function deleteFactory(name){if(!confirm('حذف معمل: '+name+'?'))return;let f=DB.get('factories',FACTORIES).filter(x=>x!==name);DB.set('factories',f);FACTORIES=f;FDB.save('settings','factories',{id:'factories',list:f});renderContent();}
+function togglePass(id,el){const inp=document.getElementById(id);if(!inp)return;if(inp.type==='password'){inp.type='text';el.textContent='🙈';}else{inp.type='password';el.textContent='👁';}}
+
+async function changeMyPassword(){
+  const oldPass=gv('chg_old'), newPass=gv('chg_new'), confirm=gv('chg_confirm');
+  const msg=document.getElementById('chg-msg');
+  const show=(text,color)=>{msg.style.display='block';msg.style.background=color==='red'?'#fef2f2':'#f0fdf4';msg.style.color=color==='red'?'#dc2626':'#059669';msg.textContent=text;};
+  if(!oldPass||!newPass||!confirm){show('يرجى تعبئة جميع الحقول','red');return;}
+  if(newPass.length<6){show('كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل','red');return;}
+  if(newPass!==confirm){show('كلمة المرور الجديدة وتأكيدها غير متطابقتين','red');return;}
+  const users=DB.get('users',{});
+  const k=uid(currentUser.email);
+  const u=users[k];
+  if(!u){show('لم يتم العثور على المستخدم','red');return;}
+  const valid=await verifyPassword(oldPass,u.password);
+  if(!valid){show('كلمة المرور الحالية غير صحيحة','red');return;}
+  const newHash=await hashPassword(newPass);
+  users[k].password=newHash;
+  DB.set('users',users);
+  await FDB.save('users',k,users[k]);
+  document.getElementById('chg_old').value='';
+  document.getElementById('chg_new').value='';
+  document.getElementById('chg_confirm').value='';
+  show('✅ تم تغيير كلمة المرور بنجاح','green');
+}
+
 async function addUser(){
   const email=gv('new_email'),pass=gv('new_pass'),role=gv('new_role'),factory=gv('new_factory_sel');
   if(!email||!pass){showToast('البريد وكلمة السر مطلوبان','error');return;}

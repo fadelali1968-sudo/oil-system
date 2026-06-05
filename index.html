@@ -2376,11 +2376,6 @@ function getKroobRefineryPayments(refineryName, wFrom, wTo){
   const byDate={};
   const details={};
 
-  const isKarbala = (refineryName||'').trim()==='مصفى كربلاء';
-  const refWords = isKarbala
-    ? ['كربلاء','مصفى كربلاء']
-    : ['صلاح الدين','صلاح','مصفى صلاح'];
-
   // بناء مجموعة أشهر الفترة المحددة
   let filterMonths = null;
   if(wFrom || wTo){
@@ -2396,24 +2391,23 @@ function getKroobRefineryPayments(refineryName, wFrom, wTo){
   }
 
   kroob.forEach(k=>{
-    const desc=(k.description||'');
-    const descLow=desc.toLowerCase();
-    const isTransfer=(descLow.includes('حوالة')||descLow.includes('حواله')||descLow.includes('صرف'));
-    const isRefinery=refWords.some(w=>desc.includes(w));
-    if(isTransfer && isRefinery){
-      // عند الفلترة: طابق الشهر المذكور في البيان مع أشهر الفترة
-      if(filterMonths){
-        const mNum = extractMonthFromDesc(desc);
-        if(mNum === null || !filterMonths.has(mNum)) return;
-      }
-      if((k.type_dinar||'مدين')!=='مدين') return;
-      const date=k.date||'';
-      const amt=parseFloat(k.amount_dinar||0);
-      if(!byDate[date])byDate[date]=0;
-      byDate[date]+=amt;
-      if(!details[date])details[date]=[];
-      details[date].push({desc,amt,date});
+    // مطابقة على حقل الجهة المستفيدة مباشرة
+    if((k.beneficiary||'').trim() !== refineryName.trim()) return;
+    if((k.type_dinar||'مدين')!=='مدين') return;
+
+    // عند الفلترة: طابق الشهر المذكور في البيان مع أشهر الفترة
+    if(filterMonths){
+      const desc=(k.description||'');
+      const mNum = extractMonthFromDesc(desc);
+      if(mNum === null || !filterMonths.has(mNum)) return;
     }
+
+    const date=k.date||'';
+    const amt=parseFloat(k.amount_dinar||0);
+    if(!byDate[date])byDate[date]=0;
+    byDate[date]+=amt;
+    if(!details[date])details[date]=[];
+    details[date].push({desc:k.description,amt,date});
   });
   return {byDate, details};
 }
@@ -2456,37 +2450,49 @@ function viewRefineryAccount(){
     </tr>`).join('');
 
     const totalRow=`<tr style="background:#92400e;color:#fff">
-      <td class="td" style="color:#fde68a;font-weight:900;font-size:13px">📊 الإجمالي</td>
+      <td class="td" colspan="2" style="color:#fde68a;font-weight:900;font-size:13px">📊 الإجمالي</td>
       <td class="td" style="color:#fff;font-weight:900;font-size:20px">${filtered.length}<br><span style="font-size:11px;color:#fde68a">سيارة</span></td>
       <td class="td" style="color:#6ee7b7;font-weight:900;font-size:18px">${fmt(grandKg)}<br><span style="font-size:11px;color:#fde68a">كغم</span></td>
       <td class="td" style="color:#fbbf24;font-weight:900;font-size:18px">${fmtM(grandAmount)}<br><span style="font-size:11px;color:#fde68a">المبلغ المستحق</span></td>
-      <td class="td" style="color:#34d399;font-weight:900;font-size:16px">${fmtM(grandReceived)}<br><span style="font-size:11px;color:#fde68a">إجمالي المستلم</span></td>
-      <td class="td" style="color:${grandRemaining>0?'#fca5a5':'#6ee7b7'};font-weight:900;font-size:16px">${fmtM(Math.abs(grandRemaining))}<br><span style="font-size:11px;color:#fde68a">${grandRemaining>0?'⚠️ المتبقي':'✅ مسوى'}</span></td>
     </tr>`;
 
-    return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:16px;border:2px solid ${color}">
-      <div style="padding:12px 16px;background:${color};display:flex;justify-content:space-between;align-items:center">
-        <span style="font-weight:900;font-size:15px;color:#fff">${title}</span>
-        <div style="display:flex;gap:16px;font-size:12px;color:rgba(255,255,255,0.85)">
-          <span>السيارات: <b style="color:#fff">${filtered.length}</b></span>
-          <span>المبلغ: <b style="color:#fbbf24">${fmtM(grandAmount)}</b></span>
-          <span style="color:${grandRemaining>0?'#fca5a5':'#6ee7b7'}">المتبقي: <b>${fmtM(Math.abs(grandRemaining))}</b></span>
+    const summaryCard=`<div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:180px;background:#064e3b;border:2px solid #059669;border-radius:10px;padding:12px 16px;text-align:center">
+        <div style="font-size:11px;color:#6ee7b7;font-weight:700;margin-bottom:4px">✅ إجمالي المستلم</div>
+        <div style="font-size:18px;font-weight:900;color:#34d399">${fmtM(grandReceived)}</div>
+        <div style="font-size:10px;color:#6ee7b7">د.ع</div>
+      </div>
+      <div style="flex:1;min-width:180px;background:${grandRemaining>0?'#450a0a':'#064e3b'};border:2px solid ${grandRemaining>0?'#dc2626':'#059669'};border-radius:10px;padding:12px 16px;text-align:center">
+        <div style="font-size:11px;color:${grandRemaining>0?'#fca5a5':'#6ee7b7'};font-weight:700;margin-bottom:4px">${grandRemaining>0?'⚠️ المتبقي غير المسوى':'✅ الحساب مسوى'}</div>
+        <div style="font-size:18px;font-weight:900;color:${grandRemaining>0?'#f87171':'#34d399'}">${fmtM(Math.abs(grandRemaining))}</div>
+        <div style="font-size:10px;color:${grandRemaining>0?'#fca5a5':'#6ee7b7'}">د.ع</div>
+      </div>
+    </div>`;
+
+    return`<div style="margin-bottom:16px">
+      <div class="card" style="overflow:hidden;padding:0;border:2px solid ${color}">
+        <div style="padding:12px 16px;background:${color};display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:900;font-size:15px;color:#fff">${title}</span>
+          <div style="display:flex;gap:16px;font-size:12px;color:rgba(255,255,255,0.85)">
+            <span>السيارات: <b style="color:#fff">${filtered.length}</b></span>
+            <span>المبلغ: <b style="color:#fbbf24">${fmtM(grandAmount)}</b></span>
+            <span style="color:${grandRemaining>0?'#fca5a5':'#6ee7b7'}">المتبقي: <b>${fmtM(Math.abs(grandRemaining))}</b></span>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;min-width:400px">
+            <thead><tr>
+              <th class="th" style="font-size:13px">ت</th>
+              <th class="th" style="font-size:13px">المعمل</th>
+              <th class="th" style="font-size:13px">السيارات</th>
+              <th class="th" style="font-size:13px">الكغم</th>
+              <th class="th" style="font-size:13px">إجمالي المبلغ</th>
+            </tr></thead>
+            <tbody>${factRows}${totalRow}</tbody>
+          </table>
         </div>
       </div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;min-width:500px">
-          <thead><tr>
-            <th class="th" style="font-size:13px">ت</th>
-            <th class="th" style="font-size:13px">المعمل</th>
-            <th class="th" style="font-size:13px">السيارات</th>
-            <th class="th" style="font-size:13px">الكغم</th>
-            <th class="th" style="font-size:13px">إجمالي المبلغ</th>
-            <th class="th" style="font-size:13px">إجمالي المستلم</th>
-            <th class="th" style="font-size:13px">المتبقي</th>
-          </tr></thead>
-          <tbody>${factRows}${totalRow}</tbody>
-        </table>
-      </div>
+      ${summaryCard}
     </div>`;
   }
 

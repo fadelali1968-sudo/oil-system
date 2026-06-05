@@ -13,7 +13,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, deleteUser as fbDeleteUser } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, deleteUser as fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   const firebaseConfig = {
     apiKey: "AIzaSyAEQ4T5W2sddGkrVkbq2KroZPmFy6BPPgU",
     authDomain: "oil-system-df212.firebaseapp.com",
@@ -26,7 +26,7 @@
   const db = getFirestore(app);
   const auth = getAuth(app);
   window._fb = { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy };
-  window._auth = { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, fbDeleteUser };
+  window._auth = { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider };
   window._fbReady = true;
   document.dispatchEvent(new Event('fb-ready'));
 </script>
@@ -2697,20 +2697,30 @@ async function changeMyPassword(){
   if(!oldPass||!newPass||!confirm){show('يرجى تعبئة جميع الحقول','red');return;}
   if(newPass.length<6){show('كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل','red');return;}
   if(newPass!==confirm){show('كلمة المرور الجديدة وتأكيدها غير متطابقتين','red');return;}
-  const users=DB.get('users',{});
-  const k=uid(currentUser.email);
-  const u=users[k];
-  if(!u){show('لم يتم العثور على المستخدم','red');return;}
-  const valid=await verifyPassword(oldPass,u.password);
-  if(!valid){show('كلمة المرور الحالية غير صحيحة','red');return;}
-  const newHash=await hashPassword(newPass);
-  users[k].password=newHash;
-  DB.set('users',users);
-  await FDB.save('users',k,users[k]);
-  document.getElementById('chg_old').value='';
-  document.getElementById('chg_new').value='';
-  document.getElementById('chg_confirm').value='';
-  show('✅ تم تغيير كلمة المرور بنجاح','green');
+  try{
+    // Firebase Auth هو المرجع الحقيقي — نتحقق منه أولاً
+    if(window._auth){
+      const {auth,reauthenticateWithCredential,EmailAuthProvider,updatePassword:fbUpdatePw}=window._auth;
+      const fbUser=auth.currentUser;
+      if(fbUser){
+        const cred=EmailAuthProvider.credential(currentUser.email,oldPass);
+        await reauthenticateWithCredential(fbUser,cred);
+        await fbUpdatePw(fbUser,newPass);
+      }
+    }
+    // تحديث الهاش في localStorage وFirestore ليتزامنا مع Firebase Auth
+    const users=DB.get('users',{});
+    const k=uid(currentUser.email);
+    const newHash=await hashPassword(newPass);
+    if(users[k]){users[k].password=newHash;DB.set('users',users);await FDB.save('users',k,users[k]);}
+    document.getElementById('chg_old').value='';
+    document.getElementById('chg_new').value='';
+    document.getElementById('chg_confirm').value='';
+    show('✅ تم تغيير كلمة المرور بنجاح','green');
+  } catch(err){
+    if(err.code==='auth/wrong-password'||err.code==='auth/invalid-credential')show('كلمة المرور الحالية غير صحيحة','red');
+    else show('حدث خطأ: '+err.message,'red');
+  }
 }
 
 async function addUser(){

@@ -1171,7 +1171,7 @@ const SALAF_PERSONS=['سيد حيدر','سيد رافد','فايق رويمي'];
 function getSalafList(person){const all=DB.get('salaf',[]);if(!person)return all;return all.filter(s=>s.person===person);}
 
 function getHaidarKroobSalaf(){
-  return DB.get('kroob',[]).filter(e=>(e.description||'').includes('سلفة حيدر صبري')&&(e.type_dinar||'مدين').trim()==='مدين');
+  return DB.get('kroob',[]).filter(e=>(e.beneficiary||'').trim()==='حيدر صبري'&&/سلف[هة]/.test(e.description||'')&&(e.type_dinar||'مدين').trim()==='مدين');
 }
 
 function viewSalafForm(){

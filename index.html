@@ -1707,7 +1707,7 @@ function generateKroobRangePDF(currency){
 function parseSairafaPDF(rawText,currency='dinar'){
   const isDollar=currency==='dollar';
   const rows=[];
-  const lines=rawText.replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(Boolean);
+  const lines=rawText.normalize('NFKC').replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(Boolean);
   // أحرف الناقص في جميع أشكالها: ASCII + رياضي + شرطة en/em
   const MINUS_RE=/[-−–—]/;
   // دالة مساعدة: هل الرمز ناقص؟ (بجميع أشكاله)
@@ -1716,6 +1716,7 @@ function parseSairafaPDF(rawText,currency='dinar'){
   const isNumericToken=t=>/^[−\-]?[\d,]+[−\-]?$/.test(t)||/^[−\-]+$/.test(t);
 
   let prevBal=null;
+  const usedCommLines=new Set(); // يمنع استخدام سطر العمولة مرتين لصفين مختلفين
   for(const line of lines){
     if(/ﻖﺑﺎﺳﺪﻴﺻﺭ/.test(line)||/رصيد.{0,8}سابق/i.test(line)||/سابق.{0,8}رصيد/i.test(line)){
       const amRe=/\b[\d,]+\b/g; let am, lastVal=null, lastNeg=false;
@@ -1724,7 +1725,9 @@ function parseSairafaPDF(rawText,currency='dinar'){
         if(v<=100)continue;
         const after=line.slice(am.index+am[0].length, am.index+am[0].length+8);
         const before=line.slice(Math.max(0,am.index-3), am.index);
-        const neg=(/^\s*[−\-–—](?!\s*\d)/.test(after))||(/[−\-–]\s*$/.test(before));
+        // الـ "-" علامة سالبة فقط إذا جاء مباشرة ملاصقاً للرقم (بلا مسافة)
+        // وإلا فهو فاصل عمود مثل "1,173,161,399 - - - رصيد سابق"
+        const neg=(/^[−\-–—](?!\s*\d)/.test(after))||(/[−\-–]\s*$/.test(before));
         lastVal=v; lastNeg=neg;
       }
       if(lastVal!==null){prevBal=lastNeg?-lastVal:lastVal;break;}
@@ -1750,10 +1753,11 @@ function parseSairafaPDF(rawText,currency='dinar'){
     const txType=descTokens.length>0?descTokens[0]:'';
     const desc=descTokens.slice(1).join(' ').trim();
 
-    // أنواع الحركة المعروفة وإشارتها
-    const CREDIT_TYPES=/^(قبض|استلام|[إا]يداع|بيع|حوال[ةه]له|حوال[ةه]\s*له)$/;
-    const DEBIT_TYPES =/^(صرف|حوال[ةه]|تسديد|دفع|شراء)$/;
-    const typeByText=CREDIT_TYPES.test(txType)?'دائن':DEBIT_TYPES.test(txType)?'مدين':null;
+    // الاتجاه من نوع العملية: وارد=دائن، صادر=مدين
+    // دينار: ايداع/قبض=دائن | دولار: ايداع/قبض/بيع=دائن
+    const _baseCredit=/^([إا]يداع|قبض)$/.test(txType);
+    const _dollarBuy=isDollar&&txType==='بيع';
+    const typeByText=(_baseCredit||_dollarBuy)?'دائن':'مدين';
 
     // ── استخراج المبالغ الرئيسية (رصيد + معاملة) مع تتبع المواضع ──
     // المرحلة 1: دائماً يشترط فاصلة و>= 1000 (الرصيد والمعاملات الكبيرة دائماً بفاصلة)
@@ -1811,49 +1815,50 @@ function parseSairafaPDF(rawText,currency='dinar'){
         commAmt=cv;
       }
     }
-    // ثانياً: إذا لم تُوجد — ابحث في السطور المجاورة (±3)
+    // ثانياً: ابحث بعد amounts[1] مباشرة في نفس السطر (للدولار فقط)
+    // الترتيب الفعلي في PDF الدولار: [رصيد]   [صادر/وارد]   [عمولة]  [نص...]
+    if(commAmt===0&&isDollar&&amPositions.length>=2){
+      const after=line.substring(amPositions[1].end);
+      const firstNum=/^\s*(\d{1,4})\b/.exec(after);
+      if(firstNum){
+        const cv=parseInt(firstNum[1]);
+        if(cv>=1)commAmt=cv;
+        // لو كانت 0 → نبقى commAmt=0 (ولا نكمل البحث في الأسطر المجاورة)
+      }
+    }
+    // ثالثاً: إذا لم تُوجد — ابحث في السطور المجاورة (±3 سطور)
     // بعض PDFs تضع قيمة العمولة في سطر Y مختلف قليلاً فتنفصل عن سطر البيانات
     if(commAmt===0){
       outer:for(let dk=1;dk<=3;dk++){
         for(const sign of [1,-1]){
           const adjIdx=li+sign*dk;
-          if(adjIdx<0||adjIdx>=lines.length)continue;
+          if(adjIdx<0||adjIdx>=lines.length||usedCommLines.has(adjIdx))continue;
           const adj=lines[adjIdx].trim();
           if(!adj||/\d{4}-\d{2}-\d{2}/.test(adj))continue;
           const solo=/^(\d{1,4})$/.exec(adj);
-          if(solo){const cv=parseInt(solo[1]);if(cv>=1){commAmt=cv;break outer;}}
+          if(solo){
+            const cv=parseInt(solo[1]);
+            usedCommLines.add(adjIdx); // احجز السطر حتى لو العمولة صفر
+            if(cv>=1)commAmt=cv;
+            break outer; // توقف بعد أول رقم منفرد (حتى لو 0)
+          }
         }
       }
     }
 
-    // ── تحديد الاتجاه ──
-    const rawBal =amounts[0];
-    const txAmt  =amounts[1];
-    const hasComm=commAmt>0;
-    let type,commission,mainAmt,balance;
-    mainAmt=txAmt; commission=commAmt;
-
-    if(hasComm){
-      // 3 مبالغ → مدين دائماً (صادر + عمولة، الدائن لا عمولة له)
-      type='مدين';
-      const calcBal=(prevBal===null?-rawBal:prevBal-txAmt-commAmt);
-      balance=(calcBal<0?-1:1)*rawBal;
-      if(prevBal===null)prevBal=balance;
-    }else if(prevBal===null){
-      // لا يوجد رصيد سابق: نستخدم نص نوع الحركة لتحديد الإشارة
-      if(typeByText==='دائن'){ type='دائن'; balance=rawBal;  }
-      else                   { type='مدين'; balance=-rawBal; } // حسابات الصيرفة غالباً عجز
+    // ── تحديد الاتجاه والرصيد ──
+    const rawBal=amounts[0];
+    const txAmt=amounts[1];
+    const mainAmt=txAmt,commission=commAmt;
+    // الاتجاه مباشرةً من نوع العملية (لا حسابات رياضية — تفشل مع الأرصدة السالبة)
+    const type=typeByText;
+    // إشارة الرصيد: نحسب الرصيد المتوقع ثم نأخذ القيمة المطلقة من PDF مع إشارته
+    let balance;
+    if(prevBal!==null){
+      const nb=type==='مدين'?prevBal-mainAmt-commission:prevBal+mainAmt;
+      balance=(nb<0?-1:1)*rawBal;
     }else{
-      // رياضياً: نختار الاتجاه الذي يُنتج رصيداً أقرب للقيمة المطلقة الفعلية
-      const expDebit =prevBal-txAmt;
-      const expCredit=prevBal+txAmt;
-      const diffDebit =Math.abs(Math.abs(expDebit) -rawBal);
-      const diffCredit=Math.abs(Math.abs(expCredit)-rawBal);
-      if(diffDebit<=diffCredit){
-        type='مدين';  balance=(expDebit <0?-1:1)*rawBal;
-      }else{
-        type='دائن';  balance=(expCredit<0?-1:1)*rawBal;
-      }
+      balance=(type==='دائن'?1:-1)*rawBal;
     }
     prevBal=balance;
 

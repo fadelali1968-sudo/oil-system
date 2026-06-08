@@ -261,6 +261,8 @@ let S = {
   kroobEditId:'', kroobSearch:'',
   rafidEditId:'', rafidSearch:'',
   kroobPdfData:null, rafidPdfData:null,
+  kroobPdfFrom:'', kroobPdfTo:'',
+  rafidPdfFrom:'', rafidPdfTo:'',
   kroobMonth: (new Date()).toISOString().slice(0,7),
   rafidMonth: (new Date()).toISOString().slice(0,7)
 };
@@ -1702,38 +1704,160 @@ function generateKroobRangePDF(currency){
 }
 
 // ──────────── مطابقة PDF الصيرفة ────────────
-function parseSairafaPDF(rawText){
+function parseSairafaPDF(rawText,currency='dinar'){
+  const isDollar=currency==='dollar';
   const rows=[];
   const lines=rawText.replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(Boolean);
+  // أحرف الناقص في جميع أشكالها: ASCII + رياضي + شرطة en/em
+  const MINUS_RE=/[-−–—]/;
+  // دالة مساعدة: هل الرمز ناقص؟ (بجميع أشكاله)
+  const isMinusChar=c=>MINUS_RE.test(c);
+  // فلترة التوكن: يُستبعد إذا كان رقماً (مع فواصل واختياري ناقص في النهاية أو البداية)
+  const isNumericToken=t=>/^[−\-]?[\d,]+[−\-]?$/.test(t)||/^[−\-]+$/.test(t);
+
   let prevBal=null;
   for(const line of lines){
-    if(/ﻖﺑﺎﺳﺪﻴﺻﺭ/.test(line)){
-      const nums=(line.match(/[\d,]+/g)||[]).map(n=>parseFloat(n.replace(/,/g,'')));
-      if(nums.length){prevBal=nums[nums.length-1];break;}
+    if(/ﻖﺑﺎﺳﺪﻴﺻﺭ/.test(line)||/رصيد.{0,8}سابق/i.test(line)||/سابق.{0,8}رصيد/i.test(line)){
+      const amRe=/\b[\d,]+\b/g; let am, lastVal=null, lastNeg=false;
+      while((am=amRe.exec(line))!==null){
+        const v=parseFloat(am[0].replace(/,/g,''));
+        if(v<=100)continue;
+        const after=line.slice(am.index+am[0].length, am.index+am[0].length+8);
+        const before=line.slice(Math.max(0,am.index-3), am.index);
+        const neg=(/^\s*[−\-–—](?!\s*\d)/.test(after))||(/[−\-–]\s*$/.test(before));
+        lastVal=v; lastNeg=neg;
+      }
+      if(lastVal!==null){prevBal=lastNeg?-lastVal:lastVal;break;}
     }
   }
-  for(const line of lines){
+
+  for(let li=0;li<lines.length;li++){
+    const line=lines[li];
     if(!/\d{4}-\d{2}-\d{2}/.test(line))continue;
     const dM=line.match(/(\d{4}-\d{2}-\d{2})/);if(!dM)continue;
     const date=dM[1];
     const docM=line.match(/\b(\d{5,6})\b/);
     const docNo=docM?docM[1]:'';
+
+    // ── استخراج نوع الحركة والبيان أولاً (لاستخدامهما في تحديد الاتجاه) ──
+    const tokens=line.split(/\s+/);
+    // استبعاد: تواريخ، أرقام بجميع أشكال الناقص، رموز ناقص منفردة، توكنات قصيرة
+    const descTokens=tokens.filter(t=>
+      !/^\d{4}-\d{2}-\d{2}$/.test(t) &&
+      !isNumericToken(t) &&
+      t.length>1
+    );
+    const txType=descTokens.length>0?descTokens[0]:'';
+    const desc=descTokens.slice(1).join(' ').trim();
+
+    // أنواع الحركة المعروفة وإشارتها
+    const CREDIT_TYPES=/^(قبض|استلام|[إا]يداع|بيع|حوال[ةه]له|حوال[ةه]\s*له)$/;
+    const DEBIT_TYPES =/^(صرف|حوال[ةه]|تسديد|دفع|شراء)$/;
+    const typeByText=CREDIT_TYPES.test(txType)?'دائن':DEBIT_TYPES.test(txType)?'مدين':null;
+
+    // ── استخراج المبالغ الرئيسية (رصيد + معاملة) مع تتبع المواضع ──
+    // المرحلة 1: دائماً يشترط فاصلة و>= 1000 (الرصيد والمعاملات الكبيرة دائماً بفاصلة)
     const amounts=[];
-    const amRe=/\b[\d,]+\b/g;let am;
+    const amPositions=[];
+    const amRe=/\b[\d,]+\b/g; let am;
     while((am=amRe.exec(line))!==null){
       if(!am[0].includes(','))continue;
       const v=parseFloat(am[0].replace(/,/g,''));
-      if(v>10000)amounts.push(v);
+      if(v<1000)continue;
+      const digitLen=am[0].replace(/,/g,'').length;
+      if(digitLen<=4){
+        const prevCh=am.index>0?line[am.index-1]:'';
+        const nextCh=line[am.index+am[0].length]||'';
+        if(prevCh==='-'||nextCh==='-')continue;
+      }
+      amounts.push(v);
+      amPositions.push({start:am.index,end:am.index+am[0].length});
+      if(amounts.length>=2)break;
+    }
+    // المرحلة 2: لـ PDF الدولار فقط — إذا وُجد الرصيد وحده (معاملة صغيرة بلا فاصلة كـ 400$)
+    // خذ أكبر رقم بلا فاصلة بعد الرصيد (ليكون المبلغ لا العمولة)
+    if(isDollar&&amounts.length===1){
+      const rest=line.substring(amPositions[0].end);
+      const cands=[];
+      const r2=/\b(\d{1,4})\b/g; let m2;
+      while((m2=r2.exec(rest))!==null){
+        const v2=parseInt(m2[1]);
+        if(v2<1)continue;
+        const pc=m2.index>0?rest[m2.index-1]:'';
+        const nc=rest[m2.index+m2[1].length]||'';
+        if(pc==='-'||nc==='-')continue;
+        cands.push({v:v2,s:amPositions[0].end+m2.index,e:amPositions[0].end+m2.index+m2[1].length});
+      }
+      if(cands.length){
+        cands.sort((a,b)=>b.v-a.v); // أكبر رقم = المبلغ لا العمولة
+        amounts.push(cands[0].v);
+        amPositions.push({start:cands[0].s,end:cands[0].e});
+      }
     }
     if(amounts.length<2)continue;
-    const balance=amounts[amounts.length-1];
-    const mainAmt=amounts[amounts.length-2];
-    const type=(prevBal!==null&&balance>prevBal)?'دائن':'مدين';
+
+    // ── استخراج العمولة ──
+    // أولاً: ابحث في النص بين الرقمَين على نفس السطر
+    let commAmt=0;
+    if(amPositions[0].end<amPositions[1].start){
+      const between=line.substring(amPositions[0].end,amPositions[1].start);
+      const cRe=/\b(\d{1,5})\b/g; let cm;
+      while((cm=cRe.exec(between))!==null){
+        const cv=parseInt(cm[1]);
+        if(cv<1)continue;
+        const pc=cm.index>0?between[cm.index-1]:'';
+        const nc=between[cm.index+cm[1].length]||'';
+        if(pc==='-'||nc==='-')continue;
+        commAmt=cv;
+      }
+    }
+    // ثانياً: إذا لم تُوجد — ابحث في السطور المجاورة (±3)
+    // بعض PDFs تضع قيمة العمولة في سطر Y مختلف قليلاً فتنفصل عن سطر البيانات
+    if(commAmt===0){
+      outer:for(let dk=1;dk<=3;dk++){
+        for(const sign of [1,-1]){
+          const adjIdx=li+sign*dk;
+          if(adjIdx<0||adjIdx>=lines.length)continue;
+          const adj=lines[adjIdx].trim();
+          if(!adj||/\d{4}-\d{2}-\d{2}/.test(adj))continue;
+          const solo=/^(\d{1,4})$/.exec(adj);
+          if(solo){const cv=parseInt(solo[1]);if(cv>=1){commAmt=cv;break outer;}}
+        }
+      }
+    }
+
+    // ── تحديد الاتجاه ──
+    const rawBal =amounts[0];
+    const txAmt  =amounts[1];
+    const hasComm=commAmt>0;
+    let type,commission,mainAmt,balance;
+    mainAmt=txAmt; commission=commAmt;
+
+    if(hasComm){
+      // 3 مبالغ → مدين دائماً (صادر + عمولة، الدائن لا عمولة له)
+      type='مدين';
+      const calcBal=(prevBal===null?-rawBal:prevBal-txAmt-commAmt);
+      balance=(calcBal<0?-1:1)*rawBal;
+      if(prevBal===null)prevBal=balance;
+    }else if(prevBal===null){
+      // لا يوجد رصيد سابق: نستخدم نص نوع الحركة لتحديد الإشارة
+      if(typeByText==='دائن'){ type='دائن'; balance=rawBal;  }
+      else                   { type='مدين'; balance=-rawBal; } // حسابات الصيرفة غالباً عجز
+    }else{
+      // رياضياً: نختار الاتجاه الذي يُنتج رصيداً أقرب للقيمة المطلقة الفعلية
+      const expDebit =prevBal-txAmt;
+      const expCredit=prevBal+txAmt;
+      const diffDebit =Math.abs(Math.abs(expDebit) -rawBal);
+      const diffCredit=Math.abs(Math.abs(expCredit)-rawBal);
+      if(diffDebit<=diffCredit){
+        type='مدين';  balance=(expDebit <0?-1:1)*rawBal;
+      }else{
+        type='دائن';  balance=(expCredit<0?-1:1)*rawBal;
+      }
+    }
     prevBal=balance;
-    const tokens=line.split(/\s+/);
-    const descTokens=tokens.filter(t=>!/^\d{4}-\d{2}-\d{2}$/.test(t)&&!/^[\d,]+$/.test(t)&&t.length>1);
-    const desc=descTokens.join(' ').split('').reverse().join('').trim();
-    if(mainAmt>0)rows.push({date,docNo,desc,amount:mainAmt,type,balance});
+
+    if(mainAmt>0)rows.push({date,docNo,txType,desc,amount:mainAmt,commission,type,balance});
   }
   return rows;
 }
@@ -1771,11 +1895,13 @@ function matchSysWithPDF(sysRows,pdfRows,amtField,dirFn){
     if(cands.length){used.add(cands[0].idx);matched.push({pdf:pR,sys:cands[0].s,dd:cands[0].dd});}
     else pdfOnly.push({pdf:pR});
   }
-  const sysOnly=sysRows.map((s,i)=>({s,i})).filter(({i})=>!used.has(i)).map(({s})=>({sys:s}));
+  const sysOnly=sysRows.map((s,i)=>({s,i})).filter(({i,s})=>!used.has(i)&&parseFloat(s[amtField]||0)>0).map(({s})=>({sys:s}));
   return{matched,pdfOnly,sysOnly};
 }
-function renderPDFMatchResult(pdfData,sysRows,amtField,dirFn,descField){
-  const{rows:pdfRows,fileName,currency}=pdfData;
+function renderPDFMatchResult(pdfData,sysRows,amtField,dirFn,descField,currency){
+  const{rows:pdfRows,fileName}=pdfData;
+  const isDollar=currency==='dollar';
+  const sysBalField=isDollar?'bal_dollar':'bal_dinar';
   const{matched,pdfOnly,sysOnly}=matchSysWithPDF(sysRows,pdfRows,amtField,dirFn);
   const pct=pdfRows.length?Math.round(matched.length/pdfRows.length*100):0;
   const allRows=[
@@ -1791,20 +1917,39 @@ function renderPDFMatchResult(pdfData,sysRows,amtField,dirFn,descField){
   const tRows=allRows.map(r=>{
     const c=stMap[r.st];
     const pDate=r.pdf?r.pdf.date:'—',sDate=r.sys?r.sys.date:'—';
+    const pTxType=r.pdf?(r.pdf.txType||''):'';
     const pDesc=r.pdf?r.pdf.desc:'—',sDesc=r.sys?(r.sys[descField]||'—'):'—';
     const amt=r.pdf?r.pdf.amount:(r.sys?parseFloat(r.sys[amtField]||0):0);
     const pType=r.pdf?r.pdf.type:null;
     const sType=r.sys?dirFn(r.sys):'مدين';
     const dir=(pType||sType)==='دائن'?'🟢 دائن':'🔴 مدين';
     const dn=r.pdf&&r.sys&&r.pdf.date!==r.sys.date?'<span style="color:#d97706;font-size:9px"> '+Math.round((r.dd||0)/86400000)+'ي</span>':'';
+    const pComm=r.pdf?(r.pdf.commission||0):0;
+    const sComm=r.sys?parseFloat(r.sys.commission||0):0;
+    const commMismatch=r.st==='ok'&&Math.abs(pComm-sComm)>=1;
+    const commCell=pComm>0
+      ?('<span style="font-weight:900;color:'+(commMismatch?'#dc2626':'#0f172a')+'">'+fmtM(pComm)+'</span>'+(commMismatch?'<br><span style="font-size:9px;color:#059669">نظام:'+fmtM(sComm)+'</span>':''))
+      :(sComm>0?'<span style="color:#94a3b8;font-size:9px">—/'+fmtM(sComm)+'</span>':'—');
+    // رصيد PDF (من الصيرفة)
+    const pBal=r.pdf&&r.pdf.balance!=null?r.pdf.balance:null;
+    const pBalCell=pBal!=null?'<span style="font-weight:900;color:'+(pBal>=0?'#0f172a':'#dc2626')+'">'+fmtM(pBal)+'</span>':'—';
+    // رصيد النظام
+    const sBal=r.sys&&r.sys[sysBalField]!=null?r.sys[sysBalField]:null;
+    const sBalCell=sBal!=null?'<span style="font-weight:900;color:'+(sBal>=0?'#0f172a':'#dc2626')+'">'+fmtM(sBal)+'</span>':'—';
+    // مقارنة الرصيدين
+    const balMismatch=r.st==='ok'&&pBal!=null&&sBal!=null&&Math.abs(pBal-sBal)>=1;
     return '<tr style="background:'+c.bg+'">'
       +'<td class="td" style="white-space:nowrap"><span style="'+c.bdg+';border-radius:4px;padding:2px 5px;font-size:9px;font-weight:900">'+c.lbl+'</span></td>'
       +'<td class="td" style="font-size:10px;white-space:nowrap">'+pDate+'</td>'
       +'<td class="td" style="font-size:10px;white-space:nowrap">'+sDate+dn+'</td>'
-      +'<td class="td" style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(pDesc)+'">'+esc(pDesc.length>30?pDesc.slice(0,30)+'…':pDesc)+'</td>'
-      +'<td class="td" style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(sDesc)+'">'+esc(sDesc.length>30?sDesc.slice(0,30)+'…':sDesc)+'</td>'
+      +'<td class="td" style="font-size:10px;white-space:nowrap;text-align:center">'+(pTxType?'<span style="background:#dbeafe;color:#1e40af;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:900">'+esc(pTxType)+'</span>':'—')+'</td>'
+      +'<td class="td" style="font-size:10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(pDesc)+'">'+esc(pDesc.length>50?pDesc.slice(0,50)+'…':pDesc)+'</td>'
+      +'<td class="td" style="font-size:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(sDesc)+'">'+esc(sDesc.length>50?sDesc.slice(0,50)+'…':sDesc)+'</td>'
       +'<td class="td" style="font-weight:900;text-align:left;font-size:11px;white-space:nowrap">'+fmtM(amt)+'</td>'
+      +'<td class="td" style="text-align:left;font-size:10px;white-space:nowrap">'+commCell+'</td>'
       +'<td class="td" style="font-size:10px;text-align:center">'+dir+'</td>'
+      +'<td class="td" style="font-size:10px;text-align:left;white-space:nowrap">'+pBalCell+'</td>'
+      +'<td class="td" style="font-size:10px;text-align:left;white-space:nowrap">'+(balMismatch?'<span style="color:#dc2626;font-weight:900">':'')+sBalCell+(balMismatch?'</span>':'')+'</td>'
       +'</tr>';
   }).join('');
   return '<div style="margin-top:10px">'
@@ -1820,12 +1965,16 @@ function renderPDFMatchResult(pdfData,sysRows,amtField,dirFn,descField){
     +'<th class="th" style="font-size:10px;white-space:nowrap">الحالة</th>'
     +'<th class="th" style="font-size:10px">ت. PDF</th>'
     +'<th class="th" style="font-size:10px">ت. نظام</th>'
+    +'<th class="th" style="font-size:10px">نوع الحركة</th>'
     +'<th class="th" style="font-size:10px">البيان (PDF)</th>'
     +'<th class="th" style="font-size:10px">البيان (نظام)</th>'
     +'<th class="th" style="font-size:10px">المبلغ</th>'
+    +'<th class="th" style="font-size:10px">العمولة</th>'
     +'<th class="th" style="font-size:10px">الاتجاه</th>'
+    +'<th class="th" style="font-size:10px;white-space:nowrap">رصيد PDF</th>'
+    +'<th class="th" style="font-size:10px;white-space:nowrap">رصيد النظام</th>'
     +'</tr></thead>'
-    +'<tbody>'+(tRows||'<tr><td colspan="7" style="text-align:center;padding:20px;color:#94a3b8">لا توجد نتائج</td></tr>')+'</tbody>'
+    +'<tbody>'+(tRows||'<tr><td colspan="11" style="text-align:center;padding:20px;color:#94a3b8">لا توجد نتائج</td></tr>')+'</tbody>'
     +'</table></div></div>';
 }
 async function importKroobPDF(input,currency){
@@ -1834,8 +1983,10 @@ async function importKroobPDF(input,currency){
   showToast('جاري قراءة PDF...','info');
   try{
     const raw=await extractPDFText(file);
-    const pdfRows=parseSairafaPDF(raw);
+    const pdfRows=parseSairafaPDF(raw,currency||'dinar');
     if(!pdfRows.length){showToast('لم يُستخرج أي بيانات — تأكد من الملف','error');return;}
+    const dates=pdfRows.map(r=>r.date).filter(Boolean).sort();
+    if(dates.length){S.kroobPdfFrom=dates[0];S.kroobPdfTo=dates[dates.length-1];}
     S.kroobPdfData={rows:pdfRows,fileName:file.name,currency:currency||'dinar'};
     showToast('تم استيراد '+pdfRows.length+' حركة من PDF','success');
     renderContent();
@@ -1847,8 +1998,10 @@ async function importRafidPDF(input,currency){
   showToast('جاري قراءة PDF...','info');
   try{
     const raw=await extractPDFText(file);
-    const pdfRows=parseSairafaPDF(raw);
+    const pdfRows=parseSairafaPDF(raw,currency||'dinar');
     if(!pdfRows.length){showToast('لم يُستخرج أي بيانات — تأكد من الملف','error');return;}
+    const dates=pdfRows.map(r=>r.date).filter(Boolean).sort();
+    if(dates.length){S.rafidPdfFrom=dates[0];S.rafidPdfTo=dates[dates.length-1];}
     S.rafidPdfData={rows:pdfRows,fileName:file.name,currency:currency||'dinar'};
     showToast('تم استيراد '+pdfRows.length+' حركة من PDF','success');
     renderContent();
@@ -1904,10 +2057,25 @@ function viewKroobStatement(){
   const _kCur=S.kroobPdfData?S.kroobPdfData.currency:'dinar';
   const _kAF=_kCur==='dinar'?'amount_dinar':'amount_dollar';
   const _kDir=e=>kroobDir(e,_kCur);
+  const _kpFrom=S.kroobPdfFrom||'';
+  const _kpTo=S.kroobPdfTo||'';
+  const pdfFilteredList=listWithBal.filter(e=>{
+    if(!e.date)return true;
+    if(_kpFrom&&e.date<_kpFrom)return false;
+    if(_kpTo&&e.date>_kpTo)return false;
+    return true;
+  });
   const kroobPdfSection='<div class="card" style="margin-bottom:14px;background:#f0fdf4;border:2px solid #34d399">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
     +'<h3 style="font-size:13px;font-weight:900;color:#065f46;margin:0">🔄 مطابقة كشف الصيرفة</h3>'
     +(S.kroobPdfData?'<button onclick="S.kroobPdfData=null;renderContent()" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:700">✕ مسح</button>':'')
+    +'</div>'
+    +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+    +'<div><label style="font-size:11px;font-weight:700;color:#065f46;display:block;margin-bottom:2px">من تاريخ</label>'
+    +'<input type="date" value="'+_kpFrom+'" onchange="S.kroobPdfFrom=this.value;renderContent()" style="border:1px solid #6ee7b7;border-radius:6px;padding:4px 8px;font-size:12px;color:#0f172a"></div>'
+    +'<div><label style="font-size:11px;font-weight:700;color:#065f46;display:block;margin-bottom:2px">إلى تاريخ</label>'
+    +'<input type="date" value="'+_kpTo+'" onchange="S.kroobPdfTo=this.value;renderContent()" style="border:1px solid #6ee7b7;border-radius:6px;padding:4px 8px;font-size:12px;color:#0f172a"></div>'
+    +(_kpFrom||_kpTo?'<span style="font-size:11px;color:#059669;font-weight:700;margin-top:16px">✔ '+pdfFilteredList.length+' حركة في الفترة</span>':'<span style="font-size:11px;color:#94a3b8;margin-top:16px">حدد الفترة لتصفية الحركات قبل المطابقة</span>')
     +'</div>'
     +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
     +'<input type="file" accept=".pdf" id="kpdf_d" style="display:none" onchange="importKroobPDF(this,\'dinar\')">'
@@ -1916,7 +2084,7 @@ function viewKroobStatement(){
     +'<button onclick="document.getElementById(\'kpdf_dl\').click()" style="background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:700">📂 PDF دولار</button>'
     +(S.kroobPdfData?'<span style="font-size:11px;color:#065f46;font-weight:700">📄 '+S.kroobPdfData.fileName+' | '+(S.kroobPdfData.currency==='dinar'?'دينار':'دولار')+' | '+S.kroobPdfData.rows.length+' حركة</span>':'<span style="font-size:11px;color:#94a3b8">اختر ملف PDF من كشف الصيرفة</span>')
     +'</div>'
-    +(S.kroobPdfData?renderPDFMatchResult(S.kroobPdfData,allList,_kAF,_kDir,'description'):'')
+    +(S.kroobPdfData?renderPDFMatchResult(S.kroobPdfData,pdfFilteredList,_kAF,_kDir,'description',_kCur):'')
     +'</div>';
 return`${kroobPdfSection}<div class="card" style="margin-bottom:14px;background:#f0fdf4;border:2px solid #34d399">
   <h3 style="font-size:13px;font-weight:900;color:#065f46;margin-bottom:10px">📄 طباعة كشف الحساب بفترة محددة</h3>
@@ -2435,10 +2603,25 @@ function viewRafidStatement(){
   const _rCur=S.rafidPdfData?S.rafidPdfData.currency:'dinar';
   const _rAF=_rCur==='dinar'?'dinar':'dollar';
   const _rDir=e=>((_rCur==='dinar'?e.type_dinar:e.type_dollar)||'مدين').trim();
+  const _rpFrom=S.rafidPdfFrom||'';
+  const _rpTo=S.rafidPdfTo||'';
+  const rafidPdfFilteredList=withBal.filter(e=>{
+    if(!e.date)return true;
+    if(_rpFrom&&e.date<_rpFrom)return false;
+    if(_rpTo&&e.date>_rpTo)return false;
+    return true;
+  });
   const rafidPdfSection='<div class="card" style="margin-bottom:14px;background:#fffbeb;border:2px solid #f59e0b">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
     +'<h3 style="font-size:13px;font-weight:900;color:#92400e;margin:0">🔄 مطابقة كشف الصيرفة</h3>'
     +(S.rafidPdfData?'<button onclick="S.rafidPdfData=null;renderContent()" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:700">✕ مسح</button>':'')
+    +'</div>'
+    +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+    +'<div><label style="font-size:11px;font-weight:700;color:#92400e;display:block;margin-bottom:2px">من تاريخ</label>'
+    +'<input type="date" value="'+_rpFrom+'" onchange="S.rafidPdfFrom=this.value;renderContent()" style="border:1px solid #fde68a;border-radius:6px;padding:4px 8px;font-size:12px;color:#0f172a"></div>'
+    +'<div><label style="font-size:11px;font-weight:700;color:#92400e;display:block;margin-bottom:2px">إلى تاريخ</label>'
+    +'<input type="date" value="'+_rpTo+'" onchange="S.rafidPdfTo=this.value;renderContent()" style="border:1px solid #fde68a;border-radius:6px;padding:4px 8px;font-size:12px;color:#0f172a"></div>'
+    +(_rpFrom||_rpTo?'<span style="font-size:11px;color:#92400e;font-weight:700;margin-top:16px">✔ '+rafidPdfFilteredList.length+' حركة في الفترة</span>':'<span style="font-size:11px;color:#94a3b8;margin-top:16px">حدد الفترة لتصفية الحركات قبل المطابقة</span>')
     +'</div>'
     +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
     +'<input type="file" accept=".pdf" id="rpdf_d" style="display:none" onchange="importRafidPDF(this,\'dinar\')">'
@@ -2447,7 +2630,7 @@ function viewRafidStatement(){
     +'<button onclick="document.getElementById(\'rpdf_dl\').click()" style="background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:700">📂 PDF دولار</button>'
     +(S.rafidPdfData?'<span style="font-size:11px;color:#92400e;font-weight:700">📄 '+S.rafidPdfData.fileName+' | '+(S.rafidPdfData.currency==='dinar'?'دينار':'دولار')+' | '+S.rafidPdfData.rows.length+' حركة</span>':'<span style="font-size:11px;color:#94a3b8">اختر ملف PDF من كشف الصيرفة</span>')
     +'</div>'
-    +(S.rafidPdfData?renderPDFMatchResult(S.rafidPdfData,allList,_rAF,_rDir,'description'):'')
+    +(S.rafidPdfData?renderPDFMatchResult(S.rafidPdfData,rafidPdfFilteredList,_rAF,_rDir,'description',_rCur):'')
     +'</div>';
   return`${rafidPdfSection}<div class="card" style="margin-bottom:14px;background:#fffbeb;border:2px solid #f59e0b">
   <h3 style="font-size:13px;font-weight:900;color:#92400e;margin-bottom:10px">📄 طباعة كشف الحساب بفترة محددة</h3>
@@ -3337,7 +3520,7 @@ function logout(){
   // Firebase Auth signOut
   if(window._auth){try{window._auth.signOut(window._auth.auth);}catch(e){}}
   currentUser=null;DB.set('last_user',null);
-  S={view:'dashboard',selectedFactory:'الكل',filterFrom:'',filterTo:'',editEntry:null,editSale:null,wFrom:'',wTo:'',pSearch:'',pRefinery:'',pType:'',sSearch:'',sTypeFilter:'',salafPerson:'',salafEditId:'',salafTab:'manual',expFactory:'',expEditId:'',expDate:'',expDinar:0,expDollar:0,expDetails:'',kroobEditId:'',kroobSearch:'',rafidEditId:'',rafidSearch:'',kroobPdfData:null,rafidPdfData:null};
+  S={view:'dashboard',selectedFactory:'الكل',filterFrom:'',filterTo:'',editEntry:null,editSale:null,wFrom:'',wTo:'',pSearch:'',pRefinery:'',pType:'',sSearch:'',sTypeFilter:'',salafPerson:'',salafEditId:'',salafTab:'manual',expFactory:'',expEditId:'',expDate:'',expDinar:0,expDollar:0,expDetails:'',kroobEditId:'',kroobSearch:'',rafidEditId:'',rafidSearch:'',kroobPdfData:null,rafidPdfData:null,kroobPdfFrom:'',kroobPdfTo:'',rafidPdfFrom:'',rafidPdfTo:''};
   renderLogin();
 }
 

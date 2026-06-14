@@ -264,7 +264,9 @@ let S = {
   kroobPdfFrom:'', kroobPdfTo:'',
   rafidPdfFrom:'', rafidPdfTo:'',
   kroobMonth: (new Date()).toISOString().slice(0,7),
-  rafidMonth: (new Date()).toISOString().slice(0,7)
+  rafidMonth: (new Date()).toISOString().slice(0,7),
+  kroobSelected: new Set(),
+  rafidSelected: new Set()
 };
 
 // ===== دوال مساعدة =====
@@ -1520,12 +1522,14 @@ function viewKroob(){
     const tdD=kroobDir(e,'dinar'),tdDol=kroobDir(e,'dollar');
     const dainD=tdD==='دائن'?fmtM(e.amount_dinar||0):'',madinD=tdD==='مدين'?fmtM(e.amount_dinar||0):'';
     const dainDol=tdDol==='دائن'?fmtM(e.amount_dollar||0):'',madinDol=tdDol==='مدين'?fmtM(e.amount_dollar||0):'';
-    return`<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td">${e.date||''}</td><td class="td" style="font-size:11px;text-align:right;max-width:160px">${esc(e.description||'')}</td><td class="td" style="font-size:11px">${esc(e.beneficiary||'')}</td><td class="td" style="font-size:11px">${esc(e.receiver||'')}</td><td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">${dainD}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${madinD}</td><td class="td" style="background:#eff6ff;color:#2563eb;font-weight:900">${dainDol}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${madinDol}</td><td class="td"><span class="badge" style="background:#f1f5f9;color:#475569">${esc(e.operation_type||'')}</span></td><td class="td" style="color:#059669;font-weight:900">${fmtM(e.commission||0)}</td><td class="td" style="color:#2563eb;font-weight:900">${fmtM(e.commission_dollar||0)}</td><td class="td" style="color:${e.bal_dinar>=0?'#059669':'#dc2626'};font-weight:900">${fmtM(e.bal_dinar)}</td><td class="td" style="color:${e.bal_dollar>=0?'#2563eb':'#dc2626'};font-weight:900">${fmtM(e.bal_dollar)}</td>${canEdit('kroob')?`<td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 8px;font-size:10px;margin-left:3px" onclick="editKroob('${e.id}')">✏️</button><button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteKroob('${e.id}')">🗑️</button></td>`:''}</tr>`;}).join('');
+    const isSel=(S.kroobSelected||new Set()).has(e.id);
+    const chkTd=canEdit('kroob')?`<td class="td" style="text-align:center;padding:3px"><input type="checkbox" data-id="${e.id}" ${isSel?'checked':''} onchange="toggleKroobSelect('${e.id}',this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:#065f46"></td>`:'';
+    return`<tr style="${isSel?'background:#d1fae5':''}">${chkTd}<td class="td" style="color:#94a3b8">${i+1}</td><td class="td">${e.date||''}</td><td class="td" style="font-size:11px;text-align:right;max-width:160px">${esc(e.description||'')}</td><td class="td" style="font-size:11px">${esc(e.beneficiary||'')}</td><td class="td" style="font-size:11px">${esc(e.receiver||'')}</td><td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">${dainD}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${madinD}</td><td class="td" style="background:#eff6ff;color:#2563eb;font-weight:900">${dainDol}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${madinDol}</td><td class="td"><span class="badge" style="background:#f1f5f9;color:#475569">${esc(e.operation_type||'')}</span></td><td class="td" style="color:#059669;font-weight:900">${fmtM(e.commission||0)}</td><td class="td" style="color:#2563eb;font-weight:900">${fmtM(e.commission_dollar||0)}</td><td class="td" style="color:${e.bal_dinar>=0?'#059669':'#dc2626'};font-weight:900">${fmtM(e.bal_dinar)}</td><td class="td" style="color:${e.bal_dollar>=0?'#2563eb':'#dc2626'};font-weight:900">${fmtM(e.bal_dollar)}</td>${canEdit('kroob')?`<td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 8px;font-size:10px;margin-left:3px" onclick="editKroob('${e.id}')">✏️</button><button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteKroob('${e.id}')">🗑️</button></td>`:''}</tr>`;}).join('');
   const tKDainD=monthWithBal.reduce((s,e)=>kroobDir(e,'dinar')==='دائن'?s+parseFloat(e.amount_dinar||0):s,0);
   const tKMadinD=monthWithBal.reduce((s,e)=>kroobDir(e,'dinar')==='مدين'?s+parseFloat(e.amount_dinar||0):s,0);
   const tKDainDol=monthWithBal.reduce((s,e)=>kroobDir(e,'dollar')==='دائن'?s+parseFloat(e.amount_dollar||0):s,0);
   const tKMadinDol=monthWithBal.reduce((s,e)=>kroobDir(e,'dollar')==='مدين'?s+parseFloat(e.amount_dollar||0):s,0);
-  const kroobTotalRow=monthWithBal.length?`<tr style="background:#065f46;color:#fff;font-weight:900"><td class="td" style="color:#fff" colspan="5">📊 الإجمالي — ${monthWithBal.length} حركة</td><td class="td" style="color:#6ee7b7;font-weight:900;font-size:12px">${fmtM(tKDainD)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tKMadinD)}</td><td class="td" style="color:#93c5fd;font-weight:900;font-size:12px">${fmtM(tKDainDol)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tKMadinDol)}</td><td class="td" colspan="${canEdit('kroob')?6:5}"></td></tr>`:'';
+  const kroobTotalRow=monthWithBal.length?`<tr style="background:#065f46;color:#fff;font-weight:900">${canEdit('kroob')?'<td class="td" style="background:#065f46"></td>':''}<td class="td" style="color:#fff" colspan="5">📊 الإجمالي — ${monthWithBal.length} حركة</td><td class="td" style="color:#6ee7b7;font-weight:900;font-size:12px">${fmtM(tKDainD)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tKMadinD)}</td><td class="td" style="color:#93c5fd;font-weight:900;font-size:12px">${fmtM(tKDainDol)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tKMadinDol)}</td><td class="td" colspan="${canEdit('kroob')?6:5}"></td></tr>`:'';
   const kroobOpTypes=DB.get('kroob_op_types',['صرف','إيداع','حواله']);
   const opDatalist=kroobOpTypes.map(t=>`<option value="${t}">`).join('');
   return`<div style="max-width:1100px">
@@ -1579,19 +1583,23 @@ function viewKroob(){
     <div id="kroob-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>
   </div>
   <div class="card" style="overflow:hidden;padding:0">
-    <div style="padding:12px 16px;background:#ecfdf5;border-bottom:1px solid #6ee7b7;font-weight:900;font-size:13px;color:#065f46;display:flex;justify-content:space-between;align-items:center">
+    <div style="padding:12px 16px;background:#ecfdf5;border-bottom:1px solid #6ee7b7;font-weight:900;font-size:13px;color:#065f46;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <span>📜 حركات كروب رافد فيصل — ${monthLabel}</span>
-      <span class="badge" style="background:#d1fae5;color:#065f46">${monthList.length} حركة</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        ${canEdit('kroob')?`<button id="kroob_del_btn" class="btn btn-red" style="font-size:11px;padding:5px 14px" onclick="deleteKroobSelected()">${(S.kroobSelected&&S.kroobSelected.size>0)?'🗑️ حذف المحدد ('+S.kroobSelected.size+')':'🗑️ حذف المحدد'}</button>`:''}
+        <span class="badge" style="background:#d1fae5;color:#065f46">${monthList.length} حركة</span>
+      </div>
     </div>
-    <div style="overflow-x:auto;max-height:500px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;min-width:1200px"><thead style="position:sticky;top:0;z-index:1"><tr><th class="th" style="background:#065f46">ت</th><th class="th" style="background:#065f46">التاريخ</th><th class="th" style="background:#065f46">البيان</th><th class="th" style="background:#065f46">الجهة المستفيدة</th><th class="th" style="background:#065f46">المستلم</th><th class="th" style="background:#059669">دائن دينار</th><th class="th" style="background:#dc2626">مدين دينار</th><th class="th" style="background:#2563eb">دائن دولار</th><th class="th" style="background:#b91c1c">مدين دولار</th><th class="th" style="background:#065f46">نوع العملية</th><th class="th" style="background:#065f46">عمولة دينار</th><th class="th" style="background:#065f46">عمولة دولار</th><th class="th" style="background:#065f46">رصيد دينار</th><th class="th" style="background:#065f46">رصيد دولار</th>${canEdit('kroob')?'<th class="th" style="background:#065f46">الإجراء</th>':''}</tr></thead><tbody>
+    <div style="overflow-x:auto;max-height:500px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;min-width:1200px"><thead style="position:sticky;top:0;z-index:1"><tr>${canEdit('kroob')?`<th class="th" style="background:#065f46;width:32px"><input type="checkbox" id="kroob_chk_all" title="تحديد الكل" onclick="toggleKroobSelectAll(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:#34d399"></th>`:''}<th class="th" style="background:#065f46">ت</th><th class="th" style="background:#065f46">التاريخ</th><th class="th" style="background:#065f46">البيان</th><th class="th" style="background:#065f46">الجهة المستفيدة</th><th class="th" style="background:#065f46">المستلم</th><th class="th" style="background:#059669">دائن دينار</th><th class="th" style="background:#dc2626">مدين دينار</th><th class="th" style="background:#2563eb">دائن دولار</th><th class="th" style="background:#b91c1c">مدين دولار</th><th class="th" style="background:#065f46">نوع العملية</th><th class="th" style="background:#065f46">عمولة دينار</th><th class="th" style="background:#065f46">عمولة دولار</th><th class="th" style="background:#065f46">رصيد دينار</th><th class="th" style="background:#065f46">رصيد دولار</th>${canEdit('kroob')?'<th class="th" style="background:#065f46">الإجراء</th>':''}</tr></thead><tbody id="kroob_table_body">
     <tr style="background:#1e3a5f">
+      ${canEdit('kroob')?'<td class="td" style="background:#1e3a5f"></td>':''}
       <td class="td" colspan="5" style="color:#93c5fd;font-size:11px;font-weight:900">🔄 رصيد مرحّل من الشهر السابق</td>
       <td class="td" colspan="4"></td><td class="td"></td><td class="td"></td><td class="td"></td>
       <td class="td" style="color:#fbbf24;font-weight:900">${fmtM(carry.dinar)} د.ع</td>
       <td class="td" style="color:#60a5fa;font-weight:900">${fmtM(carry.dollar)} $</td>
       ${canEdit('kroob')?'<td class="td"></td>':''}
     </tr>
-    ${rows||`<tr><td colspan="${canEdit('kroob')?15:14}" class="td" style="padding:24px;color:#94a3b8;text-align:center">لا توجد حركات في ${monthLabel}</td></tr>`}
+    ${rows||`<tr><td colspan="${canEdit('kroob')?16:14}" class="td" style="padding:24px;color:#94a3b8;text-align:center">لا توجد حركات في ${monthLabel}</td></tr>`}
     ${kroobTotalRow}
   </tbody></table></div></div></div>`;
 }
@@ -2123,6 +2131,43 @@ function saveKroob(){
 }
 function editKroob(id){S.kroobEditId=id;renderContent();setTimeout(()=>{const f=document.getElementById('kr_date');if(f)f.scrollIntoView({behavior:'smooth',block:'center'});},100);}
 function deleteKroob(id){if(!confirm('حذف هذه الحركة؟'))return;const kr=DB.get('kroob',[]).find(e=>e.id===id);auditLog('حذف كروب',`${kr?.description||id} | ${kr?.operation_type||''}`);DB.set('kroob',DB.get('kroob',[]).filter(e=>e.id!==id));FDB.delete('kroob',id);renderContent();}
+
+function toggleKroobSelect(id,checked){
+  if(!S.kroobSelected)S.kroobSelected=new Set();
+  if(checked)S.kroobSelected.add(id);else S.kroobSelected.delete(id);
+  const allChk=document.getElementById('kroob_chk_all');
+  if(allChk){const boxes=[...document.querySelectorAll('#kroob_table_body input[type=checkbox][data-id]')];allChk.checked=boxes.length>0&&boxes.every(c=>c.checked);allChk.indeterminate=!allChk.checked&&boxes.some(c=>c.checked);}
+  const btn=document.getElementById('kroob_del_btn');
+  if(btn)btn.textContent=S.kroobSelected.size>0?`🗑️ حذف المحدد (${S.kroobSelected.size})`:'🗑️ حذف المحدد';
+  const row=document.querySelector(`#kroob_table_body input[data-id="${id}"]`)?.closest('tr');
+  if(row)row.style.background=checked?'#d1fae5':'';
+}
+
+function toggleKroobSelectAll(checked){
+  if(!S.kroobSelected)S.kroobSelected=new Set();
+  document.querySelectorAll('#kroob_table_body input[type=checkbox][data-id]').forEach(cb=>{
+    cb.checked=checked;
+    const id=cb.getAttribute('data-id');
+    if(id){if(checked)S.kroobSelected.add(id);else S.kroobSelected.delete(id);}
+    const row=cb.closest('tr');if(row)row.style.background=checked?'#d1fae5':'';
+  });
+  const btn=document.getElementById('kroob_del_btn');
+  if(btn)btn.textContent=S.kroobSelected.size>0?`🗑️ حذف المحدد (${S.kroobSelected.size})`:'🗑️ حذف المحدد';
+}
+
+function deleteKroobSelected(){
+  if(!S.kroobSelected||S.kroobSelected.size===0){showToast('لم تحدد أي سطر للحذف','warning');return;}
+  const count=S.kroobSelected.size;
+  if(!confirm(`هل تريد حذف ${count} سطر محدد؟\nلا يمكن التراجع عن هذا الإجراء!`))return;
+  const ids=new Set(S.kroobSelected);
+  let kroob=DB.get('kroob',[]);
+  ids.forEach(id=>{const kr=kroob.find(e=>e.id===id);auditLog('حذف كروب (دفعة)',`${kr?.description||id} | ${kr?.operation_type||''}`);FDB.delete('kroob',id);});
+  DB.set('kroob',kroob.filter(e=>!ids.has(e.id)));
+  S.kroobSelected=new Set();
+  showToast(`✅ تم حذف ${count} سطر بنجاح`,'success');
+  renderContent();
+}
+
 function saveKroobOpening(){const d=parseFloat(el('op_dinar')?.value||0),dl=parseFloat(el('op_dollar')?.value||0);DB.set('kroob_opening',{dinar:d,dollar:dl});FDB.save('kroob_opening','opening',{dinar:d,dollar:dl});renderContent();}
 async function clearKroobData(){
   if(!confirm('مسح كل بيانات الكروب؟'))return;
@@ -2200,9 +2245,6 @@ function importKroobXLSX(input){
     // row[5]=المبلغ بالدولار | row[6]=المبلغ بالدينار
     // row[12]=نوع العملية | row[13]=عمولة دينار | row[15]=عمولة دولار
 
-    // حذف البيانات القديمة
-    const oldKroob=DB.get('kroob',[]);
-    for(const old of oldKroob){try{FDB.delete('kroob',old.id);}catch(err){}}
     let kroob=[],imported=0;
 
     for(let r=2;r<rows.length;r++){
@@ -2256,16 +2298,37 @@ function importKroobXLSX(input){
       imported++;
     }
 
+    if(!kroob.length){showToast('لم يتم العثور على بيانات صالحة في الملف','error');return;}
+
+    // تحديد الشهر المستهدف من أول تاريخ صحيح في الملف
     kroob.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
-    DB.set('kroob',kroob);
+    const targetMonth=kroob.find(e=>e.date)?.date?.slice(0,7)||'';
+    if(!targetMonth){showToast('لا يمكن تحديد شهر الملف — تأكد من صحة عمود التاريخ','error');return;}
+
+    // حذف سجلات الشهر المستهدف فقط من البيانات الحالية
+    let existing=DB.get('kroob',[]);
+    const toDelete=existing.filter(e=>(e.date||'').startsWith(targetMonth));
+    toDelete.forEach(e=>{try{FDB.delete('kroob',e.id);}catch(err){}});
+    existing=existing.filter(e=>!(e.date||'').startsWith(targetMonth));
+
+    // دمج الشهر الجديد مع باقي الأشهر
+    const allKroob=[...existing,...kroob];
+    allKroob.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
+
+    // تحديث الرصيد الافتتاحي فقط إذا كان الشهر المستورد هو الأقدم في النظام
+    const firstMonth=allKroob.find(e=>e.date)?.date?.slice(0,7)||'';
+    const shouldUpdateOpening=(opDinar!==0||opDollar!==0)&&targetMonth===firstMonth;
+    if(shouldUpdateOpening) DB.set('kroob_opening',{dinar:opDinar,dollar:opDollar});
+
+    DB.set('kroob',allKroob);
     DB.set('kroob_cleared',false);
     renderContent();
     showToast('⏳ جاري الحفظ في السحابة...','info',3000);
     try{
       const saves=[...kroob.map(k=>FDB.save('kroob',k.id,k))];
-      if(opDinar!==0||opDollar!==0) saves.push(FDB.save('kroob_opening','opening',{dinar:opDinar,dollar:opDollar}));
+      if(shouldUpdateOpening) saves.push(FDB.save('kroob_opening','opening',{dinar:opDinar,dollar:opDollar}));
       await Promise.all(saves);
-      showToast('✅ تم استيراد '+imported+' حركة وحفظها في السحابة ☁️','success',5000);
+      showToast('✅ تم استيراد '+imported+' حركة لشهر '+targetMonth+' وحفظها في السحابة ☁️','success',5000);
     }catch(err){
       showToast('✅ تم الاستيراد محلياً | ⚠️ فشل الحفظ في السحابة: '+err.message,'warning',5000);
     }
@@ -2302,12 +2365,14 @@ function viewRafidAccounts(){
   const totalOut=monthList.filter(e=>e.type_dinar!=='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
   const isCurrentMonth=month===today().slice(0,7);
   const rows=monthWithBal.map((e,i)=>{const isDainD=(e.type_dinar||'مدين')==='دائن',isDainDol=(e.type_dollar||'مدين')==='دائن',com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0);
-    return`<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-size:11px">${e.date||''}</td><td class="td" style="font-size:11px;text-align:right;max-width:160px">${esc(e.description||'')}</td><td class="td" style="font-size:11px">${esc(e.beneficiary||'')}</td><td class="td" style="font-size:11px">${esc(e.receiver||'')}</td><td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">${isDainD&&e.dinar?fmtM(e.dinar):''}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${!isDainD&&e.dinar?fmtM(e.dinar):''}</td><td class="td" style="background:#eff6ff;color:#2563eb;font-weight:900">${isDainDol&&e.dollar?fmtM(e.dollar):''}</td><td class="td" style="background:#faf5ff;color:#7c3aed;font-weight:900">${!isDainDol&&e.dollar?fmtM(e.dollar):''}</td><td class="td" style="font-size:11px"><span class="badge" style="background:#f1f5f9;color:#334155">${esc(e.op_type||'')}</span></td><td class="td" style="color:#f59e0b;font-weight:900;font-size:11px">${com?fmtM(com)+' د.ع':'—'}</td><td class="td" style="color:#f59e0b;font-weight:900;font-size:11px">${commD?'$'+fmtM(commD):'—'}</td><td class="td" style="color:${e.bal_dinar>=0?'#ca8a04':'#dc2626'};font-weight:900">${fmtM(e.bal_dinar)}</td><td class="td" style="color:${e.bal_dollar>=0?'#2563eb':'#dc2626'};font-weight:900">${fmtM(e.bal_dollar)}</td>${canEdit('rafid')?`<td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 7px;font-size:10px;margin-left:3px" onclick="editRafid('${e.id}')">✏️</button><button class="btn btn-red" style="padding:3px 7px;font-size:10px" onclick="deleteRafid('${e.id}')">🗑️</button></td>`:''}</tr>`;}).join('');
+    const isSel=(S.rafidSelected||new Set()).has(e.id);
+    const chkTd=canEdit('rafid')?`<td class="td" style="text-align:center;padding:3px"><input type="checkbox" data-id="${e.id}" ${isSel?'checked':''} onchange="toggleRafidSelect('${e.id}',this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:#92400e"></td>`:'';
+    return`<tr style="${isSel?'background:#fef3c7':''}">${chkTd}<td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-size:11px">${e.date||''}</td><td class="td" style="font-size:11px;text-align:right;max-width:160px">${esc(e.description||'')}</td><td class="td" style="font-size:11px">${esc(e.beneficiary||'')}</td><td class="td" style="font-size:11px">${esc(e.receiver||'')}</td><td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">${isDainD&&e.dinar?fmtM(e.dinar):''}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${!isDainD&&e.dinar?fmtM(e.dinar):''}</td><td class="td" style="background:#eff6ff;color:#2563eb;font-weight:900">${isDainDol&&e.dollar?fmtM(e.dollar):''}</td><td class="td" style="background:#faf5ff;color:#7c3aed;font-weight:900">${!isDainDol&&e.dollar?fmtM(e.dollar):''}</td><td class="td" style="font-size:11px"><span class="badge" style="background:#f1f5f9;color:#334155">${esc(e.op_type||'')}</span></td><td class="td" style="color:#f59e0b;font-weight:900;font-size:11px">${com?fmtM(com)+' د.ع':'—'}</td><td class="td" style="color:#f59e0b;font-weight:900;font-size:11px">${commD?'$'+fmtM(commD):'—'}</td><td class="td" style="color:${e.bal_dinar>=0?'#ca8a04':'#dc2626'};font-weight:900">${fmtM(e.bal_dinar)}</td><td class="td" style="color:${e.bal_dollar>=0?'#2563eb':'#dc2626'};font-weight:900">${fmtM(e.bal_dollar)}</td>${canEdit('rafid')?`<td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 7px;font-size:10px;margin-left:3px" onclick="editRafid('${e.id}')">✏️</button><button class="btn btn-red" style="padding:3px 7px;font-size:10px" onclick="deleteRafid('${e.id}')">🗑️</button></td>`:''}</tr>`;}).join('');
   const tRDainD=monthWithBal.reduce((s,e)=>(e.type_dinar||'مدين')==='دائن'?s+parseFloat(e.dinar||0):s,0);
   const tRMadinD=monthWithBal.reduce((s,e)=>(e.type_dinar||'مدين')==='مدين'?s+parseFloat(e.dinar||0):s,0);
   const tRDainDol=monthWithBal.reduce((s,e)=>(e.type_dollar||'مدين')==='دائن'?s+parseFloat(e.dollar||0):s,0);
   const tRMadinDol=monthWithBal.reduce((s,e)=>(e.type_dollar||'مدين')==='مدين'?s+parseFloat(e.dollar||0):s,0);
-  const rafidTotalRow=monthWithBal.length?`<tr style="background:#92400e;color:#fff;font-weight:900"><td class="td" style="color:#fff" colspan="5">📊 الإجمالي — ${monthWithBal.length} حركة</td><td class="td" style="color:#6ee7b7;font-weight:900;font-size:12px">${fmtM(tRDainD)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tRMadinD)}</td><td class="td" style="color:#93c5fd;font-weight:900;font-size:12px">${fmtM(tRDainDol)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tRMadinDol)}</td><td class="td" colspan="${canEdit('rafid')?6:5}"></td></tr>`:'';
+  const rafidTotalRow=monthWithBal.length?`<tr style="background:#92400e;color:#fff;font-weight:900">${canEdit('rafid')?'<td class="td" style="background:#92400e"></td>':''}<td class="td" style="color:#fff" colspan="5">📊 الإجمالي — ${monthWithBal.length} حركة</td><td class="td" style="color:#6ee7b7;font-weight:900;font-size:12px">${fmtM(tRDainD)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tRMadinD)}</td><td class="td" style="color:#93c5fd;font-weight:900;font-size:12px">${fmtM(tRDainDol)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tRMadinDol)}</td><td class="td" colspan="${canEdit('rafid')?6:5}"></td></tr>`:'';
   const opOpts=['تحويل ماستر','صرف','تسليم','استلام الصيرفة','حوالة','راتب خارجي','سلف','أخرى'].map(t=>`<option value="${t}" ${editData&&editData.op_type===t?'selected':''}>${t}</option>`).join('');
   return`<div style="max-width:1200px">
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;background:#fffbeb;border-radius:10px;padding:10px 14px;border:2px solid #f59e0b;flex-wrap:wrap">
@@ -2367,13 +2432,17 @@ function viewRafidAccounts(){
     <div id="rafid-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>
   </div>
   <div class="card" style="overflow:hidden;padding:0">
-    <div style="padding:12px 16px;background:#92400e;display:flex;justify-content:space-between;align-items:center">
+    <div style="padding:12px 16px;background:#92400e;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <span style="font-weight:900;font-size:14px;color:#fff">📋 حركات سيد رافد — ${monthLabel}</span>
-      <span class="badge" style="background:#b45309;color:#fff">${monthList.length} حركة</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        ${canEdit('rafid')?`<button id="rafid_del_btn" class="btn btn-red" style="font-size:11px;padding:5px 14px;background:#7f1d1d" onclick="deleteRafidSelected()">${(S.rafidSelected&&S.rafidSelected.size>0)?'🗑️ حذف المحدد ('+S.rafidSelected.size+')':'🗑️ حذف المحدد'}</button>`:''}
+        <span class="badge" style="background:#b45309;color:#fff">${monthList.length} حركة</span>
+      </div>
     </div>
     <div style="overflow-x:auto;max-height:500px;overflow-y:auto">
       <table style="width:100%;border-collapse:collapse;min-width:1100px">
         <thead style="position:sticky;top:0;z-index:1"><tr>
+          ${canEdit('rafid')?`<th class="th" style="background:#92400e;width:32px"><input type="checkbox" id="rafid_chk_all" title="تحديد الكل" onclick="toggleRafidSelectAll(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:#fde68a"></th>`:''}
           <th class="th" style="background:#92400e">ت</th><th class="th" style="background:#92400e">التاريخ</th>
           <th class="th" style="background:#92400e">البيان</th><th class="th" style="background:#92400e">الجهة</th>
           <th class="th" style="background:#92400e">المستلم</th><th class="th" style="background:#059669">🟢 دائن دينار</th>
@@ -2383,15 +2452,16 @@ function viewRafidAccounts(){
           <th class="th" style="background:#92400e">رصيد دينار</th><th class="th" style="background:#92400e">رصيد دولار</th>
           ${canEdit('rafid')?'<th class="th" style="background:#92400e">الإجراء</th>':''}
         </tr></thead>
-        <tbody>
+        <tbody id="rafid_table_body">
           <tr style="background:#1e3a5f">
+            ${canEdit('rafid')?'<td class="td" style="background:#1e3a5f"></td>':''}
             <td class="td" colspan="5" style="color:#93c5fd;font-size:11px;font-weight:900">🔄 رصيد مرحّل من الشهر السابق</td>
             <td class="td" colspan="6"></td>
             <td class="td" style="color:#fbbf24;font-weight:900">${fmtM(carry.dinar)} د.ع</td>
             <td class="td" style="color:#60a5fa;font-weight:900">${fmtM(carry.dollar)} $</td>
             ${canEdit('rafid')?'<td class="td"></td>':''}
           </tr>
-          ${rows||`<tr><td colspan="${canEdit('rafid')?15:14}" class="td" style="padding:24px;color:#94a3b8;text-align:center">لا توجد حركات في ${monthLabel}</td></tr>`}
+          ${rows||`<tr><td colspan="${canEdit('rafid')?16:14}" class="td" style="padding:24px;color:#94a3b8;text-align:center">لا توجد حركات في ${monthLabel}</td></tr>`}
           ${rafidTotalRow}
         </tbody>
       </table>
@@ -2416,6 +2486,42 @@ function saveRafid(){
 }
 function editRafid(id){S.rafidEditId=id;renderContent();setTimeout(()=>{const f=el('rf_date');if(f)f.scrollIntoView({behavior:'smooth',block:'center'});},100);}
 function deleteRafid(id){if(!confirm('حذف هذه الحركة؟'))return;const rf=DB.get('rafid_accounts',[]).find(e=>e.id===id);auditLog('حذف رافد',`${rf?.description||id}`);DB.set('rafid_accounts',DB.get('rafid_accounts',[]).filter(e=>e.id!==id));FDB.delete('rafid_accounts',id);renderContent();}
+
+function toggleRafidSelect(id,checked){
+  if(!S.rafidSelected)S.rafidSelected=new Set();
+  if(checked)S.rafidSelected.add(id);else S.rafidSelected.delete(id);
+  const allChk=document.getElementById('rafid_chk_all');
+  if(allChk){const boxes=[...document.querySelectorAll('#rafid_table_body input[type=checkbox][data-id]')];allChk.checked=boxes.length>0&&boxes.every(c=>c.checked);allChk.indeterminate=!allChk.checked&&boxes.some(c=>c.checked);}
+  const btn=document.getElementById('rafid_del_btn');
+  if(btn)btn.textContent=S.rafidSelected.size>0?`🗑️ حذف المحدد (${S.rafidSelected.size})`:'🗑️ حذف المحدد';
+  const row=document.querySelector(`#rafid_table_body input[data-id="${id}"]`)?.closest('tr');
+  if(row)row.style.background=checked?'#fef3c7':'';
+}
+
+function toggleRafidSelectAll(checked){
+  if(!S.rafidSelected)S.rafidSelected=new Set();
+  document.querySelectorAll('#rafid_table_body input[type=checkbox][data-id]').forEach(cb=>{
+    cb.checked=checked;
+    const id=cb.getAttribute('data-id');
+    if(id){if(checked)S.rafidSelected.add(id);else S.rafidSelected.delete(id);}
+    const row=cb.closest('tr');if(row)row.style.background=checked?'#fef3c7':'';
+  });
+  const btn=document.getElementById('rafid_del_btn');
+  if(btn)btn.textContent=S.rafidSelected.size>0?`🗑️ حذف المحدد (${S.rafidSelected.size})`:'🗑️ حذف المحدد';
+}
+
+function deleteRafidSelected(){
+  if(!S.rafidSelected||S.rafidSelected.size===0){showToast('لم تحدد أي سطر للحذف','warning');return;}
+  const count=S.rafidSelected.size;
+  if(!confirm(`هل تريد حذف ${count} سطر محدد؟\nلا يمكن التراجع عن هذا الإجراء!`))return;
+  const ids=new Set(S.rafidSelected);
+  let rafid=DB.get('rafid_accounts',[]);
+  ids.forEach(id=>{const rf=rafid.find(e=>e.id===id);auditLog('حذف رافد (دفعة)',`${rf?.description||id}`);FDB.delete('rafid_accounts',id);});
+  DB.set('rafid_accounts',rafid.filter(e=>!ids.has(e.id)));
+  S.rafidSelected=new Set();
+  showToast(`✅ تم حذف ${count} سطر بنجاح`,'success');
+  renderContent();
+}
 function saveRafidOpening(){const d=parseFloat(el('rf_op_dinar')?.value||0),dl=parseFloat(el('rf_op_dollar')?.value||0);DB.set('rafid_opening',{dinar:d,dollar:dl});FDB.save('rafid_opening','opening',{dinar:d,dollar:dl});renderContent();}
 async function clearRafidData(){
   if(!confirm('مسح جميع بيانات حسابات سيد رافد؟'))return;
@@ -2706,9 +2812,6 @@ function importRafidXLSX(input){
       if(!isNaN(dl0)) opDollar=dl0;
     }
     
-    DB.set('rafid_opening',{dinar:opDinar,dollar:opDollar});
-    if(window._fbReady)FDB.save('rafid_opening','opening',{dinar:opDinar,dollar:opDollar});
-    
     let list=[],imported=0;
     // البيانات من Row 4 (index 4) - نتجاهل صفوف الرصيد السابق
     const dataStartRow=4; // بعد الرأس وصف الباقي
@@ -2763,16 +2866,37 @@ function importRafidXLSX(input){
       imported++;
     }
 
+    if(!list.length){showToast('لم يتم العثور على بيانات صالحة في الملف','error');return;}
+
+    // تحديد الشهر المستهدف من أول تاريخ صحيح في الملف
     list.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-    DB.set('rafid_accounts',list);
+    const targetMonth=list.find(e=>e.date)?.date?.slice(0,7)||'';
+    if(!targetMonth){showToast('لا يمكن تحديد شهر الملف — تأكد من صحة عمود التاريخ','error');return;}
+
+    // حذف سجلات الشهر المستهدف فقط من البيانات الحالية
+    let existing=DB.get('rafid_accounts',[]);
+    const toDelete=existing.filter(e=>(e.date||'').startsWith(targetMonth));
+    toDelete.forEach(e=>{try{FDB.delete('rafid_accounts',e.id);}catch(err){}});
+    existing=existing.filter(e=>!(e.date||'').startsWith(targetMonth));
+
+    // دمج الشهر الجديد مع باقي الأشهر
+    const allRafid=[...existing,...list];
+    allRafid.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
+
+    // تحديث الرصيد الافتتاحي فقط إذا كان الشهر المستورد هو الأقدم في النظام
+    const firstMonth=allRafid.find(e=>e.date)?.date?.slice(0,7)||'';
+    const shouldUpdateOpening=(opDinar!==0||opDollar!==0)&&targetMonth===firstMonth;
+    if(shouldUpdateOpening) DB.set('rafid_opening',{dinar:opDinar,dollar:opDollar});
+
+    DB.set('rafid_accounts',allRafid);
     DB.set('rafid_cleared',false);
     renderContent();
     showToast('⏳ جاري الحفظ في السحابة...','info',3000);
     try{
       const saves=list.map(k=>FDB.save('rafid_accounts',k.id,k));
-      saves.push(FDB.save('rafid_opening','opening',{dinar:opDinar,dollar:opDollar}));
+      if(shouldUpdateOpening) saves.push(FDB.save('rafid_opening','opening',{dinar:opDinar,dollar:opDollar}));
       await Promise.all(saves);
-      showToast('✅ تم استيراد '+imported+' حركة وحفظها في السحابة ☁️','success',5000);
+      showToast('✅ تم استيراد '+imported+' حركة لشهر '+targetMonth+' وحفظها في السحابة ☁️','success',5000);
     }catch(err){showToast('✅ تم الاستيراد محلياً | ⚠️ فشل الحفظ في السحابة','warning',5000);}
     input.value='';
   };

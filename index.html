@@ -89,6 +89,9 @@
   .toast.hiding{animation:toastOut .3s ease forwards;}
   @keyframes toastIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
   @keyframes toastOut{from{opacity:1;transform:translateY(0);}to{opacity:0;transform:translateY(20px);}}
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; scroll-behavior:auto !important; }
+  }
 </style>
 </head>
 <body>
@@ -542,7 +545,7 @@ function viewDashboard() {
 
   const factoryCards=`<h3 style="font-size:14px;font-weight:900;margin-bottom:14px;color:#0f172a">تفاصيل أداء المعامل</h3>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
-  ${facts.map(f=>{const d=analysis[f],sd=saleAn[f];return`<div class="card" style="border-right:5px solid #2563eb">
+  ${facts.map(f=>{const d=analysis[f],sd=saleAn[f];return`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f1f5f9"><span style="font-weight:900;color:#2563eb;font-size:13px">${f}</span><span class="badge" style="background:#ecfdf5;color:#059669;font-size:10px">مُشغَّل ✓</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div style="background:#eff6ff;border-radius:8px;padding:10px"><p style="font-size:10px;color:#2563eb;font-weight:700;text-align:center;margin-bottom:6px">إجمالي المشتريات</p>${sr('السيارات',d.total.cars)}${sr('طن',fmt(d.total.tons),'#059669')}${sr('المبلغ',fmtM(d.total.money),'#1e3a8a')}</div>
@@ -571,7 +574,7 @@ function viewPorts(){
         fH+='<div style="display:flex;justify-content:space-between;padding:8px 10px;background:#f5f3ff;border-radius:6px;margin:4px 0"><span style="color:#7c3aed;font-weight:700">'+p[0]+'</span><span>'+c+' سيارة | كبان: <b style="color:#7c3aed">'+fmtKaban(k)+'</b></span></div>';
         fT+=p[0]+'\nالسيارات: '+c+' | الكبان: '+fmtKaban(k)+'\n';ok=true;}
     });
-    if(ok){html+='<div style="margin-bottom:16px;border-right:4px solid #7c3aed;padding-right:10px"><div style="font-weight:900;color:#5b21b6;font-size:13px;margin-bottom:6px">'+fac+'</div>'+fH+'</div>';wa+=fT+'---\n';}
+    if(ok){html+='<div style="margin-bottom:16px"><div style="font-weight:900;color:#5b21b6;font-size:13px;margin-bottom:6px">'+fac+'</div>'+fH+'</div>';wa+=fT+'---\n';}
   });
   window._portWAText=wa;
   if(!html)html='<div style="color:#94a3b8;text-align:center;padding:20px">لا توجد بيانات للموانئ</div>';
@@ -787,11 +790,14 @@ function viewSaleForm(){
           <option value="ميناء الحرة" ${(e.address||'')==='ميناء الحرة'?'selected':''}>ميناء الحرة</option>
         </select></div>
       <div><label class="lbl">النوع *</label><input class="inp" id="s_type" list="s_types" value="${e.product_type||'فلانكوت'}"><datalist id="s_types"><option value="فلانكوت"><option value="HFO"><option value="VR"><option value="زيت خام"></datalist></div>
-      <div><label class="lbl">الكبان *</label><input class="inp" id="s_kaban" type="number" step="0.001" value="${e.kaban||''}"></div>
+      <div><label class="lbl">الكبان *</label><input class="inp" id="s_kaban" type="number" step="0.001" value="${e.kaban||''}" oninput="updateSaleTotal()"></div>
       <div><label class="lbl">كمية اللتر</label><input class="inp" id="s_liters" type="number" step="0.001" value="${e.qty_liters||''}"></div>
       <div><label class="lbl">أجرة سائق/طن</label><input class="inp" id="s_advance" type="number" step="0.001" value="${e.advance||''}"></div>
       <div><label class="lbl">الواصل</label><input class="inp" id="s_received" type="number" step="0.001" value="${e.received||''}"></div>
       <div><label class="lbl">مصدر السيارة</label><input class="inp" id="s_source" value="${e.car_source||''}"></div>
+      <div><label class="lbl">سعر البيع/طن</label><input class="inp" id="s_price" type="number" step="0.001" value="${e.sale_price||''}" oninput="updateSaleTotal()"></div>
+      <div><label class="lbl">إجمالي البيع</label><input class="inp" id="s_total" value="${fmtM((parseFloat(e.sale_price)||0)*(parseFloat(e.kaban)||0))}" disabled style="background:#f8fafc;color:#1e3a8a;font-weight:900"></div>
+      <div><label class="lbl">مكافأة السائق</label><input class="inp" id="s_bonus" type="number" step="0.001" value="${e.driver_bonus||''}"></div>
     </div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
       ${e.id?`<button class="btn btn-gray" onclick="go('sale_table')">← الجدول</button>`:''}
@@ -801,6 +807,10 @@ function viewSaleForm(){
   </div>`;
 }
 
+function updateSaleTotal(){
+  const kaban=parseFloat(el('s_kaban')?.value||0),price=parseFloat(el('s_price')?.value||0);
+  const t=el('s_total');if(t)t.value=fmtM(price*kaban);
+}
 function saveSale(){
   const sf=S.selectedFactory,e=S.editSale||{};
   const driver=gv('s_driver'),car=gv('s_car'),date=gv('s_date'),loc=gv('s_loc');
@@ -808,8 +818,9 @@ function saveSale(){
   const kaban=parseFloat(el('s_kaban')?.value||0),liters=parseFloat(el('s_liters')?.value||0);
   const advance=parseFloat(el('s_advance')?.value||0),received=parseFloat(el('s_received')?.value||0);
   const source=gv('s_source');
+  const salePrice=parseFloat(el('s_price')?.value||0),saleTotal=salePrice*kaban,driverBonus=parseFloat(el('s_bonus')?.value||0);
   if(!driver||!car||!date||!kaban){showToast('يرجى ملء الحقول الإلزامية (*)','warning');return;}
-  const sale={id:e.id||('s_'+Date.now()),driver_name:driver,car_no:car,date,location:loc,address:addr,product_type:type,kaban,qty_liters:liters,advance,received,car_source:source,factory:sf,accountant:currentUser.email,time:Date.now()};
+  const sale={id:e.id||('s_'+Date.now()),driver_name:driver,car_no:car,date,location:loc,address:addr,product_type:type,kaban,qty_liters:liters,advance,received,car_source:source,sale_price:salePrice,sale_total:saleTotal,driver_bonus:driverBonus,factory:sf,accountant:currentUser.email,time:Date.now()};
   let sales=DB.get('sales',[]);
   if(e.id){const idx=sales.findIndex(x=>x.id===e.id);if(idx>=0)sales[idx]=sale;else sales.push(sale);}else sales.push(sale);
   auditLog(e.id ? 'تعديل مبيعات' : 'إضافة مبيعات', `سائق: ${sale.driver_name} | ${sale.product_type} | ${sale.factory}`);
@@ -895,6 +906,9 @@ function viewSaleTable(){
     <td class="td-p" style="color:#7c3aed;font-weight:900">${fmtKaban(e.kaban)}</td><td class="td-p">${fmt(e.qty_liters||0)}</td>
     <td class="td-p">${fmtM(e.advance||0)}</td><td class="td-p">${fmtM(e.received||0)}</td>
     <td class="td-p" style="color:#1e3a8a;font-weight:900">${fmtM((e.advance||0)*(e.received||0))}</td>
+    <td class="td-p">${fmtM(e.sale_price||0)}</td>
+    <td class="td-p" style="color:#1e3a8a;font-weight:900">${fmtM(e.sale_total||((e.sale_price||0)*(e.kaban||0)))}</td>
+    <td class="td-p">${fmtM(e.driver_bonus||0)}</td>
     <td class="td-p" style="font-size:11px">${esc(e.car_source||'')}</td>
     ${canEdit('sales')?`<td class="td-p" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 8px;font-size:10px;margin-left:3px" onclick="editSale('${e.id}')">✏️</button><button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteSale('${e.id}')">🗑️</button></td>`:''}
   </tr>`).join('');
@@ -925,9 +939,10 @@ function viewSaleTable(){
         <th class="th-p">ت</th><th class="th-p">السائق</th><th class="th-p">السيارة</th><th class="th-p">التاريخ</th>
         <th class="th-p">العائدية</th><th class="th-p">العنوان</th><th class="th-p">النوع</th><th class="th-p">الكبان</th>
         <th class="th-p">لتر</th><th class="th-p">أجرة/طن</th><th class="th-p">الواصل</th><th class="th-p">إجمالي المبلغ</th>
+        <th class="th-p">سعر البيع</th><th class="th-p">إجمالي البيع</th><th class="th-p">مكافأة السائق</th>
         <th class="th-p">المصدر</th>${canEdit('sales')?'<th class="th-p">الإجراء</th>':''}
       </tr></thead>
-      <tbody>${rows||`<tr><td colspan="${canEdit('sales')?14:13}" class="td-p" style="padding:30px;color:#94a3b8">لا توجد بيانات</td></tr>`}</tbody>
+      <tbody>${rows||`<tr><td colspan="${canEdit('sales')?17:16}" class="td-p" style="padding:30px;color:#94a3b8">لا توجد بيانات</td></tr>`}</tbody>
     </table></div>
   </div>`;
 }
@@ -978,8 +993,8 @@ function exportXLSX(type){
     list.forEach((e,i)=>rows.push([i+1,e.factory,e.voucher_no,e.refinery,e.date,e.product_type,e.driver_name,e.car_no,e.location,sc(e.qty_tons),sc(e.natural_liters),sc(e.weight_kg),e.po_no,e.price||150,e.transport_fee||42,parseFloat(e.refinery_price)||0]));
   }else{
     list=getSaleList();sheetName='المبيعات';fname='مبيعات_'+today()+'.xlsx';
-    rows.push(['ت','المعمل','السائق','السيارة','التاريخ','العائدية','العنوان','النوع','الكبان','لتر','أجرة','الواصل','المصدر']);
-    list.forEach((e,i)=>rows.push([i+1,e.factory,e.driver_name,e.car_no,e.date,e.location,e.address||'',e.product_type,parseFloat(e.kaban)||0,parseFloat(e.qty_liters)||0,parseFloat(e.advance)||0,parseFloat(e.received)||0,e.car_source||'']));
+    rows.push(['ت','المعمل','السائق','السيارة','التاريخ','العائدية','العنوان','النوع','الكبان','لتر','أجرة','الواصل','سعر البيع','إجمالي البيع','مكافأة السائق','المصدر']);
+    list.forEach((e,i)=>rows.push([i+1,e.factory,e.driver_name,e.car_no,e.date,e.location,e.address||'',e.product_type,parseFloat(e.kaban)||0,parseFloat(e.qty_liters)||0,parseFloat(e.advance)||0,parseFloat(e.received)||0,parseFloat(e.sale_price)||0,parseFloat(e.sale_total)||((parseFloat(e.sale_price)||0)*(parseFloat(e.kaban)||0)),parseFloat(e.driver_bonus)||0,e.car_source||'']));
   }
   const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=rows[0].map(()=>({wch:18}));
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,sheetName);XLSX.writeFile(wb,fname);
@@ -1050,7 +1065,20 @@ const COL_MAP_P={
   'المبلغ الاجمالي':'refinery_price','المبلغ الإجمالي':'refinery_price','المبلغ':'refinery_price',
   'ت':'_num','رقم البوجر':'voucher_no','البوجر':'voucher_no','رقم الوثيقة':'voucher_no','وثيقة':'voucher_no'
 };
-const COL_MAP_S={'اسم السائق':'driver_name','رقم السيارة':'car_no','التاريخ':'date','العائدية':'location','العنوان':'address','النوع':'product_type','الكبان':'kaban','البان':'kaban','كمية اللتر':'qty_liters','السلفة':'advance','الواصل':'received','مصدر سيارة':'car_source','ت':'_num'};
+const COL_MAP_S={
+  'اسم السائق':'driver_name','السائق':'driver_name',
+  'رقم السيارة':'car_no','رقم سيارة':'car_no','رقم الشاحنة':'car_no','رقم العجلة':'car_no','العجلة':'car_no',
+  'التاريخ':'date','تاريخ':'date',
+  'العائدية':'location','العائدیة':'location','المحافظة':'location','الموقع':'location',
+  'العنوان':'address',
+  'النوع':'product_type','نوع المنتج':'product_type','نوع البضاعة':'product_type',
+  'الكبان':'kaban','البان':'kaban',
+  'كمية اللتر':'qty_liters','الكمية بالليتر':'qty_liters','الكمية/ لتر':'qty_liters','الكمية/لتر':'qty_liters','كمية/ لتر':'qty_liters','كمية/لتر':'qty_liters','الكميه/لتر':'qty_liters','الكمية لتر':'qty_liters','اللتر':'qty_liters','الكمية':'qty_liters',
+  'السلفة':'advance','سلفة':'advance','المبلغ المسلف':'advance',
+  'الواصل':'received','المبلغ الواصل':'received','المستلم':'received',
+  'مصدر سيارة':'car_source','مصدر السيارة':'car_source','مصدر':'car_source',
+  'ت':'_num','الرقم':'_num'
+};
 
 function normalizeCol(col,map){
   const c=(col||'').toString().trim().replace(/\s+/g,' ').replace(/\u200f|\u200e|\u202a|\u202c/g,'');
@@ -1564,7 +1592,7 @@ function viewKroob(){
     </details>
   </div>
   <datalist id="kr_op_datalist">${opDatalist}</datalist>
-  <div class="card" style="margin-bottom:14px;border-right:5px solid #34d399">
+  <div class="card" style="margin-bottom:14px">
     <h3 style="font-size:13px;font-weight:900;margin-bottom:14px;color:#065f46">${editId?'✏️ تعديل':'➕ إضافة'} حركة</h3>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
       <div><label class="lbl">التاريخ *</label><input class="inp" id="kr_date" type="date" value="${editData?editData.date:month+'-01'}"></div>
@@ -1638,12 +1666,12 @@ function generateKroobPDF(month,mode){
       <td style="text-align:center;color:${e.bal_dollar>=0?'#000':'#c00'};font-weight:900">${fmtS(e.bal_dollar)}</td>
     </tr>`;
   }).join('');
-  const styles=`@page{size:A4 landscape;margin:10mm 8mm}body{font-family:'Arial',sans-serif;font-size:11px;direction:rtl;color:#000;margin:0}h2{text-align:center;color:#065f46;font-size:15px;margin:0 0 4px}.sub{text-align:center;color:#065f46;font-size:11px;margin:0 0 8px}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#fff;color:#000;font-weight:900;border:2px solid #000;padding:5px 3px;text-align:center}td{border:2px solid #000;padding:4px 3px;color:#000;font-weight:700}.op-row td{background:#e0f2fe;color:#0c4a6e;font-weight:900}.cl-row td{background:#065f46;color:#fff;font-weight:900;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+  const styles=`@page{size:A4 landscape;margin:10mm 8mm}body{font-family:'Cairo',sans-serif;font-size:11px;direction:rtl;color:#000;margin:0}h2{text-align:center;color:#065f46;font-size:15px;margin:0 0 4px}.sub{text-align:center;color:#065f46;font-size:11px;margin:0 0 8px}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#fff;color:#000;font-weight:900;border:2px solid #000;padding:5px 3px;text-align:center}td{border:2px solid #000;padding:4px 3px;color:#000;font-weight:700}.op-row td{background:#e0f2fe;color:#0c4a6e;font-weight:900}.cl-row td{background:#065f46;color:#fff;font-weight:900;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
   const body=`<h2>كشف حركة كروب رافد فيصل</h2><div class="sub">شهر ${monthLabel} — عدد الحركات: ${monthList.length}</div><table><thead><tr><th style="width:25px">ت</th><th style="width:68px">التاريخ</th><th style="width:140px">البيان</th><th style="width:75px">الجهة المستفيدة</th><th style="width:75px">المستلم / المسلم</th><th style="width:65px">دائن دينار</th><th style="width:65px">مدين دينار</th><th style="width:55px">دائن دولار</th><th style="width:55px">مدين دولار</th><th style="width:55px">نوع العملية</th><th style="width:50px">عمولة دينار</th><th style="width:50px">عمولة دولار</th><th style="width:75px">رصيد الدينار</th><th style="width:60px">رصيد الدولار</th></tr></thead><tbody><tr class="op-row"><td colspan="12" style="text-align:right">الرصيد الافتتاحي للشهر</td><td style="text-align:center;color:${opDinar>=0?'#0c4a6e':'#c00'}">${fmtS(opDinar)}</td><td style="text-align:center;color:${opDollar>=0?'#0c4a6e':'#c00'}">${fmtS(opDollar)}</td></tr>${rows}<tr class="cl-row"><td colspan="12">الرصيد الختامي للشهر</td><td>${fmtS(lastEntry.bal_dinar)}</td><td>${fmtS(lastEntry.bal_dollar)}</td></tr></tbody></table>`;
   if(mode==='save'){
     if(typeof html2pdf==='undefined'){showToast('⚠️ مكتبة PDF غير محملة، أعد تحميل الصفحة','warning');return;}
     const div=document.createElement('div');
-    div.style.cssText='direction:rtl;font-family:Arial,sans-serif;font-size:11px;color:#000;width:277mm;padding:5mm';
+    div.style.cssText='direction:rtl;font-family:Cairo,sans-serif;font-size:11px;color:#000;width:277mm;padding:5mm';
     div.innerHTML=`<style>${styles}</style>${body}`;
     document.body.appendChild(div);
     showToast('⏳ جاري إنشاء الملف...','info',3000);
@@ -1655,9 +1683,8 @@ function generateKroobPDF(month,mode){
     }).from(div).save().then(()=>{document.body.removeChild(div);showToast('✅ تم حفظ الملف','success');}).catch(()=>{document.body.removeChild(div);showToast('⚠️ فشل الحفظ','error');});
   } else {
     const win=window.open('','_blank');
-    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>${styles}</style></head><body>${body}</body></html>`);
+    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>${styles}</style></head><body>${body}<script>window.onload=function(){window.print();};<\/script></body></html>`);
     win.document.close();win.focus();
-    setTimeout(()=>{win.print();},800);
   }
 }
 
@@ -1687,10 +1714,10 @@ function generateKroobRangePDF(currency){
     const totCr=filteredList.filter(e=>{const op=(e.operation_type||'').trim();return op==='إيداع'||op==='ايداع'||op==='استلام';}).reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);
     const totDb=filteredList.filter(e=>{const op=(e.operation_type||'').trim();return!(op==='إيداع'||op==='ايداع'||op==='استلام');}).reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);
     const totComm=filteredList.reduce((s,e)=>s+parseFloat(e.commission||0),0);
-    const styles=`@page{size:A4 portrait;margin:10mm 8mm}body{font-family:'Arial',sans-serif;font-size:11px;direction:rtl;color:#000;margin:0}h2{text-align:center;color:#7f1d1d;font-size:15px;margin:0 0 4px}.sub{text-align:center;color:#64748b;font-size:11px;margin:0 0 8px}table{width:100%;border-collapse:collapse}th{background:#fff;color:#000;font-weight:900;border:2px solid #000;padding:5px 3px;text-align:center}td{border:2px solid #000;padding:4px 3px;color:#000;font-weight:700}.op-row td{background:#fffbeb;color:#92400e;font-weight:900}.cl-row td{background:#7f1d1d;color:#fff;font-weight:900;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+    const styles=`@page{size:A4 portrait;margin:10mm 8mm}body{font-family:'Cairo',sans-serif;font-size:11px;direction:rtl;color:#000;margin:0}h2{text-align:center;color:#7f1d1d;font-size:15px;margin:0 0 4px}.sub{text-align:center;color:#64748b;font-size:11px;margin:0 0 8px}table{width:100%;border-collapse:collapse}th{background:#fff;color:#000;font-weight:900;border:2px solid #000;padding:5px 3px;text-align:center}td{border:2px solid #000;padding:4px 3px;color:#000;font-weight:700}.op-row td{background:#fffbeb;color:#92400e;font-weight:900}.cl-row td{background:#7f1d1d;color:#fff;font-weight:900;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
     const body=`<h2>كشف حساب الدينار — كروب رافد فيصل</h2><div class="sub">الفترة: ${dateLabel} — عدد الحركات: ${filteredList.length}</div><table><thead><tr><th style="width:28px">ت</th><th style="width:78px">التاريخ</th><th>البيان</th><th style="width:100px">الجهة</th><th style="width:95px">دائن دينار</th><th style="width:95px">مدين دينار</th><th style="width:80px">عمولة</th><th style="width:95px">رصيد الدينار</th></tr></thead><tbody><tr class="op-row"><td colspan="7" style="text-align:right">الرصيد الافتتاحي للفترة</td><td style="text-align:center;color:${opDinar>=0?'#92400e':'#c00'}">${fmtS(opDinar)}</td></tr>${rows}<tr class="cl-row"><td colspan="4">الإجماليات</td><td>${fmtS(totCr)}</td><td>${fmtS(totDb)}</td><td>${fmtS(totComm)}</td><td>${fmtS(lastEntry.bal_dinar)}</td></tr></tbody></table>`;
     const win=window.open('','_blank');
-    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>${styles}</style></head><body>${body}<script>window.onload=function(){window.print();};<\/script></body></html>`);
+    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>${styles}</style></head><body>${body}<script>window.onload=function(){window.print();};<\/script></body></html>`);
     win.document.close();
 
   }else{
@@ -1703,10 +1730,10 @@ function generateKroobRangePDF(currency){
     const totCr=filteredList.filter(e=>{const op=(e.operation_type||'').trim();return op==='إيداع'||op==='ايداع'||op==='استلام'||op==='شراء_دولار';}).reduce((s,e)=>s+parseFloat(e.amount_dollar||0),0);
     const totDb=filteredList.filter(e=>{const op=(e.operation_type||'').trim();return!(op==='إيداع'||op==='ايداع'||op==='استلام'||op==='شراء_دولار');}).reduce((s,e)=>s+parseFloat(e.amount_dollar||0),0);
     const totCommD=filteredList.reduce((s,e)=>s+parseFloat(e.commission_dollar||0),0);
-    const styles=`@page{size:A4 portrait;margin:10mm 8mm}body{font-family:'Arial',sans-serif;font-size:11px;direction:rtl;color:#000;margin:0}h2{text-align:center;color:#1d4ed8;font-size:15px;margin:0 0 4px}.sub{text-align:center;color:#64748b;font-size:11px;margin:0 0 8px}table{width:100%;border-collapse:collapse}th{background:#fff;color:#000;font-weight:900;border:2px solid #000;padding:5px 3px;text-align:center}td{border:2px solid #000;padding:4px 3px;color:#000;font-weight:700}.op-row td{background:#eff6ff;color:#1d4ed8;font-weight:900}.cl-row td{background:#1d4ed8;color:#fff;font-weight:900;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+    const styles=`@page{size:A4 portrait;margin:10mm 8mm}body{font-family:'Cairo',sans-serif;font-size:11px;direction:rtl;color:#000;margin:0}h2{text-align:center;color:#1d4ed8;font-size:15px;margin:0 0 4px}.sub{text-align:center;color:#64748b;font-size:11px;margin:0 0 8px}table{width:100%;border-collapse:collapse}th{background:#fff;color:#000;font-weight:900;border:2px solid #000;padding:5px 3px;text-align:center}td{border:2px solid #000;padding:4px 3px;color:#000;font-weight:700}.op-row td{background:#eff6ff;color:#1d4ed8;font-weight:900}.cl-row td{background:#1d4ed8;color:#fff;font-weight:900;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
     const body=`<h2>كشف حساب الدولار — كروب رافد فيصل</h2><div class="sub">الفترة: ${dateLabel} — عدد الحركات: ${dollarList.length}</div><table><thead><tr><th style="width:28px">ت</th><th style="width:78px">التاريخ</th><th>البيان</th><th style="width:100px">الجهة</th><th style="width:95px">دائن دولار</th><th style="width:95px">مدين دولار</th><th style="width:80px">عمولة $</th><th style="width:95px">رصيد الدولار</th></tr></thead><tbody><tr class="op-row"><td colspan="7" style="text-align:right">الرصيد الافتتاحي للفترة</td><td style="text-align:center;color:${opDollar>=0?'#1d4ed8':'#c00'}">${fmtS(opDollar)}</td></tr>${rows}<tr class="cl-row"><td colspan="4">الإجماليات</td><td>${fmtS(totCr)}</td><td>${fmtS(totDb)}</td><td>${fmtS(totCommD)}</td><td>${fmtS(lastEntry.bal_dollar)}</td></tr></tbody></table>`;
     const win=window.open('','_blank');
-    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>${styles}</style></head><body>${body}<script>window.onload=function(){window.print();};<\/script></body></html>`);
+    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>${styles}</style></head><body>${body}<script>window.onload=function(){window.print();};<\/script></body></html>`);
     win.document.close();
   }
 }
@@ -2037,7 +2064,7 @@ function viewKroobStatement(){
     const totalIn=mList.reduce((s,e)=>s+(e.operation_type==='إيداع'||e.operation_type==='ايداع'||e.operation_type==='استلام'?parseFloat(e.amount_dinar||0):0),0);
     const totalOut=mList.reduce((s,e)=>s+(e.operation_type!=='إيداع'&&e.operation_type!=='ايداع'&&e.operation_type!=='استلام'?parseFloat(e.amount_dinar||0):0),0);
     const lastBal=mList[mList.length-1];
-    return`<div class="card" style="margin-bottom:12px;border-right:5px solid #34d399">
+    return`<div class="card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-weight:900;font-size:14px;color:#065f46">📅 ${m}</span>
         <div style="display:flex;gap:6px;align-items:center">
@@ -2410,7 +2437,7 @@ function viewRafidAccounts(){
       </div>
     </details>
   </div>
-  <div class="card" style="margin-bottom:14px;border-right:5px solid #f59e0b">
+  <div class="card" style="margin-bottom:14px">
     <h3 style="font-size:13px;font-weight:900;margin-bottom:14px;color:#92400e">${editId?'✏️ تعديل':'➕ إضافة'} حركة جديدة</h3>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
       <div><label class="lbl">التاريخ *</label><input class="inp" id="rf_date" type="date" value="${editData?editData.date:month+'-01'}"></div>
@@ -2556,7 +2583,7 @@ function getKroobBalanceBefore(date){
 function renderKroobDailySection(date){
   const todayList=getKroobByDate(date),openBal=getKroobBalanceBefore(date);
   let balDinar=openBal.dinar,balDollar=openBal.dollar;
-  if(!todayList.length)return`<div class="card" style="margin-bottom:14px;border-right:4px solid #34d399;padding:16px;background:#f0fdf4"><h3 style="font-size:13px;font-weight:900;color:#065f46;margin-bottom:6px">🏦 كشف الكروب اليومي — ${date}</h3><p style="color:#94a3b8;font-size:12px">لا توجد حركات اليوم</p></div>`;
+  if(!todayList.length)return`<div class="card" style="margin-bottom:14px;padding:16px;background:#f0fdf4"><h3 style="font-size:13px;font-weight:900;color:#065f46;margin-bottom:6px">🏦 كشف الكروب اليومي — ${date}</h3><p style="color:#94a3b8;font-size:12px">لا توجد حركات اليوم</p></div>`;
   let rows='';
   todayList.forEach((e,i)=>{const d=parseFloat(e.amount_dinar||0),dl=parseFloat(e.amount_dollar||0),op=(e.operation_type||'صرف').trim(),com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0),isIn=op==='إيداع'||op==='ايداع';
     if(isIn){balDinar+=d;balDollar+=dl;}else{balDinar-=d;balDollar-=dl;}balDinar-=com;balDollar-=commD;
@@ -2593,7 +2620,7 @@ function getRafidBalanceBefore(date){
 function renderRafidDailySection(date){
   const todayList=getRafidByDate(date),openBal=getRafidBalanceBefore(date);
   let balDinar=openBal.dinar,balDollar=openBal.dollar;
-  if(!todayList.length)return`<div class="card" style="margin-bottom:14px;border-right:4px solid #f59e0b;padding:16px;background:#fffbeb"><h3 style="font-size:13px;font-weight:900;color:#92400e;margin-bottom:6px">💼 كشف حسابات سيد رافد — ${date}</h3><p style="color:#94a3b8;font-size:12px">لا توجد حركات اليوم</p></div>`;
+  if(!todayList.length)return`<div class="card" style="margin-bottom:14px;padding:16px;background:#fffbeb"><h3 style="font-size:13px;font-weight:900;color:#92400e;margin-bottom:6px">💼 كشف حسابات سيد رافد — ${date}</h3><p style="color:#94a3b8;font-size:12px">لا توجد حركات اليوم</p></div>`;
   let rows='';
   todayList.forEach((e,i)=>{const d=parseFloat(e.dinar||0),dl=parseFloat(e.dollar||0),tdD=(e.type_dinar||'مدين').trim(),tdDol=(e.type_dollar||'مدين').trim(),com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0),isDainD=tdD==='دائن',isDainDol=tdDol==='دائن';
     if(isDainD)balDinar+=d;else balDinar-=d;if(isDainDol)balDollar+=dl;else balDollar-=dl;balDinar-=com;balDollar-=commD;
@@ -2643,10 +2670,10 @@ function generateRafidRangePDF(currency){
     const totCr=filteredList.filter(e=>(e.type_dinar||'مدين').trim()==='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
     const totDb=filteredList.filter(e=>(e.type_dinar||'مدين').trim()!=='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
     const totComm=filteredList.reduce((s,e)=>s+parseFloat(e.commission||0),0);
-    const styles=`@page{size:A4 portrait;margin:10mm 8mm}body{font-family:'Arial',sans-serif;font-size:11px;direction:rtl;color:#000;margin:0}h2{text-align:center;color:#7f1d1d;font-size:15px;margin:0 0 4px}.sub{text-align:center;color:#64748b;font-size:11px;margin:0 0 8px}table{width:100%;border-collapse:collapse}th{background:#fff;color:#000;font-weight:900;border:2px solid #000;padding:5px 3px;text-align:center}td{border:2px solid #000;padding:4px 3px;color:#000;font-weight:700}.op-row td{background:#fffbeb;color:#92400e;font-weight:900}.cl-row td{background:#7f1d1d;color:#fff;font-weight:900;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+    const styles=`@page{size:A4 portrait;margin:10mm 8mm}body{font-family:'Cairo',sans-serif;font-size:11px;direction:rtl;color:#000;margin:0}h2{text-align:center;color:#7f1d1d;font-size:15px;margin:0 0 4px}.sub{text-align:center;color:#64748b;font-size:11px;margin:0 0 8px}table{width:100%;border-collapse:collapse}th{background:#fff;color:#000;font-weight:900;border:2px solid #000;padding:5px 3px;text-align:center}td{border:2px solid #000;padding:4px 3px;color:#000;font-weight:700}.op-row td{background:#fffbeb;color:#92400e;font-weight:900}.cl-row td{background:#7f1d1d;color:#fff;font-weight:900;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
     const body=`<h2>كشف حساب الدينار — حسابات سيد رافد</h2><div class="sub">الفترة: ${dateLabel} — عدد الحركات: ${filteredList.length}</div><table><thead><tr><th style="width:28px">ت</th><th style="width:78px">التاريخ</th><th>البيان</th><th style="width:100px">الجهة</th><th style="width:95px">دائن دينار</th><th style="width:95px">مدين دينار</th><th style="width:80px">عمولة</th><th style="width:95px">رصيد الدينار</th></tr></thead><tbody><tr class="op-row"><td colspan="7" style="text-align:right">الرصيد الافتتاحي للفترة</td><td style="text-align:center;color:${opDinar>=0?'#92400e':'#c00'}">${fmtS(opDinar)}</td></tr>${rows}<tr class="cl-row"><td colspan="4">الإجماليات</td><td>${fmtS(totCr)}</td><td>${fmtS(totDb)}</td><td>${fmtS(totComm)}</td><td>${fmtS(lastEntry.bal_dinar)}</td></tr></tbody></table>`;
     const win=window.open('','_blank');
-    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>${styles}</style></head><body>${body}<script>window.onload=function(){window.print();};<\/script></body></html>`);
+    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>${styles}</style></head><body>${body}<script>window.onload=function(){window.print();};<\/script></body></html>`);
     win.document.close();
 
   }else{
@@ -2659,10 +2686,10 @@ function generateRafidRangePDF(currency){
     const totCr=dollarList.filter(e=>(e.type_dollar||'مدين').trim()==='دائن').reduce((s,e)=>s+parseFloat(e.dollar||0),0);
     const totDb=dollarList.filter(e=>(e.type_dollar||'مدين').trim()!=='دائن').reduce((s,e)=>s+parseFloat(e.dollar||0),0);
     const totCommD=dollarList.reduce((s,e)=>s+parseFloat(e.commission_dollar||0),0);
-    const styles=`@page{size:A4 portrait;margin:10mm 8mm}body{font-family:'Arial',sans-serif;font-size:11px;direction:rtl;color:#000;margin:0}h2{text-align:center;color:#1d4ed8;font-size:15px;margin:0 0 4px}.sub{text-align:center;color:#64748b;font-size:11px;margin:0 0 8px}table{width:100%;border-collapse:collapse}th{background:#fff;color:#000;font-weight:900;border:2px solid #000;padding:5px 3px;text-align:center}td{border:2px solid #000;padding:4px 3px;color:#000;font-weight:700}.op-row td{background:#eff6ff;color:#1d4ed8;font-weight:900}.cl-row td{background:#1d4ed8;color:#fff;font-weight:900;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+    const styles=`@page{size:A4 portrait;margin:10mm 8mm}body{font-family:'Cairo',sans-serif;font-size:11px;direction:rtl;color:#000;margin:0}h2{text-align:center;color:#1d4ed8;font-size:15px;margin:0 0 4px}.sub{text-align:center;color:#64748b;font-size:11px;margin:0 0 8px}table{width:100%;border-collapse:collapse}th{background:#fff;color:#000;font-weight:900;border:2px solid #000;padding:5px 3px;text-align:center}td{border:2px solid #000;padding:4px 3px;color:#000;font-weight:700}.op-row td{background:#eff6ff;color:#1d4ed8;font-weight:900}.cl-row td{background:#1d4ed8;color:#fff;font-weight:900;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
     const body=`<h2>كشف حساب الدولار — حسابات سيد رافد</h2><div class="sub">الفترة: ${dateLabel} — عدد الحركات: ${dollarList.length}</div><table><thead><tr><th style="width:28px">ت</th><th style="width:78px">التاريخ</th><th>البيان</th><th style="width:100px">الجهة</th><th style="width:95px">دائن دولار</th><th style="width:95px">مدين دولار</th><th style="width:80px">عمولة $</th><th style="width:95px">رصيد الدولار</th></tr></thead><tbody><tr class="op-row"><td colspan="7" style="text-align:right">الرصيد الافتتاحي للفترة</td><td style="text-align:center;color:${opDollar>=0?'#1d4ed8':'#c00'}">${fmtS(opDollar)}</td></tr>${rows}<tr class="cl-row"><td colspan="4">الإجماليات</td><td>${fmtS(totCr)}</td><td>${fmtS(totDb)}</td><td>${fmtS(totCommD)}</td><td>${fmtS(lastEntry.bal_dollar)}</td></tr></tbody></table>`;
     const win=window.open('','_blank');
-    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>${styles}</style></head><body>${body}<script>window.onload=function(){window.print();};<\/script></body></html>`);
+    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>${styles}</style></head><body>${body}<script>window.onload=function(){window.print();};<\/script></body></html>`);
     win.document.close();
   }
 }
@@ -2690,7 +2717,7 @@ function viewRafidStatement(){
     const mDainD=mList.filter(e=>e.type_dinar==='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
     const mMadinD=mList.filter(e=>e.type_dinar!=='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
     const lastBal=mList[mList.length-1];
-    return`<div class="card" style="margin-bottom:12px;border-right:5px solid #f59e0b">
+    return`<div class="card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-weight:900;font-size:14px;color:#92400e">📅 ${m}</span>
         <div style="display:flex;gap:6px;align-items:center">
@@ -2964,7 +2991,7 @@ function viewRefineryAccount(){
   const unclassified=entries.filter(e=>e.refinery!=='مصفى كربلاء'&&e.refinery!=='مصفى صلاح الدين');
 
   function buildRefineryTable(list,title,color){
-    if(!list.length)return`<div class="card" style="margin-bottom:14px;border-right:5px solid ${color}"><h3 style="color:${color};font-size:14px;font-weight:900;margin-bottom:8px">${title}</h3><p style="color:#94a3b8;font-size:12px">لا توجد بيانات</p></div>`;
+    if(!list.length)return`<div class="card" style="margin-bottom:14px"><h3 style="color:${color};font-size:14px;font-weight:900;margin-bottom:8px">${title}</h3><p style="color:#94a3b8;font-size:12px">لا توجد بيانات</p></div>`;
     const wf=S.wFrom,wt=S.wTo;
     let filtered=list;
     if(wf)filtered=filtered.filter(e=>e.date>=wf);

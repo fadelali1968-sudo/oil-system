@@ -1449,7 +1449,7 @@ function importExpensesXLSX(input){
     renderContent();
     showToast('⏳ جاري الحفظ في السحابة...','info',3000);
     try{
-      const newExp=expenses.filter(function(e){return e.accountant==='import'&&e.id.startsWith('exp_xl_');});
+      const newExp=expenses.filter(function(e){return e.id.startsWith('exp_xl_'+ts+'_');});
       await Promise.all(newExp.map(function(e){return FDB.save('expenses',e.id,e);}));
       showToast('✅ تم استيراد '+imported+' مصروف وحفظها في السحابة ☁️','success',5000);
     }catch(err){showToast('✅ تم الاستيراد محلياً | ⚠️ فشل الحفظ في السحابة','warning',5000);}

@@ -260,7 +260,7 @@ let S = {
   pSearch:'', pRefinery:'', pType:'', pDateFrom:'', pDateTo:'',
   sSearch:'', sTypeFilter:'', sDateFrom:'', sDateTo:'',
   salafPerson:'', salafEditId:'', salafTab:'manual',
-  expFactory:'', expEditId:'', expDate:'', expDinar:0, expDollar:0, expDetails:'',
+  expFactory:'', expEditId:'', expDate:'', expDinar:0, expDollar:0, expDetails:'', expMonth:'', dupReviewIds:null,
   kroobEditId:'', kroobSearch:'',
   rafidEditId:'', rafidSearch:'',
   kroobPdfData:null, rafidPdfData:null,
@@ -485,6 +485,7 @@ function renderContent() {
   else if(v==='salaf')         c.innerHTML = viewSalafForm();
   else if(v==='expenses')      c.innerHTML = viewExpenses();
   else if(v==='expenses_summary') c.innerHTML = viewExpensesSummary();
+  else if(v==='exp_dup_review') c.innerHTML = viewExpDupReview();
   else if(v==='kroob')         c.innerHTML = viewKroob();
   else if(v==='kroob_statement') c.innerHTML = viewKroobStatement();
   else if(v==='import_p')      c.innerHTML = viewImport('purchases');
@@ -1285,14 +1286,114 @@ function exportSalafXLSX(person){if(typeof XLSX==='undefined')return;const list=
 // ===== نظام المصاريف (مختصر) =====
 const EXPENSE_FACTORIES=['مصاريف الجوهرة','الوطنية','عطاء الذهب','ايجار كراج','الفهد','روعة المشرق','الذهب الأسود','ابرار شط العرب','الذهب الأصفر','نذره الذهب','إياد عودة','الكرستال','حميد جاسم','رافد خاص'];
 function getExpenseList(factory){const all=DB.get('expenses',[]);if(!factory)return all;return all.filter(e=>e.factory===factory);}
+const EXP_IRAQI_MONTHS={'01':'كانون الثاني','02':'شباط','03':'آذار','04':'نيسان','05':'أيار','06':'حزيران','07':'تموز','08':'آب','09':'أيلول','10':'تشرين الأول','11':'تشرين الثاني','12':'كانون الأول'};
+function expNormAr(s){return String(s||'').replace(/[أإآ]/g,'ا').trim();}
+function expTextMonthToNum(text){const t=expNormAr(text);for(const mm in EXP_IRAQI_MONTHS){if(t.includes(expNormAr(EXP_IRAQI_MONTHS[mm])))return mm;}return null;}
+function expDateMatchesMonth(dateStr,month){
+  if(!dateStr||!month)return false;
+  if(/^\d{4}-\d{2}/.test(dateStr))return dateStr.startsWith(month);
+  const mm=expTextMonthToNum(dateStr);
+  if(!mm)return false;
+  return month===(today().slice(0,4)+'-'+mm);
+}
+function expDupKey(e){
+  const d=Math.round(parseFloat(e.amount_dinar)||0);
+  const dl=Math.round((parseFloat(e.amount_dollar)||0)*100)/100;
+  return (e.factory||'')+'|'+(e.date||'')+'|'+d+'|'+dl+'|'+(e.details||'').trim();
+}
+// دفعة الحركة: حركات الاستيراد من نفس عملية الاستيراد تشترك بنفس الدفعة (لا تُعتبر تكراراً فيما بينها)
+// الحركات اليدوية كل واحدة دفعة مستقلة بذاتها (لا تُحذف أبداً عبر هذه الأداة)
+function expBatchKey(e){
+  if(e.id&&e.id.indexOf('exp_xl_')===0){const p=e.id.split('_');return 'xl_'+p[2];}
+  return 'manual_'+e.id;
+}
+// يكتشف فقط التكرار الناتج عن إعادة استيراد نفس الملف (دفعات مختلفة بنفس المحتوى)
+// لا يلمس حركتين متطابقتين ضمن نفس عملية الاستيراد لأنهما غالباً حركتان حقيقيتان منفصلتان
+function computeDuplicateExpenseCandidates(){
+  // فقط حركات الاستيراد مؤهلة للحذف التلقائي — الحركات اليدوية لا تُمس مهما تشابه محتواها
+  // والحركات بلا تاريخ فعلي مستبعدة أيضاً (التاريخ الفارغ غير موثوق للمطابقة بين الأشهر)
+  const expenses=DB.get('expenses',[]).filter(function(e){return e.id&&e.id.indexOf('exp_xl_')===0&&e.date;});
+  const byKey={};
+  expenses.forEach(function(e){const k=expDupKey(e);(byKey[k]=byKey[k]||[]).push(e);});
+  const candidates=[];
+  Object.keys(byKey).forEach(function(k){
+    const group=byKey[k];
+    if(group.length<2)return;
+    const byBatch={};
+    group.forEach(function(e){const b=expBatchKey(e);(byBatch[b]=byBatch[b]||[]).push(e);});
+    const batches=Object.keys(byBatch);
+    if(batches.length<2)return;
+    batches.sort(function(a,b){
+      const diff=byBatch[b].length-byBatch[a].length;
+      if(diff!==0)return diff;
+      return(byBatch[a][0].time||0)-(byBatch[b][0].time||0);
+    });
+    batches.slice(1).forEach(function(b){byBatch[b].forEach(function(e){candidates.push(e);});});
+  });
+  return candidates;
+}
+function cleanupDuplicateExpenses(){
+  const candidates=computeDuplicateExpenseCandidates();
+  if(!candidates.length){alert('لا توجد حركات مكررة (ناتجة عن إعادة استيراد) يمكن رصدها تلقائياً');return;}
+  S.dupReviewIds=new Set(candidates.map(function(e){return e.id;}));
+  S.view='exp_dup_review';
+  renderContent();
+}
+function viewExpDupReview(){
+  const candidates=computeDuplicateExpenseCandidates();
+  const selectedIds=S.dupReviewIds||new Set(candidates.map(function(e){return e.id;}));
+  const totalD=candidates.reduce(function(s,e){return selectedIds.has(e.id)?s+parseFloat(e.amount_dinar||0):s;},0);
+  const totalDol=candidates.reduce(function(s,e){return selectedIds.has(e.id)?s+parseFloat(e.amount_dollar||0):s;},0);
+  const rows=candidates.map(function(e,i){
+    const checked=selectedIds.has(e.id);
+    return`<tr style="background:${checked?'':'#f8fafc'}"><td class="td" style="text-align:center"><input type="checkbox" data-id="${e.id}" ${checked?'checked':''} onchange="toggleDupReviewSelect('${e.id}',this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:#dc2626"></td><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900;color:#7f1d1d;font-size:11px">${esc(e.factory||'')}</td><td class="td">${esc(e.date||'')}</td><td class="td" style="color:#ca8a04;font-weight:900">${fmtM(e.amount_dinar||0)}</td><td class="td" style="color:#0f172a;font-weight:900">${fmtM(e.amount_dollar||0)}</td><td class="td" style="font-size:11px;text-align:right">${esc(e.details||'')}</td></tr>`;
+  }).join('');
+  return`<div style="max-width:960px">
+  <div class="card" style="margin-bottom:14px;border-right:5px solid #dc2626">
+    <h3 style="font-size:14px;font-weight:900;margin-bottom:8px;color:#7f1d1d">🧹 مراجعة الحركات المرشّحة للحذف (تكرار استيراد)</h3>
+    <p style="font-size:12px;color:#64748b;margin-bottom:10px">تم رصد هذه الحركات لأنها مطابقة تماماً (الجهة + التاريخ + المبلغ + التفاصيل) لحركة أخرى مستوردة في عملية استيراد مختلفة. راجعها جيداً — إذا كانت حركة حقيقية ألغِ تحديدها قبل الحذف. لن يُحذف إلا ما هو محدد ✅</p>
+    ${candidates.length?`<div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap"><span style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:900;color:#dc2626">${selectedIds.size} من ${candidates.length} محدد للحذف</span><span style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:900;color:#92400e">💛 ${fmtM(totalD)} د.ع</span><span style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:900;color:#0f172a">🖤 ${fmtM(totalDol)} $</span></div>`:''}
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-red" style="padding:9px 22px" onclick="confirmDeleteDupReview()">🗑️ حذف المحدد فقط</button>
+      <button class="btn btn-gray" style="padding:9px 22px" onclick="S.view='expenses';renderContent()">إلغاء والعودة</button>
+    </div>
+  </div>
+  <div class="card" style="overflow:hidden;padding:0"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:620px"><thead><tr><th class="th" style="background:#7f1d1d;width:32px"></th><th class="th" style="background:#7f1d1d">ت</th><th class="th" style="background:#7f1d1d">الجهة</th><th class="th" style="background:#7f1d1d">التاريخ</th><th class="th" style="background:#7f1d1d">💛 دينار</th><th class="th" style="background:#7f1d1d">🖤 دولار</th><th class="th" style="background:#7f1d1d">التفاصيل</th></tr></thead><tbody>${rows||`<tr><td colspan="7" class="td" style="padding:24px;color:#94a3b8">لا توجد حركات مرشّحة</td></tr>`}</tbody></table></div></div></div>`;
+}
+function toggleDupReviewSelect(id,checked){
+  if(!S.dupReviewIds)S.dupReviewIds=new Set();
+  if(checked)S.dupReviewIds.add(id);else S.dupReviewIds.delete(id);
+  renderContent();
+}
+async function confirmDeleteDupReview(){
+  const ids=Array.from(S.dupReviewIds||[]);
+  if(!ids.length){alert('لم تحدد أي حركة للحذف');return;}
+  if(!confirm('حذف '+ids.length+' حركة محددة نهائياً؟'))return;
+  addExpenseTombstones(ids);
+  const expenses=DB.get('expenses',[]).filter(function(e){return!ids.includes(e.id);});
+  DB.set('expenses',expenses);
+  S.view='expenses';S.dupReviewIds=null;
+  renderContent();
+  showToast('⏳ جاري الحذف من السحابة...','info',3000);
+  try{
+    await Promise.all(ids.map(function(id){return FDB.delete('expenses',id);}));
+    showToast('✅ تم حذف '+ids.length+' حركة مكررة','success',5000);
+  }catch(err){showToast('✅ تم الحذف محلياً | ⚠️ فشل الحذف من السحابة','warning',5000);}
+}
 
 function viewExpenses(){
   const selF=S.expFactory||'',editId=S.expEditId||'';
   const editData=editId?getExpenseList(selF).find(e=>e.id===editId):null;
-  const list=getExpenseList(selF),totalD=list.reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0),totalDol=list.reduce((s,e)=>s+parseFloat(e.amount_dollar||0),0);
+  const fullList=getExpenseList(selF);
+  const selMonth=S.expMonth||'';
+  const mnNames={'01':'يناير','02':'فبراير','03':'مارس','04':'أبريل','05':'مايو','06':'يونيو','07':'يوليو','08':'أغسطس','09':'سبتمبر','10':'أكتوبر','11':'نوفمبر','12':'ديسمبر'};
+  const monthLabel=selMonth?((mnNames[selMonth.split('-')[1]]||selMonth.split('-')[1])+' '+selMonth.split('-')[0]):'';
+  const list=selMonth?fullList.filter(e=>expDateMatchesMonth(e.date,selMonth)):fullList;
+  const totalD=list.reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0),totalDol=list.reduce((s,e)=>s+parseFloat(e.amount_dollar||0),0);
   const settlement=DB.get('expenses_settlement',{});const stl=selF?(settlement[selF]||{}):{};
+  const fullTotalD=fullList.reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);
   const totalRecD=selF?parseFloat(stl.received_dinar||0):Object.values(settlement).reduce((s,v)=>s+parseFloat(v.received_dinar||0),0);
-  const remainD=totalD-totalRecD;
+  const remainD=fullTotalD-totalRecD;
   const allEntities=[...new Set(DB.get('expenses',[]).map(e=>e.factory||'').filter(f=>f))].sort();
   const entityOpts=allEntities.map(f=>`<option value="${esc(f)}" ${selF===f?'selected':''}>${esc(f)}</option>`).join('');
   const rows=list.map((e,i)=>`<tr style="background:${e.id===editId?'#fef2f2':''}">${canEdit('expenses')?`<td class="td" style="width:32px;text-align:center"><input type="checkbox" class="exp-chk" data-id="${e.id}" style="width:15px;height:15px;cursor:pointer;accent-color:#dc2626"></td>`:''}<td class="td" style="color:#94a3b8">${i+1}</td><td class="td">${e.date||''}</td><td class="td" style="font-weight:900;color:#7f1d1d;font-size:11px">${esc(e.factory||'—')}</td><td class="td" style="color:#ca8a04;font-weight:900;background:#fffbeb">${fmtM(e.amount_dinar||0)} <span style="font-size:9px">د.ع</span></td><td class="td" style="color:#0f172a;font-weight:900;background:#f8fafc">${fmtM(e.amount_dollar||0)} <span style="font-size:9px">$</span></td><td class="td" style="font-size:11px;text-align:right">${esc(e.details||'')}</td>${canEdit('expenses')?`<td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 8px;font-size:10px;margin-left:3px" onclick="editExpense('${e.id}','${e.factory||''}')">✏️</button><button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteExpense('${e.id}')">🗑️</button></td>`:''}</tr>`).join('');
@@ -1300,10 +1401,17 @@ function viewExpenses(){
   const factoryDatalist=allEntities.map(f=>`<option value="${esc(f)}">`).join('');
   return`<div style="max-width:960px">
   <datalist id="exp_factory_list">${factoryDatalist}</datalist>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;background:#fef2f2;border-radius:10px;padding:10px 14px;border:2px solid #fca5a5;flex-wrap:wrap">
+    <button onclick="S.expMonth=prevMonth(S.expMonth||today().slice(0,7));renderContent()" class="btn btn-gray" style="padding:5px 14px;font-size:18px;line-height:1">◀</button>
+    <input type="month" value="${selMonth}" onchange="S.expMonth=this.value;renderContent()" class="inp" style="width:155px;font-size:13px;font-weight:900;text-align:center;padding:6px 8px">
+    <button onclick="S.expMonth=nextMonth(S.expMonth||today().slice(0,7));renderContent()" class="btn btn-gray" style="padding:5px 14px;font-size:18px;line-height:1">▶</button>
+    <span style="font-size:14px;font-weight:900;color:#7f1d1d">📅 ${selMonth?monthLabel:'كل الأشهر'}</span>
+    ${selMonth?`<button onclick="S.expMonth='';renderContent()" class="btn btn-gray" style="font-size:11px;padding:6px 12px">✕ عرض الكل</button>`:''}
+  </div>
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px"><div class="card" style="text-align:center;border-top:4px solid #dc2626"><div style="font-size:10px;color:#64748b">عدد المصاريف</div><div style="font-size:22px;font-weight:900;color:#dc2626">${list.length}</div></div><div class="card" style="text-align:center;border-top:4px solid #ca8a04;background:#fffbeb"><div style="font-size:10px;color:#92400e;font-weight:700">💛 إجمالي الدينار</div><div style="font-size:16px;font-weight:900;color:#ca8a04">${fmtM(totalD)}</div></div><div class="card" style="text-align:center;border-top:4px solid #0f172a;background:#f8fafc"><div style="font-size:10px;color:#0f172a;font-weight:700">🖤 إجمالي الدولار</div><div style="font-size:16px;font-weight:900;color:#0f172a">${fmtM(totalDol)}</div></div><div class="card" style="text-align:center;border-top:4px solid ${remainD>0?'#dc2626':'#059669'}"><div style="font-size:10px;color:#64748b;font-weight:700">المتبقي (دينار)</div><div style="font-size:16px;font-weight:900;color:${remainD>0?'#dc2626':'#059669'}">${fmtM(Math.abs(remainD))}</div><div style="font-size:10px">${remainD>0?'⚠️ غير مسوى':'✅ مسوى'}</div></div></div>
   <div class="card" style="margin-bottom:14px;border-right:5px solid #dc2626"><h3 style="font-size:13px;font-weight:900;margin-bottom:14px;color:#7f1d1d">${editId?'✏️ تعديل':'➕ إضافة'} مصروف</h3><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px"><div><label class="lbl">التاريخ *</label><input class="inp" id="exp_date" type="date" value="${editData?editData.date:today()}"></div><div><label class="lbl">جهة الصرف *</label><input class="inp" id="exp_factory_inp" list="exp_factory_list" placeholder="اكتب جهة الصرف..." value="${editData?editData.factory||'':selF}"></div><div><label class="lbl">💛 مبلغ دينار</label><input class="inp" id="exp_dinar" type="number" placeholder="0" value="${editData?editData.amount_dinar||'':''}"></div><div><label class="lbl">🖤 مبلغ دولار</label><input class="inp" id="exp_dollar" type="number" placeholder="0" value="${editData?editData.amount_dollar||'':''}"></div><div style="grid-column:span 2"><label class="lbl">التفاصيل *</label><input class="inp" id="exp_details" placeholder="تفاصيل المصروف..." value="${editData?editData.details||'':''}"></div></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">${editId?`<button class="btn btn-gray" onclick="S.expEditId='';renderContent()">إلغاء</button>`:''}<button class="btn btn-red" style="padding:10px 28px" onclick="saveExpense()">💾 حفظ</button></div><div id="exp-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div></div>
-  <div class="card" style="margin-bottom:12px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><label style="font-size:12px;font-weight:900;color:#334155;white-space:nowrap">🔍 عرض مصاريف الجهة:</label><select class="inp" style="width:220px;font-size:12px" onchange="S.expFactory=this.value;S.expEditId='';renderContent()"><option value="" ${!selF?'selected':''}>الكل</option>${entityOpts}</select><span style="font-size:12px;font-weight:700;color:#64748b">${list.length} مصروف</span>${selF?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="generateExpensesPDF('${selF}')">📄 PDF الجهة</button>`:''}<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="generateExpensesPDF('')">📄 PDF الكل</button><label class="btn btn-green" style="font-size:12px;padding:8px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-right:auto">📥 استيراد Excel (متعدد الشيتات)<input type="file" accept=".xlsx" style="display:none" onchange="importExpensesXLSX(this)"></label></div></div>
-  <div class="card" style="overflow:hidden;padding:0"><div style="padding:12px 16px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><span style="font-weight:900;font-size:13px;color:#7f1d1d">${selF||'الكل'} <span class="badge" style="background:#fee2e2;color:#dc2626">${list.length} مصروف</span></span><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:900;color:#92400e">💛 ${fmtM(totalD)} د.ع</span><span style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:900;color:#0f172a">🖤 ${fmtM(totalDol)} $</span></div><div style="display:flex;gap:6px;flex-wrap:wrap">${canEdit('expenses')?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="deleteSelectedExpenses()">🗑️ حذف المحدد</button>`:''}${isManager()&&selF?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px;background:#7f1d1d" onclick="clearFactoryExpenses('${selF}')">⛔ مسح كل مصاريف ${selF}</button>`:''}<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="exportExpensesXLSX('${selF}')">📊 Excel</button></div></div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:620px"><thead><tr>${canEdit('expenses')?'<th class="th" style="background:#7f1d1d;width:32px"><input type="checkbox" id="exp-chk-all" onchange="toggleSelectAllExp(this)" style="width:15px;height:15px;cursor:pointer;accent-color:#fca5a5" title="تحديد الكل"></th>':''}<th class="th" style="background:#7f1d1d">ت</th><th class="th" style="background:#7f1d1d">التاريخ</th><th class="th" style="background:#7f1d1d">الجهة</th><th class="th" style="background:#7f1d1d">💛 دينار</th><th class="th" style="background:#7f1d1d">🖤 دولار</th><th class="th" style="background:#7f1d1d">التفاصيل</th>${canEdit('expenses')?'<th class="th" style="background:#7f1d1d">الإجراء</th>':''}</tr></thead><tbody>${rows||`<tr><td colspan="${canEdit('expenses')?'8':'6'}" class="td" style="padding:24px;color:#94a3b8">لا توجد مصاريف</td></tr>`}${totalRow}</tbody></table></div></div></div>`;
+  <div class="card" style="margin-bottom:12px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><label style="font-size:12px;font-weight:900;color:#334155;white-space:nowrap">🔍 عرض مصاريف الجهة:</label><select class="inp" style="width:220px;font-size:12px" onchange="S.expFactory=this.value;S.expEditId='';renderContent()"><option value="" ${!selF?'selected':''}>الكل</option>${entityOpts}</select><span style="font-size:12px;font-weight:700;color:#64748b">${list.length} مصروف</span>${selF?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="generateExpensesPDF('${selF}','${selMonth}')">📄 PDF الجهة</button>`:''}<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="generateExpensesPDF('','${selMonth}')">📄 PDF الكل</button><label class="btn btn-green" style="font-size:12px;padding:8px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-right:auto">📥 استيراد Excel (متعدد الشيتات)<input type="file" accept=".xlsx" style="display:none" onchange="importExpensesXLSX(this)"></label>${isManager()?`<button class="btn btn-gray" style="font-size:11px;padding:8px 14px" onclick="cleanupDuplicateExpenses()">🧹 تنظيف التكرارات</button>`:''}</div></div>
+  <div class="card" style="overflow:hidden;padding:0"><div style="padding:12px 16px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><span style="font-weight:900;font-size:13px;color:#7f1d1d">${selF||'الكل'} <span class="badge" style="background:#fee2e2;color:#dc2626">${list.length} مصروف</span></span><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:900;color:#92400e">💛 ${fmtM(totalD)} د.ع</span><span style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:900;color:#0f172a">🖤 ${fmtM(totalDol)} $</span></div><div style="display:flex;gap:6px;flex-wrap:wrap">${canEdit('expenses')?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="deleteSelectedExpenses()">🗑️ حذف المحدد</button>`:''}${isManager()&&selF?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px;background:#7f1d1d" onclick="clearFactoryExpenses('${selF}')">⛔ مسح كل مصاريف ${selF}</button>`:''}<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="exportExpensesXLSX('${selF}','${selMonth}')">📊 Excel</button></div></div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:620px"><thead><tr>${canEdit('expenses')?'<th class="th" style="background:#7f1d1d;width:32px"><input type="checkbox" id="exp-chk-all" onchange="toggleSelectAllExp(this)" style="width:15px;height:15px;cursor:pointer;accent-color:#fca5a5" title="تحديد الكل"></th>':''}<th class="th" style="background:#7f1d1d">ت</th><th class="th" style="background:#7f1d1d">التاريخ</th><th class="th" style="background:#7f1d1d">الجهة</th><th class="th" style="background:#7f1d1d">💛 دينار</th><th class="th" style="background:#7f1d1d">🖤 دولار</th><th class="th" style="background:#7f1d1d">التفاصيل</th>${canEdit('expenses')?'<th class="th" style="background:#7f1d1d">الإجراء</th>':''}</tr></thead><tbody>${rows||`<tr><td colspan="${canEdit('expenses')?'8':'6'}" class="td" style="padding:24px;color:#94a3b8">لا توجد مصاريف</td></tr>`}${totalRow}</tbody></table></div></div></div>`;
 }
 
 function viewExpensesSummary(){
@@ -1351,12 +1459,13 @@ function editExpense(id,factory){S.expEditId=id;S.expFactory=factory;renderConte
 function addExpenseTombstones(ids){var t=DB.get('deleted_expense_ids',[]);var combined=Array.from(new Set(t.concat(ids)));DB.set('deleted_expense_ids',combined);}
 function deleteExpense(id){if(!confirm('حذف هذا المصروف؟'))return;const exp=DB.get('expenses',[]).find(e=>e.id===id);auditLog('حذف مصروف',`جهة: ${exp?.factory||id} | دينار: ${exp?.amount_dinar||0}`);addExpenseTombstones([id]);let expenses=DB.get('expenses',[]).filter(e=>e.id!==id);DB.set('expenses',expenses);FDB.delete('expenses',id);renderContent();}
 function saveSettlement(factory){const dinar=parseFloat(document.getElementById('stl_dinar')?.value||0);const dollar=parseFloat(document.getElementById('stl_dollar')?.value||0);const settlement=DB.get('expenses_settlement',{});settlement[factory]={received_dinar:dinar,received_dollar:dollar,updated:Date.now()};DB.set('expenses_settlement',settlement);FDB.save('expenses_settlement',factory.replace(/\s+/g,'_'),settlement[factory]);renderContent();}
-function exportExpensesXLSX(factory){if(typeof XLSX==='undefined')return;const list=getExpenseList(factory);const rows=[['ت','المعمل','التاريخ','المبلغ دينار','المبلغ دولار','التفاصيل']];list.forEach((e,i)=>rows.push([i+1,e.factory,e.date,e.amount_dinar||0,e.amount_dollar||0,e.details||'']));const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'مصاريف '+factory);XLSX.writeFile(wb,'مصاريف_'+factory+'_'+today()+'.xlsx');}
+function exportExpensesXLSX(factory,month){var list=getExpenseList(factory);if(month)list=list.filter(function(e){return expDateMatchesMonth(e.date,month);});if(typeof XLSX==='undefined')return;const rows=[['ت','المعمل','التاريخ','المبلغ دينار','المبلغ دولار','التفاصيل']];list.forEach((e,i)=>rows.push([i+1,e.factory,e.date,e.amount_dinar||0,e.amount_dollar||0,e.details||'']));const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'مصاريف '+factory);XLSX.writeFile(wb,'مصاريف_'+factory+(month?'_'+month:'')+'_'+today()+'.xlsx');}
 
-function generateExpensesPDF(factory){
-  const list=getExpenseList(factory);
+function generateExpensesPDF(factory,month){
+  var list=getExpenseList(factory);
+  if(month)list=list.filter(function(e){return expDateMatchesMonth(e.date,month);});
   const color='#7f1d1d';
-  const subtitle=factory?('الجهة: '+factory):'جميع الجهات';
+  const subtitle=(factory?('الجهة: '+factory):'جميع الجهات')+(month?(' | الشهر: '+month):'');
   const totalD=list.reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);
   const totalDol=list.reduce((s,e)=>s+parseFloat(e.amount_dollar||0),0);
   const rows=list.map((e,i)=>`<tr><td>${i+1}</td><td>${e.date||''}</td><td>${e.factory||''}</td><td>${fmtM(e.amount_dinar||0)}</td><td>${fmtM(e.amount_dollar||0)}</td><td style="text-align:right;padding-right:8px">${e.details||''}</td></tr>`).join('');
@@ -1380,7 +1489,7 @@ function importExpensesXLSX(input){
       'الوطنية':'الوطنية','الوطنيه':'الوطنية',
       'عطاء الذهب':'عطاء الذهب',
       'ايجار كراج':'ايجار كراج',
-      'الفهد':'الفهد','مصارف الفهد':'الفهد',
+      'الفهد':'الفهد','مصارف الفهد':'الفهد','مصاريف الفهد':'الفهد',
       'روعة المشرق':'الروعة المشرق','الروعة المشرق':'الروعة المشرق','الروعه':'الروعة المشرق',
       'الذهب الاسود':'الذهب الأسود','الذهب الأسود':'الذهب الأسود',
       'ابراج شط العرب':'ابرار شط العرب','ابرار شط العرب':'ابرار شط العرب',
@@ -1392,8 +1501,13 @@ function importExpensesXLSX(input){
     const normAr=s=>String(s||'').replace(/[أإآ]/g,'ا').trim();
     const isSkip=(...cols)=>skipKW.some(kw=>cols.some(c=>normAr(c).includes(normAr(kw))));
     let expenses=DB.get('expenses',[]);
-    let imported=0;
+    let imported=0,skippedDup=0;
     const ts=Date.now();
+    // عدّاد تكراري بدل مجموعة: يسمح بحركتين حقيقيتين متطابقتي القيم ضمن نفس الملف،
+    // ويتجاهل فقط ما يتجاوز العدد الموجود مسبقاً (إعادة استيراد كاملة أو جزئية لنفس البيانات)
+    const existingCounts={};
+    expenses.forEach(function(e){const k=expDupKey(e);existingCounts[k]=(existingCounts[k]||0)+1;});
+    const importedCounts={};
     wb.SheetNames.forEach(function(sheetName){
       const factory=sheetMap[sheetName.trim()]||sheetName.trim();
       const ws=wb.Sheets[sheetName];
@@ -1417,9 +1531,8 @@ function importExpensesXLSX(input){
         }
 
         if(isSkip(col0,col1,col2,col3,col4))continue;
-        // تخطي أي صف يحتوي A فارغ وB نص بلا أرقام (صف إجمالي/ملاحظة)
-        if(!col0 && col1 && !/\d/.test(col1))continue;
         var dinar=parseFloat(col2)||0,dollar=parseFloat(col3)||0;
+        // تخطي الصف فقط إذا لم يحوِ أي بيانات حقيقية إطلاقاً (لا مبلغ ولا تفاصيل) — صف فارغ/إجمالي حقيقي
         if(!dinar&&!dollar&&!col4)continue;
 
         // تحديد التاريخ لهذا الصف
@@ -1440,6 +1553,11 @@ function importExpensesXLSX(input){
 
         var id='exp_xl_'+ts+'_'+r+'_'+Math.random().toString(36).slice(2,5);
         var entry={id,factory,date:dateForRow,amount_dinar:dinar,amount_dollar:dollar,details:col4,accountant:currentUser?currentUser.email:'import',time:ts+r};
+        var dupKey=expDupKey(entry);
+        importedCounts[dupKey]=(importedCounts[dupKey]||0)+1;
+        // التاريخ الفارغ غير موثوق للمطابقة (قد يتطابق صدفة مع شهر آخر له نفس المبلغ والتفاصيل المتكررة)
+        // لذا لا نعتبر الصف تكراراً أبداً إذا لم يكن له تاريخ فعلي
+        if(dateForRow && importedCounts[dupKey]<=(existingCounts[dupKey]||0)){skippedDup++;continue;}
         expenses.push(entry);
         imported++;
       }
@@ -1451,7 +1569,7 @@ function importExpensesXLSX(input){
     try{
       const newExp=expenses.filter(function(e){return e.id.startsWith('exp_xl_'+ts+'_');});
       await Promise.all(newExp.map(function(e){return FDB.save('expenses',e.id,e);}));
-      showToast('✅ تم استيراد '+imported+' مصروف وحفظها في السحابة ☁️','success',5000);
+      showToast('✅ تم استيراد '+imported+' مصروف'+(skippedDup?(' | ⏭️ تم تجاهل '+skippedDup+' مكرر'):'')+' وحفظها في السحابة ☁️','success',5000);
     }catch(err){showToast('✅ تم الاستيراد محلياً | ⚠️ فشل الحفظ في السحابة','warning',5000);}
     input.value='';
   };
@@ -3659,7 +3777,7 @@ function logout(){
   // Firebase Auth signOut
   if(window._auth){try{window._auth.signOut(window._auth.auth);}catch(e){}}
   currentUser=null;DB.set('last_user',null);
-  S={view:'dashboard',selectedFactory:'الكل',filterFrom:'',filterTo:'',editEntry:null,editSale:null,wFrom:'',wTo:'',pSearch:'',pRefinery:'',pType:'',sSearch:'',sTypeFilter:'',salafPerson:'',salafEditId:'',salafTab:'manual',expFactory:'',expEditId:'',expDate:'',expDinar:0,expDollar:0,expDetails:'',kroobEditId:'',kroobSearch:'',rafidEditId:'',rafidSearch:'',kroobPdfData:null,rafidPdfData:null,kroobPdfFrom:'',kroobPdfTo:'',rafidPdfFrom:'',rafidPdfTo:''};
+  S={view:'dashboard',selectedFactory:'الكل',filterFrom:'',filterTo:'',editEntry:null,editSale:null,wFrom:'',wTo:'',pSearch:'',pRefinery:'',pType:'',sSearch:'',sTypeFilter:'',salafPerson:'',salafEditId:'',salafTab:'manual',expFactory:'',expEditId:'',expDate:'',expDinar:0,expDollar:0,expDetails:'',expMonth:'',kroobEditId:'',kroobSearch:'',rafidEditId:'',rafidSearch:'',kroobPdfData:null,rafidPdfData:null,kroobPdfFrom:'',kroobPdfTo:'',rafidPdfFrom:'',rafidPdfTo:''};
   renderLogin();
 }
 

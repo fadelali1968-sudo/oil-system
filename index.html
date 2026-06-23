@@ -1608,6 +1608,34 @@ function clearFactoryExpenses(factory){
   alert('✅ تم مسح كل مصاريف '+factory);
 }
 
+function startRenameExpenseEntity(name){S.expEntityRenameTarget=name;renderContent();setTimeout(()=>{const el=document.getElementById('rename_entity_inp');if(el){el.focus();el.select();}},50);}
+function cancelRenameExpenseEntity(){S.expEntityRenameTarget='';renderContent();}
+function saveRenameExpenseEntity(oldName){
+  const newName=(document.getElementById('rename_entity_inp')?.value||'').trim();
+  if(!newName){showToast('يرجى كتابة الاسم الجديد','error');return;}
+  if(newName===oldName){S.expEntityRenameTarget='';renderContent();return;}
+  let expenses=DB.get('expenses',[]);
+  const affected=expenses.filter(e=>e.factory===oldName);
+  if(!affected.length){showToast('لا توجد مصاريف لهذه الجهة','warning');S.expEntityRenameTarget='';renderContent();return;}
+  const mergeExisting=expenses.some(e=>e.factory===newName);
+  if(mergeExisting&&!confirm('الجهة "'+newName+'" موجودة مسبقاً — سيتم دمج '+affected.length+' مصروف من "'+oldName+'" معها. متابعة؟'))return;
+  affected.forEach(e=>{e.factory=newName;});
+  DB.set('expenses',expenses);
+  affected.forEach(e=>FDB.save('expenses',e.id,e));
+  const settlement=DB.get('expenses_settlement',{});
+  if(settlement[oldName]){
+    if(!settlement[newName])settlement[newName]=settlement[oldName];
+    delete settlement[oldName];
+    DB.set('expenses_settlement',settlement);
+    if(settlement[newName])FDB.save('expenses_settlement',newName.replace(/\s+/g,'_'),settlement[newName]);
+    FDB.delete('expenses_settlement',oldName.replace(/\s+/g,'_'));
+  }
+  auditLog('تعديل تسمية جهة صرف',`من: ${oldName} إلى: ${newName} | عدد المصاريف: ${affected.length}`);
+  S.expEntityRenameTarget='';
+  showToast('تم تحديث التسمية في '+affected.length+' مصروف','success');
+  setTimeout(()=>renderContent(),500);
+}
+
 // ===== نظام الكروب =====
 function getKroobList(){let list=DB.get('kroob',[]);list.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));return list;}
 function calcKroobBalance(list){const opening=DB.get('kroob_opening',{dinar:0,dollar:0});let balDinar=safeNum(opening.dinar),balDollar=safeNum(opening.dollar);return list.map(e=>{const d=safeNum(e.amount_dinar),dl=safeNum(e.amount_dollar),com=safeNum(e.commission),commD=safeNum(e.commission_dollar);if(kroobDir(e,'dinar')==='دائن')balDinar+=d;else balDinar-=d;if(kroobDir(e,'dollar')==='دائن')balDollar+=dl;else balDollar-=dl;balDinar-=com;balDollar-=commD;return{...e,bal_dinar:balDinar,bal_dollar:balDollar};});}
@@ -1715,7 +1743,7 @@ function viewKroob(){
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
       <div><label class="lbl">التاريخ *</label><input class="inp" id="kr_date" type="date" value="${editData?editData.date:month+'-01'}"></div>
       <div style="grid-column:span 2"><label class="lbl">البيان *</label><input class="inp" id="kr_desc" placeholder="وصف الحركة..." value="${editData?editData.description||'':''}"></div>
-      <div><label class="lbl">نوع العملية</label><input class="inp" id="kr_op_type" list="kr_op_datalist" placeholder="اكتب أو اختر..." value="${editData?editData.operation_type||'':''}"></div>
+      <div><label class="lbl">نوع العملية</label><input class="inp" id="kr_op_type" list="kr_op_datalist" placeholder="اكتب أو اختر..." value="${editData?editData.operation_type||'':''}" oninput="suggestKroobDirection(this.value)"></div>
       <div><label class="lbl">الجهة المستفيدة</label><input class="inp" id="kr_beneficiary" value="${editData?editData.beneficiary||'':''}"></div>
       <div><label class="lbl">المستلم / المسلم</label><input class="inp" id="kr_receiver" value="${editData?editData.receiver||'':''}"></div>
       <div><label class="lbl">💛 مبلغ الدينار</label><input class="inp" id="kr_dinar" type="number" placeholder="0" value="${editData?editData.amount_dinar||'':''}"></div>
@@ -2256,6 +2284,19 @@ return`${kroobPdfSection}<div class="card" style="margin-bottom:14px;background:
 <h2 style="font-size:15px;font-weight:900;margin-bottom:16px;color:#065f46">📜 كشف الحساب — كروب رافد فيصل</h2><div class="card" style="margin-bottom:18px;border:2px solid #34d399;background:#f0fdf4"><h3 style="font-size:14px;font-weight:900;color:#065f46;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #6ee7b7">📊 ملخص إجمالي — كروب رافد فيصل</h3><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px"><div style="background:#ecfdf5;border-radius:12px;padding:14px;text-align:center;border:2px solid #6ee7b7"><div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">🟢 إجمالي الإيداع</div><div style="font-size:20px;font-weight:900;color:#059669">${fmtM(grandIn)}</div><div style="font-size:10px;color:#065f46;margin-top:3px">د.ع</div></div><div style="background:#fef2f2;border-radius:12px;padding:14px;text-align:center;border:2px solid #fca5a5"><div style="font-size:11px;color:#7f1d1d;font-weight:700;margin-bottom:6px">🔴 إجمالي الصرف</div><div style="font-size:20px;font-weight:900;color:#dc2626">${fmtM(grandOut)}</div><div style="font-size:10px;color:#7f1d1d;margin-top:3px">د.ع</div></div><div style="background:${curBalD>=0?'#fffbeb':'#fef2f2'};border-radius:12px;padding:14px;text-align:center;border:2px solid ${curBalD>=0?'#fde68a':'#fca5a5'}"><div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">💛 الرصيد الحالي</div><div style="font-size:22px;font-weight:900;color:${curBalD>=0?'#ca8a04':'#dc2626'}">${fmtM(curBalD)}</div><div style="font-size:10px;margin-top:3px">${curBalD>=0?'✅':'⚠️'}</div></div></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px">عدد الحركات</div><div style="font-size:22px;font-weight:900;color:#0f172a">${allList.length}</div></div><div style="background:#fffbeb;border-radius:10px;padding:12px;text-align:center;border:1px solid #fde68a"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">🟡 الرصيد الافتتاحي دينار</div><div style="font-size:14px;font-weight:900;color:#ca8a04">${fmtM(opening.dinar)} د.ع</div></div><div style="background:#fffbeb;border-radius:10px;padding:12px;text-align:center;border:1px solid #fde68a"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">🟡 الرصيد الافتتاحي دولار</div><div style="font-size:14px;font-weight:900;color:${parseFloat(opening.dollar||0)>=0?'#ca8a04':'#dc2626'}">${fmtM(opening.dollar||0)} $</div></div><div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px">🖤 رصيد الدولار الحالي</div><div style="font-size:14px;font-weight:900;color:${curBalDol>=0?'#0f172a':'#dc2626'}">${fmtM(curBalDol)} $</div></div><div style="background:#fef3c7;border-radius:10px;padding:12px;text-align:center;border:1px solid #fde68a"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">عمولات الدينار</div><div style="font-size:14px;font-weight:900;color:#f59e0b">${fmtM(grandComm)} د.ع</div></div><div style="background:#fef3c7;border-radius:10px;padding:12px;text-align:center;border:1px solid #fde68a"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">💚 عمولات الدولار</div><div style="font-size:14px;font-weight:900;color:#f59e0b">${fmtM(grandCommDollar)} $</div></div></div></div><h3 style="font-size:13px;font-weight:900;margin-bottom:12px;color:#065f46">📅 الكشف الشهري</h3>${monthCards||'<div class="card" style="text-align:center;color:#94a3b8;padding:30px">لا توجد حركات</div>'}`;
 }
 
+function suggestKroobDirection(text){
+  const t=(text||'').trim();
+  if(!t)return;
+  const creditWords=['إيداع','ايداع','استلام','قبض','تحصيل','وارد'];
+  const debitWords=['صرف','سحب','حوالة','دفع','صادر'];
+  const isCredit=creditWords.some(w=>t.includes(w));
+  const isDebit=!isCredit&&debitWords.some(w=>t.includes(w));
+  if(!isCredit&&!isDebit)return;
+  const dir=isCredit?'دائن':'مدين';
+  const selD=document.getElementById('kr_type_dinar'),selDol=document.getElementById('kr_type_dollar');
+  if(selD)selD.value=dir;
+  if(selDol)selDol.value=dir;
+}
 function saveKroob(){
   const date=gv('kr_date'),desc=gv('kr_desc');
   const op_type=gv('kr_op_type')||'صرف';
@@ -2703,18 +2744,19 @@ function renderKroobDailySection(date){
   let balDinar=openBal.dinar,balDollar=openBal.dollar;
   if(!todayList.length)return`<div class="card" style="margin-bottom:14px;padding:16px;background:#f0fdf4"><h3 style="font-size:13px;font-weight:900;color:#065f46;margin-bottom:6px">🏦 كشف الكروب اليومي — ${date}</h3><p style="color:#94a3b8;font-size:12px">لا توجد حركات اليوم</p></div>`;
   let rows='';
-  todayList.forEach((e,i)=>{const d=parseFloat(e.amount_dinar||0),dl=parseFloat(e.amount_dollar||0),op=(e.operation_type||'صرف').trim(),com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0),isIn=op==='إيداع'||op==='ايداع';
-    if(isIn){balDinar+=d;balDollar+=dl;}else{balDinar-=d;balDollar-=dl;}balDinar-=com;balDollar-=commD;
-    rows+=`<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-size:11px;text-align:right;max-width:180px">${esc(e.description||'')}</td><td class="td" style="font-size:11px">${esc(e.beneficiary||'')}</td><td class="td" style="font-size:11px">${esc(e.receiver||'')}</td><td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">${isIn&&d?fmtM(d):''}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${!isIn&&d?fmtM(d):''}</td><td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">${isIn&&dl?fmtM(dl):''}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${!isIn&&dl?fmtM(dl):''}</td><td class="td"><span class="badge" style="background:${isIn?'#ecfdf5':'#fef2f2'};color:${isIn?'#059669':'#dc2626'}">${op}</span></td><td class="td" style="color:#f59e0b;font-size:11px;font-weight:900">${com?fmtM(com)+' د.ع':'—'}</td><td class="td" style="color:#f59e0b;font-size:11px;font-weight:900">${commD?'$'+fmtM(commD):'—'}</td><td class="td" style="color:${balDinar>=0?'#ca8a04':'#dc2626'};font-weight:900">${fmtM(balDinar)}</td><td class="td" style="color:${balDollar>=0?'#2563eb':'#dc2626'};font-weight:900">${fmtM(balDollar)}</td></tr>`;
+  todayList.forEach((e,i)=>{const d=parseFloat(e.amount_dinar||0),dl=parseFloat(e.amount_dollar||0),op=(e.operation_type||'صرف').trim(),com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0),isInD=kroobDir(e,'dinar')==='دائن',isInDol=kroobDir(e,'dollar')==='دائن';
+    if(isInD)balDinar+=d;else balDinar-=d;if(isInDol)balDollar+=dl;else balDollar-=dl;balDinar-=com;balDollar-=commD;
+    const badgeIn=d?isInD:(dl?isInDol:isInD);
+    rows+=`<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-size:11px;text-align:right;max-width:180px">${esc(e.description||'')}</td><td class="td" style="font-size:11px">${esc(e.beneficiary||'')}</td><td class="td" style="font-size:11px">${esc(e.receiver||'')}</td><td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">${isInD&&d?fmtM(d):''}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${!isInD&&d?fmtM(d):''}</td><td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">${isInDol&&dl?fmtM(dl):''}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${!isInDol&&dl?fmtM(dl):''}</td><td class="td"><span class="badge" style="background:${badgeIn?'#ecfdf5':'#fef2f2'};color:${badgeIn?'#059669':'#dc2626'}">${op}</span></td><td class="td" style="color:#f59e0b;font-size:11px;font-weight:900">${com?fmtM(com)+' د.ع':'—'}</td><td class="td" style="color:#f59e0b;font-size:11px;font-weight:900">${commD?'$'+fmtM(commD):'—'}</td><td class="td" style="color:${balDinar>=0?'#ca8a04':'#dc2626'};font-weight:900">${fmtM(balDinar)}</td><td class="td" style="color:${balDollar>=0?'#2563eb':'#dc2626'};font-weight:900">${fmtM(balDollar)}</td></tr>`;
   });
-  const totalIn=todayList.filter(e=>e.operation_type==='إيداع'||e.operation_type==='ايداع').reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);
-  const totalOut=todayList.filter(e=>e.operation_type!=='إيداع'&&e.operation_type!=='ايداع').reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);
+  const totalIn=todayList.reduce((s,e)=>kroobDir(e,'dinar')==='دائن'?s+parseFloat(e.amount_dinar||0):s,0);
+  const totalOut=todayList.reduce((s,e)=>kroobDir(e,'dinar')==='دائن'?s:s+parseFloat(e.amount_dinar||0),0);
   // بناء نص الواتساب
   let waTextK='🏦 *كشف يومي — كروب رافد فيصل*\n📅 *'+date+'*\n─────────────────\n';
   waTextK+='📊 *الرصيد السابق:* '+fmtM(openBal.dinar)+' د.ع';
   if(openBal.dollar)waTextK+=' | $'+fmtM(openBal.dollar);
   waTextK+='\n─────────────────\n';
-  todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isIn2=op2==='إيداع'||op2==='ايداع';let r='\n'+(isIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 $'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
+  todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isInD2=kroobDir(e,'dinar')==='دائن',isInDol2=kroobDir(e,'dollar')==='دائن',badgeIn2=d2?isInD2:(dl2?isInDol2:isInD2);let r='\n'+(badgeIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+(isInD2?'+':'-')+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 '+(isInDol2?'+':'-')+'$'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
   waTextK+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextK+=' | $'+fmtM(balDollar);
   waTextK+='\n✅ نظام المراقبة v44.0';
@@ -3309,6 +3351,15 @@ function viewAdmin(){
   FACTORIES=DB.get('factories',["الذهب الأسود","عطاء الذهب الأسود","معمل الفهد","معمل الوطنية","روعة المشرق"]);
   const factRows=FACTORIES.map((f,i)=>`<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900">${f}</td><td class="td"><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="deleteFactory('${f}')">حذف</button></td></tr>`).join('');
   const userRows=Object.entries(users).map(([k,u])=>`<tr><td class="td" style="color:#94a3b8;font-size:11px">${k}</td><td class="td">${u.email||''}</td><td class="td"><span class="badge" style="background:${u.role==='manager'?'#eff6ff':'#f0fdf4'};color:${u.role==='manager'?'#2563eb':'#059669'}">${u.role==='manager'?'مدير':'محاسب'}</span></td><td class="td">${u.factory||'الكل'}</td><td class="td">${k!==ADMIN_UID?`<button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteUser('${k}')">حذف</button>`:''}</td></tr>`).join('');
+  const allExpEntities=[...new Set(DB.get('expenses',[]).map(e=>e.factory||'').filter(f=>f))].sort();
+  const renameTarget=S.expEntityRenameTarget||'';
+  const expEntityRows=allExpEntities.map((f,i)=>{
+    const cnt=DB.get('expenses',[]).filter(e=>e.factory===f).length;
+    if(renameTarget===f){
+      return `<tr style="background:#eff6ff"><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" colspan="2"><input class="inp" id="rename_entity_inp" value="${esc(f)}" style="font-size:12px"></td><td class="td" style="white-space:nowrap"><button class="btn btn-blue" style="padding:3px 10px;font-size:11px;margin-left:4px" onclick="saveRenameExpenseEntity('${f}')">💾 حفظ</button><button class="btn btn-gray" style="padding:3px 10px;font-size:11px" onclick="cancelRenameExpenseEntity()">إلغاء</button></td></tr>`;
+    }
+    return `<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900">${esc(f)}</td><td class="td" style="color:#64748b;font-size:11px">${cnt} مصروف</td><td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 10px;font-size:11px;margin-left:4px" onclick="startRenameExpenseEntity('${f}')">✏️ تعديل التسمية</button><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="clearFactoryExpenses('${f}')">🗑️ حذف</button></td></tr>`;
+  }).join('');
   return`<div style="max-width:900px">
   <div class="card" style="margin-bottom:14px;border:2px solid #2563eb">
     <h3 style="font-size:14px;font-weight:900;margin-bottom:14px;color:#0f172a">🔐 تغيير كلمة المرور</h3>
@@ -3327,6 +3378,7 @@ function viewAdmin(){
     <div style="display:flex;gap:10px"><input class="inp" id="new_factory" placeholder="اسم المعمل..." style="flex:1"><button class="btn btn-blue" onclick="addFactory()">إضافة</button></div>
   </div>
   <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px"><div style="padding:12px 16px;background:#0f172a;font-weight:900;font-size:13px;color:#94a3b8">قائمة المعامل</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">ت</th><th class="th">اسم المعمل</th><th class="th">حذف</th></tr></thead><tbody>${factRows}</tbody></table></div></div>
+  <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px"><div style="padding:12px 16px;background:#7f1d1d;font-weight:900;font-size:13px;color:#fecaca">🧾 إدارة جهات الصرف (المصاريف)</div><div style="padding:10px 16px;background:#fef2f2;font-size:11px;font-weight:700;color:#7f1d1d;border-bottom:1px solid #fecaca">القائمة مبنية تلقائياً من المصاريف المسجَّلة. الإضافة تتم بكتابة اسم جديد عند تسجيل مصروف من صفحة المصاريف. تعديل التسمية هنا يُحدِّث الاسم في كل المصاريف القديمة لهذه الجهة، والحذف يمسح كل مصاريفها نهائياً.</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">ت</th><th class="th">اسم الجهة</th><th class="th">عدد المصاريف</th><th class="th">إجراءات</th></tr></thead><tbody>${expEntityRows||'<tr><td colspan="4" class="td" style="padding:16px;color:#94a3b8">لا توجد جهات صرف مسجَّلة بعد</td></tr>'}</tbody></table></div></div>
   <div class="card" style="margin-bottom:14px">
     <h3 style="font-size:14px;font-weight:900;margin-bottom:14px;color:#0f172a">إضافة مستخدم جديد</h3>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><div><label class="lbl">البريد الإلكتروني *</label><input class="inp" id="new_email" placeholder="user@example.com"></div><div><label class="lbl">كلمة السر *</label><input class="inp" id="new_pass" type="password" placeholder="Password123"></div><div><label class="lbl">الدور *</label><select class="inp" id="new_role"><option value="accountant">محاسب</option><option value="manager">مدير</option></select></div><div style="grid-column:span 3"><label class="lbl">المعمل المسؤول عنه *</label><select class="inp" id="new_factory_sel"><option value="الكل">الكل</option>${FACTORIES.map(f=>`<option value="${f}">${f}</option>`).join('')}</select></div></div><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-blue" onclick="addUser()">إضافة المستخدم</button></div><div id="user-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>

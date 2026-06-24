@@ -149,6 +149,7 @@ async function syncFromCloud(silent=false) {
     if(!DB.get('kroob_cleared',false)){
       const kroob=await FDB.getAll('kroob'); if(kroob&&kroob.length) DB.set('kroob',kroob);
       const kroobOpArr=await FDB.getAll('kroob_opening'); if(kroobOpArr&&kroobOpArr.length){const op=kroobOpArr.find(x=>x.id==='opening')||kroobOpArr[0];if(op)DB.set('kroob_opening',{dinar:parseFloat(op.dinar||0),dollar:parseFloat(op.dollar||0)});}
+      const kroobMonthOp=await FDB.getAll('kroob_month_openings'); if(kroobMonthOp&&kroobMonthOp.length){const map=DB.get('kroob_month_openings',{});kroobMonthOp.forEach(x=>{if(x.id)map[x.id]={dinar:x.dinar,dollar:x.dollar};});DB.set('kroob_month_openings',map);}
     }
     if(drivers&&drivers.length){const drObj={};drivers.forEach(d=>{if(d.name)drObj[d.name]=d;});DB.set('drivers',drObj);}
     // مزامنة حسابات سيد رافد
@@ -1699,6 +1700,10 @@ function prevMonth(m){const d=new Date(m+'-01');d.setMonth(d.getMonth()-1);retur
 function nextMonth(m){const d=new Date(m+'-01');d.setMonth(d.getMonth()+1);return d.toISOString().slice(0,7);}
 
 function getKroobCarryForward(month){
+  // أولاً: الرصيد الافتتاحي المخزن مباشرة من ملف الاستيراد لهذا الشهر
+  const monthOpenings=DB.get('kroob_month_openings',{});
+  if(monthOpenings[month]) return{dinar:safeNum(monthOpenings[month].dinar),dollar:safeNum(monthOpenings[month].dollar)};
+  // ثانياً: حساب تراكمي من الحركات السابقة (للأشهر غير المستوردة)
   const allList=getKroobList(),prevList=allList.filter(e=>(e.date||'').slice(0,7)<month);
   if(!prevList.length){const op=DB.get('kroob_opening',{dinar:0,dollar:0});return{dinar:safeNum(op.dinar),dollar:safeNum(op.dollar)};}
   const withBal=calcKroobBalance(prevList),last=withBal[withBal.length-1];
@@ -1758,7 +1763,9 @@ function viewKroob(){
   const tKMadinD=monthWithBal.reduce((s,e)=>kroobDir(e,'dinar')==='مدين'?s+parseFloat(e.amount_dinar||0):s,0);
   const tKDainDol=monthWithBal.reduce((s,e)=>kroobDir(e,'dollar')==='دائن'?s+parseFloat(e.amount_dollar||0):s,0);
   const tKMadinDol=monthWithBal.reduce((s,e)=>kroobDir(e,'dollar')==='مدين'?s+parseFloat(e.amount_dollar||0):s,0);
-  const kroobTotalRow=monthWithBal.length?`<tr style="background:#065f46;color:#fff;font-weight:900">${canEdit('kroob')?'<td class="td" style="background:#065f46"></td>':''}<td class="td" style="color:#fff" colspan="5">📊 الإجمالي — ${monthWithBal.length} حركة</td><td class="td" style="color:#6ee7b7;font-weight:900;font-size:12px">${fmtM(tKDainD)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tKMadinD)}</td><td class="td" style="color:#93c5fd;font-weight:900;font-size:12px">${fmtM(tKDainDol)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tKMadinDol)}</td><td class="td" colspan="${canEdit('kroob')?6:5}"></td></tr>`:'';
+  const tKCommD=monthWithBal.reduce((s,e)=>s+parseFloat(e.commission||0),0);
+  const tKCommDol=monthWithBal.reduce((s,e)=>s+parseFloat(e.commission_dollar||0),0);
+  const kroobTotalRow=monthWithBal.length?`<tr style="background:#065f46;color:#fff;font-weight:900">${canEdit('kroob')?'<td class="td" style="background:#065f46"></td>':''}<td class="td" style="color:#fff" colspan="5">📊 الإجمالي — ${monthWithBal.length} حركة</td><td class="td" style="color:#6ee7b7;font-weight:900;font-size:12px">${fmtM(tKDainD)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tKMadinD)}</td><td class="td" style="color:#93c5fd;font-weight:900;font-size:12px">${fmtM(tKDainDol)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tKMadinDol)}</td><td class="td"></td><td class="td" style="color:#6ee7b7;font-weight:900;font-size:12px">${fmtM(tKCommD)}</td><td class="td" style="color:#93c5fd;font-weight:900;font-size:12px">${fmtM(tKCommDol)}</td><td class="td" colspan="${canEdit('kroob')?3:2}"></td></tr>`:'';
   const kroobOpTypes=DB.get('kroob_op_types',['صرف','إيداع','حواله']);
   const opDatalist=kroobOpTypes.map(t=>`<option value="${t}">`).join('');
   return`<div style="max-width:1100px">
@@ -1781,7 +1788,7 @@ function viewKroob(){
       <h4 style="font-size:12px;font-weight:900;color:#065f46;white-space:nowrap">💰 الرصيد الافتتاحي للشهر:</h4>
       <span style="background:#fff;border:1px solid #6ee7b7;border-radius:8px;padding:5px 14px;font-size:13px;font-weight:900;color:${carry.dinar>=0?'#ca8a04':'#dc2626'}">${fmtM(carry.dinar)} د.ع</span>
       <span style="background:#fff;border:1px solid #6ee7b7;border-radius:8px;padding:5px 14px;font-size:13px;font-weight:900;color:${carry.dollar>=0?'#0f172a':'#dc2626'}">${fmtM(carry.dollar)} $</span>
-      <div style="display:flex;gap:8px;margin-right:auto"><label class="btn btn-green" style="font-size:11px;padding:6px 12px;cursor:pointer">📥 استيراد Excel<input type="file" accept=".xlsx" style="display:none" onchange="importKroobXLSX(this)"></label><button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="exportKroobXLSX()">📊 تصدير</button><button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="clearKroobData()">🗑️ مسح الكل</button></div>
+      <div style="display:flex;gap:8px;margin-right:auto"><label class="btn btn-green" style="font-size:11px;padding:6px 12px;cursor:pointer">📥 استيراد Excel<input type="file" accept=".xlsx" style="display:none" onchange="importKroobXLSX(this)"></label><button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="exportKroobXLSX()">📊 تصدير</button><button class="btn btn-amber" style="font-size:11px;padding:6px 12px" onclick="clearKroobMonth()">🗑️ مسح الشهر</button><button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="clearKroobData()">🗑️ مسح الكل</button></div>
     </div>
     <details style="margin-top:8px">
       <summary style="font-size:11px;color:#64748b;cursor:pointer;user-select:none">⚙️ تعديل رصيد بداية النظام (أول حركة)</summary>
@@ -2410,12 +2417,39 @@ function deleteKroobSelected(){
 }
 
 function saveKroobOpening(){const d=parseFloat(el('op_dinar')?.value||0),dl=parseFloat(el('op_dollar')?.value||0);DB.set('kroob_opening',{dinar:d,dollar:dl});FDB.save('kroob_opening','opening',{dinar:d,dollar:dl});renderContent();}
+async function clearKroobMonth(){
+  const month=S.kroobMonth||today().slice(0,7);
+  const mnNames={'01':'يناير','02':'فبراير','03':'مارس','04':'أبريل','05':'مايو','06':'يونيو','07':'يوليو','08':'أغسطس','09':'سبتمبر','10':'أكتوبر','11':'نوفمبر','12':'ديسمبر'};
+  const[yr,mn]=month.split('-');
+  const label=(mnNames[mn]||mn)+' '+yr;
+  const existing=DB.get('kroob',[]);
+  const toDelete=existing.filter(e=>(e.date||'').startsWith(month));
+  if(!toDelete.length){showToast('لا توجد حركات لشهر '+label,'warning');return;}
+  if(!confirm('مسح '+toDelete.length+' حركة لشهر '+label+'؟'))return;
+  DB.set('kroob',existing.filter(e=>!(e.date||'').startsWith(month)));
+  const monthOpenings=DB.get('kroob_month_openings',{});
+  delete monthOpenings[month];
+  DB.set('kroob_month_openings',monthOpenings);
+  if(window._fbReady){
+    try{
+      const{db,collection,getDocs,deleteDoc,doc}=window._fb;
+      const snap=await getDocs(collection(db,'kroob'));
+      const toDelFB=snap.docs.filter(d=>d.data().date?.startsWith(month));
+      await Promise.all(toDelFB.map(d=>deleteDoc(doc(db,'kroob',d.id))));
+      await deleteDoc(doc(db,'kroob_month_openings',month));
+    }catch(e){console.warn('Firebase error:',e);}
+  }
+  showToast('تم مسح '+toDelete.length+' حركة لشهر '+label,'success');
+  renderContent();
+}
+
 async function clearKroobData(){
   if(!confirm('مسح كل بيانات الكروب؟'))return;
   if(!confirm('تأكيد نهائي — لا يمكن التراجع!'))return;
   // مسح localStorage + علامة منع إعادة المزامنة
   DB.set('kroob',[]);
   DB.set('kroob_opening',{dinar:0,dollar:0});
+  DB.set('kroob_month_openings',{});
   DB.set('kroob_cleared',true);
   // مسح Firebase
   if(window._fbReady){
@@ -2444,15 +2478,17 @@ function importKroobXLSX(input){
     let opDinar=0,opDollar=0;
     const OPENING_KEYWORDS=['الرصيد من الشهر السابق','من الشهر السابق','رصيد سابق','رصيد أول المدة','رصيد اول المدة'];
     const MADWAR_KEYWORDS=['مدور','رصيد مدور'];
+    // يتعامل مع أرقام تحتوي $ أو د.ع أو فراغات أو أرقام عربية
+    function parseNum(v){const s=String(v||'').replace(/[$,،\s‏‎‫‬]/g,'').replace(/[^\d.\-]/g,'');return parseFloat(s)||0;}
     function extractBalFromRow(row){
-      // العمود M (index 12) = رصيد الدينار | العمود L (index 11) = رصيد الدولار
-      const d=parseFloat(String(row[12]||'').replace(/,/g,''))||0;
-      const dl=parseFloat(String(row[11]||'').replace(/,/g,''))||0;
+      // العمود L (index 11) = رصيد الدولار | العمود M (index 12) = رصيد الدينار
+      const d=parseNum(row[12]);
+      const dl=parseNum(row[11]);
       if(d) return{d,dl};
       // fallback إذا كانت الأعمدة فارغة
       let fd=0,fdl=0;
-      for(let i=0;i<row.length;i++){const v=parseFloat(String(row[i]||'').replace(/,/g,''));if(!isNaN(v)&&v>100000000&&v>fd)fd=v;}
-      for(let i=0;i<row.length;i++){const v=parseFloat(String(row[i]||'').replace(/,/g,''));if(!isNaN(v)&&v!==0&&v!==fd&&Math.abs(v)<10000000)fdl=v;}
+      for(let i=0;i<row.length;i++){const v=parseNum(row[i]);if(v>100000000&&v>fd)fd=v;}
+      for(let i=0;i<row.length;i++){const v=parseNum(row[i]);if(v!==0&&Math.abs(v)!==fd&&Math.abs(v)<10000000)fdl=v;}
       return{d:fd,dl:fdl};
     }
     // 1) البحث عن "الرصيد من الشهر السابق" في كل الملف (أول تطابق)
@@ -2484,10 +2520,11 @@ function importKroobXLSX(input){
     }
     // الرصيد الافتتاحي سيُحدَّث فقط إذا كان الشهر المستورد هو الأقدم — انظر أسفل الدالة
 
-    // ===== قراءة الحركات بأعمدة ثابتة حسب بنية الملف المعروفة =====
-    // row[0]=ت | row[1]=التاريخ | row[2]=البيان | row[3]=الجهة | row[4]=المستلم
-    // row[5]=المبلغ بالدولار | row[6]=المبلغ بالدينار
-    // row[12]=نوع العملية | row[13]=عمولة دينار | row[15]=عمولة دولار
+    // ===== قراءة الحركات بأعمدة ثابتة (تنسيق الصيرفة) =====
+    // row[0]=ت | row[1]=تاريخ | row[2]=بيان | row[3]=جهة | row[4]=مستلم
+    // row[5]=مبلغ دولار | row[6]=مبلغ دينار | row[7]=دائن دولار | row[8]=مدين دولار
+    // row[9]=دائن دينار | row[10]=مدين دينار | row[11]=رصيد دولار | row[12]=رصيد دينار
+    // row[13]=نوع العملية | row[14]=عمولة دينار | row[15]=عمولة دولار
 
     let kroob=[],imported=0;
 
@@ -2510,13 +2547,13 @@ function importKroobXLSX(input){
       const desc         = String(row[2]||'').trim();
       const benef        = String(row[3]||'').trim();
       const recv         = String(row[4]||'').trim();
-      const creditDollar = parseFloat(String(row[7]||'').replace(/,/g,''))||0;  // H دائن دولار
-      const debitDollar  = parseFloat(String(row[8]||'').replace(/,/g,''))||0;  // I مدين دولار
-      const creditDinar  = parseFloat(String(row[9]||'').replace(/,/g,''))||0;  // J دائن دينار
-      const debitDinar   = parseFloat(String(row[10]||'').replace(/,/g,''))||0; // K مدين دينار
-      const rawOpType    = String(row[13]||'').trim()||'صرف'; // N نوع العملية (كان row[12] خطأ)
-      const commDinar    = parseFloat(String(row[14]||'').replace(/,/g,''))||0; // O عمولة دينار (كان row[13] خطأ)
-      const commDollar   = parseFloat(String(row[15]||'').replace(/,/g,''))||0; // P عمولة دولار
+      const creditDollar = parseNum(row[7]);   // H دائن دولار
+      const debitDollar  = parseNum(row[8]);   // I مدين دولار
+      const creditDinar  = parseNum(row[9]);   // J دائن دينار
+      const debitDinar   = parseNum(row[10]);  // K مدين دينار
+      const rawOpType    = String(row[13]||'').trim()||'صرف'; // N نوع العملية
+      const commDinar    = parseNum(row[14]);  // O عمولة دينار
+      const commDollar   = parseNum(row[15]);  // P عمولة دولار
 
       // تحديد نوع العملية والمبالغ بدقة من أعمدة H/I/J/K
       let finalOpType, finalAmountDinar, finalAmountDollar;
@@ -2529,8 +2566,8 @@ function importKroobXLSX(input){
       } else {
         // صرف/حواله/تحويل: خصم
         finalOpType=rawOpType;
-        finalAmountDinar=debitDinar||parseFloat(String(row[6]||'').replace(/,/g,''))||0;
-        finalAmountDollar=debitDollar||parseFloat(String(row[5]||'').replace(/,/g,''))||0;
+        finalAmountDinar=debitDinar||parseNum(row[6])||0;
+        finalAmountDollar=debitDollar||parseNum(row[5])||0;
       }
 
       if(!finalAmountDinar&&!finalAmountDollar&&!desc)continue;
@@ -2540,7 +2577,7 @@ function importKroobXLSX(input){
       const id='kr_xl_'+r+'_'+Date.now();
       kroob.push({id,date,description:desc,operation_type:finalOpType,type_dinar:finalTypeDinar,type_dollar:finalTypeDollar,beneficiary:benef,receiver:recv,
         amount_dinar:finalAmountDinar,amount_dollar:finalAmountDollar,commission:commDinar,commission_dollar:commDollar,
-        accountant:'import',time:Date.now()+r});
+        accountant:currentUser?.email||'import',time:Date.now()+r});
       imported++;
     }
 
@@ -2554,17 +2591,24 @@ function importKroobXLSX(input){
     // حذف سجلات الشهر المستهدف فقط من البيانات الحالية
     let existing=DB.get('kroob',[]);
     const toDelete=existing.filter(e=>(e.date||'').startsWith(targetMonth));
-    toDelete.forEach(e=>{try{FDB.delete('kroob',e.id);}catch(err){}});
+    if(toDelete.length) await Promise.all(toDelete.map(e=>FDB.delete('kroob',e.id)));
     existing=existing.filter(e=>!(e.date||'').startsWith(targetMonth));
 
     // دمج الشهر الجديد مع باقي الأشهر
     const allKroob=[...existing,...kroob];
     allKroob.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
 
-    // تحديث الرصيد الافتتاحي فقط إذا كان الشهر المستورد هو الأقدم في النظام
+    // تحديث الرصيد الافتتاحي العام فقط إذا كان الشهر المستورد هو الأقدم
     const firstMonth=allKroob.find(e=>e.date)?.date?.slice(0,7)||'';
     const shouldUpdateOpening=(opDinar!==0||opDollar!==0)&&targetMonth===firstMonth;
     if(shouldUpdateOpening) DB.set('kroob_opening',{dinar:opDinar,dollar:opDollar});
+
+    // حفظ رصيد افتتاحي خاص بهذا الشهر — يُستخدم مباشرة بدلاً من الحساب التراكمي
+    if(opDinar!==0||opDollar!==0){
+      const monthOpenings=DB.get('kroob_month_openings',{});
+      monthOpenings[targetMonth]={dinar:opDinar,dollar:opDollar};
+      DB.set('kroob_month_openings',monthOpenings);
+    }
 
     DB.set('kroob',allKroob);
     DB.set('kroob_cleared',false);
@@ -2573,6 +2617,7 @@ function importKroobXLSX(input){
     try{
       const saves=[...kroob.map(k=>FDB.save('kroob',k.id,k))];
       if(shouldUpdateOpening) saves.push(FDB.save('kroob_opening','opening',{dinar:opDinar,dollar:opDollar}));
+      if(opDinar!==0||opDollar!==0) saves.push(FDB.save('kroob_month_openings',targetMonth,{id:targetMonth,dinar:opDinar,dollar:opDollar}));
       await Promise.all(saves);
       showToast('✅ تم استيراد '+imported+' حركة لشهر '+targetMonth+' وحفظها في السحابة ☁️','success',5000);
     }catch(err){

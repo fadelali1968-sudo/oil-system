@@ -3469,6 +3469,10 @@ function viewAdmin(){
     <div style="display:flex;gap:8px;flex-wrap:wrap">${FACTORIES.map((f,i)=>`<button class="btn btn-red" style="font-size:11px;padding:5px 10px" onclick="clearByIndex(${i},'purchases')">مشتريات ${f}</button>`).join('')}</div></div>
     <div><p style="font-size:12px;font-weight:700;color:#581c87;margin-bottom:6px">🗑️ مسح مبيعات معمل:</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap">${FACTORIES.map((f,i)=>`<button class="btn btn-purple" style="font-size:11px;padding:5px 10px" onclick="clearByIndex(${i},'sales')">مبيعات ${f}</button>`).join('')}</div></div>
+    <div style="margin-top:14px;padding-top:12px;border-top:2px dashed #dc2626">
+      <p style="font-size:12px;font-weight:700;color:#7f1d1d;margin-bottom:8px">📦 نسخ احتياطي وإعادة تشغيل (جميع المعامل):</p>
+      <button class="btn btn-red" style="font-size:12px;padding:7px 16px;font-weight:900" onclick="backupAndClearAllProcurement()">📦 نسخ احتياطي Excel ثم مسح الكل (مشتريات + مبيعات)</button>
+    </div>
   </div></div>`;
 }
 
@@ -3665,6 +3669,41 @@ async function clearTypeData(factory,type){
   renderContent();
 }
 function exportAllXLSX(){exportXLSX('purchases');setTimeout(()=>exportXLSX('sales'),1000);}
+
+async function backupAndClearAllProcurement(){
+  const totalEnt=DB.get('entries',[]).length;
+  const totalSal=DB.get('sales',[]).length;
+  if(!confirm(`سيتم:\n1. تصدير ${totalEnt} مشتريات و${totalSal} مبيعات إلى Excel (نسخة احتياطية)\n2. مسح جميع هذه البيانات من النظام\n\nهل تريد المتابعة؟`))return;
+  if(!confirm('تأكيد نهائي: مسح جميع المشتريات والمبيعات من جميع المعامل؟'))return;
+  // خطوة 1: تصدير Excel كنسخة احتياطية (كل المعامل بغض النظر عن الفلتر الحالي)
+  const _prevFactory=S.selectedFactory;
+  S.selectedFactory='الكل';
+  exportXLSX('purchases');
+  await new Promise(r=>setTimeout(r,900));
+  exportXLSX('sales');
+  await new Promise(r=>setTimeout(r,900));
+  S.selectedFactory=_prevFactory;
+  // خطوة 2: مسح من localStorage
+  DB.set('entries',[]);
+  DB.set('sales',[]);
+  // خطوة 3: مسح من Firebase
+  if(window._fbReady){
+    try{
+      const {db,collection:col2,getDocs,deleteDoc,doc}=window._fb;
+      for(const colName of ['entries','sales']){
+        const snap=await getDocs(col2(db,colName));
+        const batchSize=20;
+        for(let i=0;i<snap.docs.length;i+=batchSize){
+          const batch=snap.docs.slice(i,i+batchSize);
+          await Promise.all(batch.map(d=>deleteDoc(doc(db,colName,d.id))));
+        }
+      }
+    }catch(e){console.warn('Firebase delete error:',e);}
+  }
+  auditLog('مسح شامل',`تم مسح ${totalEnt} مشتريات و${totalSal} مبيعات من جميع المعامل`);
+  showToast(`تم مسح ${totalEnt} مشتريات + ${totalSal} مبيعات — الملفات الاحتياطية محفوظة في التنزيلات`,'success');
+  renderContent();
+}
 
 // ===== إدارة الصلاحيات =====
 const ALL_PERMS=['salaf','expenses','kroob','table','sale_table','reports','import_p','import_s','rafid','refinery'];

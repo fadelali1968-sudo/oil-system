@@ -1358,6 +1358,7 @@ function getExpenseList(factory){
 const EXP_IRAQI_MONTHS={'01':'كانون الثاني','02':'شباط','03':'آذار','04':'نيسان','05':'أيار','06':'حزيران','07':'تموز','08':'آب','09':'أيلول','10':'تشرين الأول','11':'تشرين الثاني','12':'كانون الأول'};
 function expNormAr(s){return String(s||'').replace(/[أإآ]/g,'ا').trim();}
 function expTextMonthToNum(text){const t=expNormAr(text);for(const mm in EXP_IRAQI_MONTHS){if(t.includes(expNormAr(EXP_IRAQI_MONTHS[mm])))return mm;}return null;}
+function expDateToYM(d){if(!d)return'';const iso=(d||'').slice(0,7);if(/^\d{4}-\d{2}$/.test(iso))return iso;const mm=expTextMonthToNum(d);if(!mm)return'';const ym=/(\d{4})/.exec(d);const yr=ym?ym[1]:today().slice(0,4);return yr+'-'+mm;}
 function expDateMatchesMonth(dateStr,month){
   if(!dateStr||!month)return false;
   // handle ISO dates with or without zero-padded month (2026-06-15 or 2026-6-15)
@@ -1509,7 +1510,7 @@ function viewExpensesSummary(){
 function saveExpense(){
   const factoryRaw=(document.getElementById('exp_factory_inp')?.value||'').trim();
   if(!factoryRaw){showToast('يرجى كتابة جهة الصرف','error');return;}
-  const date=gv('exp_date')||today();
+  const _eid0=S.expEditId||'';const _orig0=_eid0?(DB.get('expenses',[]).find(e=>e.id===_eid0)||null):null;const date=gv('exp_date')||(_orig0&&_orig0.date)||today();
   const dinar=parseFloat(document.getElementById('exp_dinar')?.value||0);
   const dollar=parseFloat(document.getElementById('exp_dollar')?.value||0);
   const details=gv('exp_details');
@@ -1757,7 +1758,7 @@ function getPersonExpenses(personName,month){if(!personName)return[];return DB.g
 function getPersonExpensesTotal(personName,month){const list=getPersonExpenses(personName,month);return{dinar:list.reduce((s,e)=>s+safeNum(e.amount_dinar),0),dollar:list.reduce((s,e)=>s+safeNum(e.amount_dollar),0)};}
 function getFactoryExpensesTotal(factory,month){if(!factory)return{dinar:0,dollar:0};const list=getExpenseList(factory==='__all__'?'':factory).filter(e=>(factory==='__all__'||e.factory===factory)&&expDateMatchesMonth(e.date,month));return{dinar:list.reduce((s,e)=>s+safeNum(e.amount_dinar),0),dollar:list.reduce((s,e)=>s+safeNum(e.amount_dollar),0)};}
 function getFactoryExpensesList(factory,month){if(!factory)return[];return getExpenseList(factory==='__all__'?'':factory).filter(e=>(factory==='__all__'||e.factory===factory)&&expDateMatchesMonth(e.date,month)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));}
-function getSalafCarryForward(person,month){const cfg=getSalafSettlementConfig(),pcfg=person==='haidar'?cfg.haidar:cfg.mohammed;const personName=pcfg.personName||'';let d=safeNum(pcfg.openDinar),dl=safeNum(pcfg.openDollar);const allAdv=person==='haidar'?[...getHaidarKroobSalaf().map(e=>({date:e.date,d:safeNum(e.amount_dinar),dl:safeNum(e.amount_dollar)})),...getHaidarRafidSalaf().map(e=>({date:e.date,d:safeNum(e.dinar),dl:safeNum(e.dollar)}))]:([...getMohammedKroobSalaf().map(e=>({date:e.date,d:safeNum(e.amount_dinar),dl:safeNum(e.amount_dollar)})),...getMohammedRafidSalaf().map(e=>({date:e.date,d:safeNum(e.dinar),dl:safeNum(e.dollar)}))]);allAdv.filter(e=>(e.date||'').slice(0,7)<month).forEach(e=>{d+=e.d;dl+=e.dl;});if(personName){DB.get('expenses',[]).filter(e=>e.person===personName&&(e.date||'').slice(0,7)<month).forEach(e=>{d-=safeNum(e.amount_dinar);dl-=safeNum(e.amount_dollar);});}return{dinar:d,dollar:dl};}
+function getSalafCarryForward(person,month){const cfg=getSalafSettlementConfig(),pcfg=person==='haidar'?cfg.haidar:cfg.mohammed;const personName=pcfg.personName||'';let d=safeNum(pcfg.openDinar),dl=safeNum(pcfg.openDollar);const allAdv=person==='haidar'?[...getHaidarKroobSalaf().map(e=>({date:e.date,d:safeNum(e.amount_dinar),dl:safeNum(e.amount_dollar)})),...getHaidarRafidSalaf().map(e=>({date:e.date,d:safeNum(e.dinar),dl:safeNum(e.dollar)}))]:([...getMohammedKroobSalaf().map(e=>({date:e.date,d:safeNum(e.amount_dinar),dl:safeNum(e.amount_dollar)})),...getMohammedRafidSalaf().map(e=>({date:e.date,d:safeNum(e.dinar),dl:safeNum(e.dollar)}))]);allAdv.filter(e=>(e.date||'').slice(0,7)<month).forEach(e=>{d+=e.d;dl+=e.dl;});if(personName){DB.get('expenses',[]).filter(e=>e.person===personName&&expDateToYM(e.date)<month&&expDateToYM(e.date)!=='').forEach(e=>{d-=safeNum(e.amount_dinar);dl-=safeNum(e.amount_dollar);});}return{dinar:d,dollar:dl};}
 function viewSalafSettlement(){
   const month=S.salafSettlementMonth||today().slice(0,7);
   const mnNames={'01':'يناير','02':'فبراير','03':'مارس','04':'أبريل','05':'مايو','06':'يونيو','07':'يوليو','08':'أغسطس','09':'سبتمبر','10':'أكتوبر','11':'نوفمبر','12':'ديسمبر'};

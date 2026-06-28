@@ -2817,9 +2817,11 @@ function importKroobXLSX(input){
 
     if(!kroob.length){showToast('لم يتم العثور على بيانات صالحة في الملف','error');return;}
 
-    // تحديد الشهر المستهدف من أول تاريخ صحيح في الملف
+    // تحديد الشهر المستهدف: الشهر الأكثر تكراراً في البيانات (لتجنب خلل تاريخ يوم 31 من الشهر السابق)
     kroob.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
-    const targetMonth=kroob.find(e=>e.date)?.date?.slice(0,7)||'';
+    const _kroobMonthCounts={};
+    kroob.forEach(e=>{if(e.date){const m=e.date.slice(0,7);_kroobMonthCounts[m]=(_kroobMonthCounts[m]||0)+1;}});
+    const targetMonth=Object.entries(_kroobMonthCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
     if(!targetMonth){showToast('لا يمكن تحديد شهر الملف — تأكد من صحة عمود التاريخ','error');return;}
 
     // حذف سجلات الشهر المستهدف فقط من البيانات الحالية
@@ -3399,9 +3401,11 @@ function importRafidXLSX(input){
 
     if(!list.length){showToast('لم يتم العثور على بيانات صالحة في الملف','error');return;}
 
-    // تحديد الشهر المستهدف من أول تاريخ صحيح في الملف
+    // تحديد الشهر المستهدف: الشهر الأكثر تكراراً في البيانات (لتجنب خلل تاريخ يوم 31 من الشهر السابق)
     list.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-    const targetMonth=list.find(e=>e.date)?.date?.slice(0,7)||'';
+    const _monthCounts={};
+    list.forEach(e=>{if(e.date){const m=e.date.slice(0,7);_monthCounts[m]=(_monthCounts[m]||0)+1;}});
+    const targetMonth=Object.entries(_monthCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
     if(!targetMonth){showToast('لا يمكن تحديد شهر الملف — تأكد من صحة عمود التاريخ','error');return;}
 
     // حذف سجلات الشهر المستهدف فقط من البيانات الحالية

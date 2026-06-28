@@ -164,6 +164,7 @@ async function syncFromCloud(silent=false) {
     }
     const settings=await FDB.getAll('settings');if(settings&&settings.length){const fd=settings.find(x=>x.id==='factories');if(fd&&fd.list&&fd.list.length){DB.set('factories',fd.list);}const kot=settings.find(x=>x.id==='kroob_op_types');if(kot&&kot.list&&kot.list.length)DB.set('kroob_op_types',kot.list);}
     const settlementArr=await FDB.getAll('expenses_settlement');if(settlementArr&&settlementArr.length){const stl={};settlementArr.forEach(s=>{if(s.id){const k=s.id.replace(/_/g,' ');stl[k]={received_dinar:parseFloat(s.received_dinar||0),received_dollar:parseFloat(s.received_dollar||0),updated:s.updated||0};}});if(Object.keys(stl).length)DB.set('expenses_settlement',stl);}
+    const expEntArr=await FDB.getAll('expense_entities');if(expEntArr&&expEntArr.length)DB.set('expense_entities',expEntArr);
     if(!silent) showToast('تمت المزامنة مع Firebase','info',2000);
     return true;
   } catch(e) { console.warn('Sync error:',e); return false; }
@@ -1473,11 +1474,13 @@ function viewExpenses(){
   const fullTotalD=fullList.reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);
   const totalRecD=selF?parseFloat(stl.received_dinar||0):Object.values(settlement).reduce((s,v)=>s+parseFloat(v.received_dinar||0),0);
   const remainD=fullTotalD-totalRecD;
-  const allEntities=[...new Set(DB.get('expenses',[]).map(e=>e.factory||'').filter(f=>f))].sort();
+  const predefE=DB.get('expense_entities',[]).map(e=>e.name);
+  const dynE=DB.get('expenses',[]).map(e=>e.factory||'').filter(f=>f);
+  const allEntities=[...new Set([...predefE,...dynE])].sort();
   const entityOpts=allEntities.map(f=>`<option value="${esc(f)}" ${selF===f?'selected':''}>${esc(f)}</option>`).join('');
   const rows=list.map((e,i)=>`<tr style="background:${e.id===editId?'#fef2f2':''}">${canEdit('expenses')?`<td class="td" style="width:32px;text-align:center"><input type="checkbox" class="exp-chk" data-id="${e.id}" style="width:15px;height:15px;cursor:pointer;accent-color:#dc2626"></td>`:''}<td class="td" style="color:#94a3b8">${i+1}</td><td class="td">${e.date||''}</td><td class="td" style="font-weight:900;color:#7f1d1d;font-size:11px">${esc(e.factory||'—')}</td><td class="td" style="font-size:10px">${e.person?`<span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:1px 6px;font-weight:700">${esc(e.person)}</span>`:''}</td><td class="td" style="color:#ca8a04;font-weight:900;background:#fffbeb">${fmtM(e.amount_dinar||0)} <span style="font-size:9px">د.ع</span></td><td class="td" style="color:#0f172a;font-weight:900;background:#f8fafc">${fmtM(e.amount_dollar||0)} <span style="font-size:9px">$</span></td><td class="td" style="font-size:11px;text-align:right">${esc(e.details||'')}</td>${canEdit('expenses')?`<td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 8px;font-size:10px;margin-left:3px" onclick="editExpense('${e.id}','${e.factory||''}')">✏️</button><button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteExpense('${e.id}')">🗑️</button></td>`:''}</tr>`).join('');
   const totalRow=`<tr style="background:#7f1d1d;color:#fff;font-weight:900">${canEdit('expenses')?'<td class="td"></td>':''}<td class="td" style="color:#fff" colspan="4">الإجمالي</td><td class="td" style="color:#fde68a;font-size:13px">${fmtM(totalD)} د.ع</td><td class="td" style="color:#fff;font-size:13px">${fmtM(totalDol)} $</td><td class="td" style="color:#fff">${list.length} مصروف</td>${canEdit('expenses')?'<td class="td"></td>':''}</tr>`;
-  const factoryDatalist=allEntities.map(f=>`<option value="${esc(f)}">`).join('');
+  const factoryDatalist=[...new Set([...predefE,...dynE])].sort().map(f=>`<option value="${esc(f)}">`).join('');
   const uniquePersons=[...new Set(DB.get('expenses',[]).map(e=>e.person||'').filter(p=>p))].sort();
   const personDatalist=uniquePersons.map(p=>`<option value="${esc(p)}">`).join('');
   return`<div style="max-width:960px">
@@ -1724,6 +1727,33 @@ function clearFactoryExpenses(factory){
 
 function startRenameExpenseEntity(name){S.expEntityRenameTarget=name;renderContent();setTimeout(()=>{const el=document.getElementById('rename_entity_inp');if(el){el.focus();el.select();}},50);}
 function cancelRenameExpenseEntity(){S.expEntityRenameTarget='';renderContent();}
+function addExpenseEntity(){
+  const name=(document.getElementById('new_exp_entity_name')?.value||'').trim();
+  const factAssoc=(document.getElementById('new_exp_entity_factory')?.value||'').trim()||'الكل';
+  if(!name){showToast('يرجى كتابة اسم الجهة','error');return;}
+  const list=DB.get('expense_entities',[]);
+  const dynNames=DB.get('expenses',[]).map(e=>e.factory||'').filter(f=>f);
+  const allNames=[...list.map(e=>e.name),...dynNames];
+  if(allNames.includes(name)){showToast('هذه الجهة موجودة مسبقاً','error');return;}
+  const newEnt={id:'expent_'+Date.now(),name,factory_assoc:factAssoc};
+  list.push(newEnt);
+  DB.set('expense_entities',list);
+  FDB.save('expense_entities',newEnt.id,newEnt);
+  auditLog('إضافة جهة صرف',`${name} — ${factAssoc}`);
+  showToast('تمت إضافة الجهة','success');
+  renderContent();
+}
+async function deleteExpenseEntityPredef(id){
+  if(!confirm('حذف هذه الجهة من القائمة؟'))return;
+  const list=DB.get('expense_entities',[]);
+  const ent=list.find(e=>e.id===id);
+  if(!ent)return;
+  DB.set('expense_entities',list.filter(e=>e.id!==id));
+  await FDB.delete('expense_entities',id);
+  auditLog('حذف جهة صرف',ent.name);
+  showToast('تم الحذف','success');
+  renderContent();
+}
 function saveRenameExpenseEntity(oldName){
   const newName=(document.getElementById('rename_entity_inp')?.value||'').trim();
   if(!newName){showToast('يرجى كتابة الاسم الجديد','error');return;}
@@ -1744,6 +1774,10 @@ function saveRenameExpenseEntity(oldName){
     if(settlement[newName])FDB.save('expenses_settlement',newName.replace(/\s+/g,'_'),settlement[newName]);
     FDB.delete('expenses_settlement',oldName.replace(/\s+/g,'_'));
   }
+  // تحديث الاسم في قائمة الجهات المعرَّفة مسبقاً إن وجدت
+  const predefList=DB.get('expense_entities',[]);
+  const predefIdx=predefList.findIndex(e=>e.name===oldName);
+  if(predefIdx>=0){predefList[predefIdx].name=newName;DB.set('expense_entities',predefList);FDB.save('expense_entities',predefList[predefIdx].id,predefList[predefIdx]);}
   auditLog('تعديل تسمية جهة صرف',`من: ${oldName} إلى: ${newName} | عدد المصاريف: ${affected.length}`);
   S.expEntityRenameTarget='';
   showToast('تم تحديث التسمية في '+affected.length+' مصروف','success');
@@ -3661,14 +3695,24 @@ function viewAdmin(){
   FACTORIES=DB.get('factories',["الذهب الأسود","عطاء الذهب الأسود","معمل الفهد","معمل الوطنية","روعة المشرق"]);
   const factRows=FACTORIES.map((f,i)=>`<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900">${f}</td><td class="td"><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="deleteFactory('${f}')">حذف</button></td></tr>`).join('');
   const userRows=Object.entries(users).map(([k,u])=>`<tr><td class="td" style="color:#94a3b8;font-size:11px">${k}</td><td class="td">${u.email||''}</td><td class="td"><span class="badge" style="background:${u.role==='manager'?'#eff6ff':'#f0fdf4'};color:${u.role==='manager'?'#2563eb':'#059669'}">${u.role==='manager'?'مدير':'محاسب'}</span></td><td class="td">${u.factory||'الكل'}</td><td class="td">${k!==ADMIN_UID?`<button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteUser('${k}')">حذف</button>`:''}</td></tr>`).join('');
-  const allExpEntities=[...new Set(DB.get('expenses',[]).map(e=>e.factory||'').filter(f=>f))].sort();
+  const predefEntities=DB.get('expense_entities',[]);
+  const predefNames=predefEntities.map(e=>e.name);
+  const dynExpNames=DB.get('expenses',[]).map(e=>e.factory||'').filter(f=>f);
+  const allExpEntities=[...new Set([...predefNames,...dynExpNames])].sort();
   const renameTarget=S.expEntityRenameTarget||'';
   const expEntityRows=allExpEntities.map((f,i)=>{
     const cnt=DB.get('expenses',[]).filter(e=>e.factory===f).length;
+    const predef=predefEntities.find(e=>e.name===f);
+    const factAssocCell=predef
+      ?`<td class="td"><span class="badge" style="background:#eff6ff;color:#2563eb;font-size:10px">${esc(predef.factory_assoc)}</span></td>`
+      :`<td class="td" style="color:#94a3b8;font-size:10px">—</td>`;
     if(renameTarget===f){
-      return `<tr style="background:#eff6ff"><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" colspan="2"><input class="inp" id="rename_entity_inp" value="${esc(f)}" style="font-size:12px"></td><td class="td" style="white-space:nowrap"><button class="btn btn-blue" style="padding:3px 10px;font-size:11px;margin-left:4px" onclick="saveRenameExpenseEntity('${f}')">💾 حفظ</button><button class="btn btn-gray" style="padding:3px 10px;font-size:11px" onclick="cancelRenameExpenseEntity()">إلغاء</button></td></tr>`;
+      return `<tr style="background:#eff6ff"><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" colspan="2"><input class="inp" id="rename_entity_inp" value="${esc(f)}" style="font-size:12px"></td>${factAssocCell}<td class="td" style="white-space:nowrap"><button class="btn btn-blue" style="padding:3px 10px;font-size:11px;margin-left:4px" onclick="saveRenameExpenseEntity('${f}')">💾 حفظ</button><button class="btn btn-gray" style="padding:3px 10px;font-size:11px" onclick="cancelRenameExpenseEntity()">إلغاء</button></td></tr>`;
     }
-    return `<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900">${esc(f)}</td><td class="td" style="color:#64748b;font-size:11px">${cnt} مصروف</td><td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 10px;font-size:11px;margin-left:4px" onclick="startRenameExpenseEntity('${f}')">✏️ تعديل التسمية</button><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="clearFactoryExpenses('${f}')">🗑️ حذف</button></td></tr>`;
+    const actionBtns=cnt===0&&predef
+      ?`<button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="deleteExpenseEntityPredef('${predef.id}')">🗑️ حذف</button>`
+      :`<button class="btn btn-gray" style="padding:3px 10px;font-size:11px;margin-left:4px" onclick="startRenameExpenseEntity('${f}')">✏️ تعديل التسمية</button><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="clearFactoryExpenses('${f}')">🗑️ حذف</button>`;
+    return `<tr><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900">${esc(f)}</td><td class="td" style="color:#64748b;font-size:11px">${cnt} مصروف</td>${factAssocCell}<td class="td" style="white-space:nowrap">${actionBtns}</td></tr>`;
   }).join('');
   return`<div style="max-width:900px">
   <div class="card" style="margin-bottom:14px;border:2px solid #2563eb">
@@ -3694,7 +3738,7 @@ function viewAdmin(){
       <button class="btn" style="background:#f59e0b;color:#fff;font-weight:900;padding:10px 22px;font-size:12px" onclick="migrateExpensesToHaidar()">🚀 تنفيذ الترحيل</button>
     </div>
   </div>`:''}
-  <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px"><div style="padding:12px 16px;background:#7f1d1d;font-weight:900;font-size:13px;color:#fecaca">🧾 إدارة جهات الصرف (المصاريف)</div><div style="padding:10px 16px;background:#fef2f2;font-size:11px;font-weight:700;color:#7f1d1d;border-bottom:1px solid #fecaca">القائمة مبنية تلقائياً من المصاريف المسجَّلة. الإضافة تتم بكتابة اسم جديد عند تسجيل مصروف من صفحة المصاريف. تعديل التسمية هنا يُحدِّث الاسم في كل المصاريف القديمة لهذه الجهة، والحذف يمسح كل مصاريفها نهائياً.</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">ت</th><th class="th">اسم الجهة</th><th class="th">عدد المصاريف</th><th class="th">إجراءات</th></tr></thead><tbody>${expEntityRows||'<tr><td colspan="4" class="td" style="padding:16px;color:#94a3b8">لا توجد جهات صرف مسجَّلة بعد</td></tr>'}</tbody></table></div></div>
+  <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px"><div style="padding:12px 16px;background:#7f1d1d;font-weight:900;font-size:13px;color:#fecaca">🧾 إدارة جهات الصرف (المصاريف)</div><div style="padding:14px 16px;background:#fef9f9;border-bottom:1px solid #fecaca"><h4 style="font-size:12px;font-weight:900;color:#7f1d1d;margin:0 0 10px">➕ إضافة جهة صرف جديدة</h4><div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><div style="flex:1;min-width:160px"><label class="lbl">اسم الجهة *</label><input class="inp" id="new_exp_entity_name" placeholder="مثال: شركة الوقود الوطنية..." style="font-size:12px"></div><div style="min-width:160px"><label class="lbl">المعمل المرتبط</label><select class="inp" id="new_exp_entity_factory" style="font-size:12px"><option value="الكل">الكل</option>${FACTORIES.map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join('')}</select></div><button class="btn btn-red" style="padding:9px 22px;font-size:12px;white-space:nowrap;align-self:flex-end" onclick="addExpenseEntity()">إضافة</button></div></div><div style="padding:8px 16px;background:#fef2f2;font-size:11px;font-weight:700;color:#7f1d1d;border-bottom:1px solid #fecaca">تعديل التسمية يُحدِّث الاسم في كل المصاريف القديمة. حذف جهة بدون مصاريف يزيلها من القائمة فقط. حذف جهة بها مصاريف يمسح كل مصاريفها نهائياً.</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">ت</th><th class="th">اسم الجهة</th><th class="th">عدد المصاريف</th><th class="th">المعمل</th><th class="th">إجراءات</th></tr></thead><tbody>${expEntityRows||'<tr><td colspan="5" class="td" style="padding:16px;color:#94a3b8">لا توجد جهات صرف بعد — أضف من النموذج أعلاه</td></tr>'}</tbody></table></div></div>
   <div class="card" style="margin-bottom:14px">
     <h3 style="font-size:14px;font-weight:900;margin-bottom:14px;color:#0f172a">إضافة مستخدم جديد</h3>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><div><label class="lbl">البريد الإلكتروني *</label><input class="inp" id="new_email" placeholder="user@example.com"></div><div><label class="lbl">كلمة السر *</label><input class="inp" id="new_pass" type="password" placeholder="Password123"></div><div><label class="lbl">الدور *</label><select class="inp" id="new_role"><option value="accountant">محاسب</option><option value="manager">مدير</option></select></div><div style="grid-column:span 3"><label class="lbl">المعمل المسؤول عنه *</label><select class="inp" id="new_factory_sel"><option value="الكل">الكل</option>${FACTORIES.map(f=>`<option value="${f}">${f}</option>`).join('')}</select></div></div><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-blue" onclick="addUser()">إضافة المستخدم</button></div><div id="user-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>

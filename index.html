@@ -493,6 +493,7 @@ function renderContent() {
   else if(v==='expenses')      c.innerHTML = viewExpenses();
   else if(v==='expenses_summary') c.innerHTML = viewExpensesSummary();
   else if(v==='exp_dup_review') c.innerHTML = viewExpDupReview();
+  else if(v==='exp_fixdates_review') c.innerHTML = viewExpFixDatesReview();
   else if(v==='kroob')         c.innerHTML = viewKroob();
   else if(v==='kroob_statement') c.innerHTML = viewKroobStatement();
   else if(v==='import_p')      c.innerHTML = viewImport('purchases');
@@ -1457,6 +1458,74 @@ async function confirmDeleteDupReview(){
   }catch(err){showToast('✅ تم الحذف محلياً | ⚠️ فشل الحذف من السحابة','warning',5000);}
 }
 
+// يرصد المصاريف ذات تاريخ نصي (مثل "شهر حزيران") بدل تاريخ ISO حقيقي، ويقترح تحويلها لأول يوم من الشهر المستنتج
+function computeTextDateExpenseCandidates(){
+  const expenses=DB.get('expenses',[]).filter(function(e){return e.date&&!/^\d{4}-\d{2}-\d{2}$/.test(e.date);});
+  const candidates=[];
+  expenses.forEach(function(e){
+    const ym=expDateToYM(e.date);
+    if(/^\d{4}-\d{2}$/.test(ym))candidates.push(Object.assign({},e,{newDate:ym+'-01'}));
+  });
+  return candidates;
+}
+function openFixTextDatesReview(){
+  const candidates=computeTextDateExpenseCandidates();
+  if(!candidates.length){alert('لا توجد مصاريف بتاريخ نصي يمكن تحويله تلقائياً');return;}
+  S.dateFixIds=new Set(candidates.map(function(e){return e.id;}));
+  S.view='exp_fixdates_review';
+  renderContent();
+}
+function viewExpFixDatesReview(){
+  const candidates=computeTextDateExpenseCandidates();
+  const selectedIds=S.dateFixIds||new Set(candidates.map(function(e){return e.id;}));
+  const rows=candidates.map(function(e,i){
+    const checked=selectedIds.has(e.id);
+    return`<tr style="background:${checked?'':'#f8fafc'}"><td class="td" style="text-align:center"><input type="checkbox" data-id="${e.id}" ${checked?'checked':''} onchange="toggleDateFixSelect('${e.id}',this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:#dc2626"></td><td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900;color:#7f1d1d;font-size:11px">${esc(e.factory||'')}</td><td class="td" style="color:#dc2626;font-weight:700">${esc(e.date||'')}</td><td class="td" style="color:#059669;font-weight:900">→ ${e.newDate}</td><td class="td" style="color:#ca8a04;font-weight:900">${fmtM(e.amount_dinar||0)}</td><td class="td" style="color:#0f172a;font-weight:900">${fmtM(e.amount_dollar||0)}</td><td class="td" style="font-size:11px;text-align:right">${esc(e.details||'')}</td></tr>`;
+  }).join('');
+  return`<div style="max-width:1000px">
+  <div class="card" style="margin-bottom:14px;border-right:5px solid #dc2626">
+    <h3 style="font-size:14px;font-weight:900;margin-bottom:8px;color:#7f1d1d">📅 مراجعة تحويل التواريخ النصية</h3>
+    <p style="font-size:12px;color:#64748b;margin-bottom:10px">هذه مصاريف حقيقية بتاريخ نصي (مثل "شهر حزيران") بدل تاريخ حقيقي، لذلك تختفي من عرض الأشهر بمرور الوقت. سيتم تحويل كل تاريخ إلى أول يوم من الشهر المستنتج (كما هو موضح بعمود "التاريخ الجديد"). راجع القائمة جيداً — ألغِ تحديد أي سجل تريد استثناءه قبل التأكيد. لن يتحوّل إلا ما هو محدد ✅</p>
+    ${candidates.length?`<div style="margin-bottom:10px"><span style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:900;color:#dc2626">${selectedIds.size} من ${candidates.length} محدد للتحويل</span></div>`:''}
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-red" style="padding:9px 22px" onclick="confirmFixTextDates()">✅ تحويل المحدد</button>
+      <button class="btn btn-gray" style="padding:9px 22px" onclick="S.view='expenses';renderContent()">إلغاء والعودة</button>
+    </div>
+  </div>
+  <div class="card" style="overflow:hidden;padding:0"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:700px"><thead><tr><th class="th" style="background:#7f1d1d;width:32px"></th><th class="th" style="background:#7f1d1d">ت</th><th class="th" style="background:#7f1d1d">الجهة</th><th class="th" style="background:#7f1d1d">التاريخ الحالي</th><th class="th" style="background:#7f1d1d">التاريخ الجديد</th><th class="th" style="background:#7f1d1d">💛 دينار</th><th class="th" style="background:#7f1d1d">🖤 دولار</th><th class="th" style="background:#7f1d1d">التفاصيل</th></tr></thead><tbody>${rows||`<tr><td colspan="8" class="td" style="padding:24px;color:#94a3b8">لا توجد سجلات مرشّحة</td></tr>`}</tbody></table></div></div></div>`;
+}
+function toggleDateFixSelect(id,checked){
+  if(!S.dateFixIds)S.dateFixIds=new Set();
+  if(checked)S.dateFixIds.add(id);else S.dateFixIds.delete(id);
+  renderContent();
+}
+async function confirmFixTextDates(){
+  const candidates=computeTextDateExpenseCandidates();
+  const selectedIds=S.dateFixIds||new Set(candidates.map(function(e){return e.id;}));
+  const toFix=candidates.filter(function(e){return selectedIds.has(e.id);});
+  if(!toFix.length){alert('لم تحدد أي سجل للتحويل');return;}
+  if(!confirm('تحويل تاريخ '+toFix.length+' مصروف إلى تاريخ ISO صحيح؟'))return;
+  const expenses=DB.get('expenses',[]);
+  const changes=[];
+  toFix.forEach(function(fx){
+    const idx=expenses.findIndex(function(e){return e.id===fx.id;});
+    if(idx>-1){
+      const oldDate=expenses[idx].date;
+      expenses[idx]=Object.assign({},expenses[idx],{date:fx.newDate});
+      changes.push({id:fx.id,oldDate:oldDate,newDate:fx.newDate,entry:expenses[idx]});
+    }
+  });
+  DB.set('expenses',expenses);
+  auditLog('تحويل تواريخ نصية لمصاريف','عدد: '+changes.length+' | مثال: '+changes.slice(0,5).map(function(c){return c.oldDate+'←'+c.newDate;}).join('، ')+(changes.length>5?' ...':''));
+  S.view='expenses';S.dateFixIds=null;
+  renderContent();
+  showToast('⏳ جاري الحفظ في السحابة...','info',3000);
+  try{
+    await Promise.all(changes.map(function(c){return FDB.save('expenses',c.id,c.entry);}));
+    showToast('✅ تم تحويل '+changes.length+' تاريخ بنجاح','success',5000);
+  }catch(err){showToast('✅ تم التحويل محلياً | ⚠️ فشل الحفظ بالسحابة','warning',5000);}
+}
+
 function viewExpenses(){
   const selF=S.expFactory||'',editId=S.expEditId||'';
   const editData=editId?getExpenseList(selF).find(e=>e.id===editId):null;
@@ -1508,7 +1577,7 @@ function viewExpenses(){
   ${(()=>{if(!selMonth)return'';const outside=fullList.filter(e=>!expDateMatchesMonth(e.date,selMonth)&&!expDateMatchesMonth(e.date,curMonth));if(!outside.length)return'';const outD=outside.reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);return`<div style="background:#fff7ed;border:2px solid #f97316;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:20px">⚠️</span><div style="flex:1"><div style="font-size:13px;font-weight:900;color:#c2410c">يوجد ${outside.length} سجل مخفي (${fmtM(outD)} د.ع) — لا ينتمي لا لـ${monthLabel} ولا لحزيران</div><div style="font-size:11px;color:#92400e;margin-top:2px">هذه السجلات تُسبب ارتفاع المتبقي الكلي — ${hiddenOnly?'يمكنك الآن تحديدها وحذفها':'اضغط لعرضها وحذفها'}</div></div>${hiddenOnly?`<button onclick="S.expHiddenOnly=false;renderContent()" class="btn btn-gray" style="font-size:11px;padding:6px 14px">✕ إلغاء</button>`:`<button onclick="S.expHiddenOnly=true;renderContent()" class="btn" style="font-size:11px;padding:6px 14px;background:#f97316;color:#fff;font-weight:900">🔍 عرض الخفية فقط</button>`}</div>`;})()}
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px"><div class="card" style="text-align:center;border-top:4px solid #dc2626"><div style="font-size:10px;color:#64748b">عدد المصاريف</div><div style="font-size:22px;font-weight:900;color:#dc2626">${list.length}</div></div><div class="card" style="text-align:center;border-top:4px solid #ca8a04;background:#fffbeb"><div style="font-size:10px;color:#92400e;font-weight:700">💛 إجمالي الدينار</div><div style="font-size:16px;font-weight:900;color:#ca8a04">${fmtM(totalD)}</div></div><div class="card" style="text-align:center;border-top:4px solid #0f172a;background:#f8fafc"><div style="font-size:10px;color:#0f172a;font-weight:700">🖤 إجمالي الدولار</div><div style="font-size:16px;font-weight:900;color:#0f172a">${fmtM(totalDol)}</div></div></div>
   <div class="card" style="margin-bottom:14px;border-right:5px solid #dc2626"><h3 style="font-size:13px;font-weight:900;margin-bottom:14px;color:#7f1d1d">${editId?'✏️ تعديل':'➕ إضافة'} مصروف</h3><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px"><div><label class="lbl">التاريخ *</label><input class="inp" id="exp_date" type="date" value="${editData?editData.date:today()}"></div>${factoryHtml}<div><label class="lbl">💛 مبلغ دينار</label><input class="inp" id="exp_dinar" type="number" placeholder="0" value="${editData?editData.amount_dinar||'':''}"></div><div><label class="lbl">🖤 مبلغ دولار</label><input class="inp" id="exp_dollar" type="number" placeholder="0" value="${editData?editData.amount_dollar||'':''}"></div><div style="grid-column:span 2"><label class="lbl">التفاصيل *</label><input class="inp" id="exp_details" placeholder="تفاصيل المصروف..." value="${editData?editData.details||'':''}"></div><div style="grid-column:span 2"><label class="lbl">👤 الشخص (اختياري — فارغ = مصروف عام)</label><input class="inp" id="exp_person" list="exp_person_list" placeholder="مثال: حيدر صبري" value="${editData?editData.person||'':''}"></div></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">${editId?`<button class="btn btn-gray" onclick="S.expEditId='';renderContent()">إلغاء</button>`:''}<button class="btn btn-red" style="padding:10px 28px" onclick="saveExpense()">💾 حفظ</button></div><div id="exp-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div></div>
-  <div class="card" style="margin-bottom:12px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><label style="font-size:12px;font-weight:900;color:#334155;white-space:nowrap">🔍 عرض مصاريف الجهة:</label><select class="inp" style="width:220px;font-size:12px" onchange="S.expFactory=this.value;S.expEditId='';renderContent()"><option value="" ${!selF?'selected':''}>الكل</option>${entityOpts}</select><span style="font-size:12px;font-weight:700;color:#64748b">${list.length} مصروف</span><input class="inp" id="exp_search_inp" placeholder="🔍 بحث في البيان، الشخص، المبلغ..." value="${esc(S.expSearch||'')}" oninput="setExpSearch(this.value,this.selectionStart)" style="min-width:180px;max-width:260px;font-size:12px">${expSearchTxt?`<button class="btn btn-gray" style="font-size:11px;padding:5px 10px" onclick="S.expSearch='';renderContent()">✕</button>`:''} ${selF?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="generateExpensesPDF('${selF}','${selMonth}')">📄 PDF الجهة</button>`:''}<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="generateExpensesPDF('','${selMonth}')">📄 PDF الكل</button><label class="btn btn-green" style="font-size:12px;padding:8px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-right:auto">📥 استيراد Excel (متعدد الشيتات)<input type="file" accept=".xlsx" style="display:none" onchange="importExpensesXLSX(this)"></label>${isManager()?`<button class="btn btn-gray" style="font-size:11px;padding:8px 14px" onclick="cleanupDuplicateExpenses()">🧹 تنظيف التكرارات</button>`:''}</div></div>
+  <div class="card" style="margin-bottom:12px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><label style="font-size:12px;font-weight:900;color:#334155;white-space:nowrap">🔍 عرض مصاريف الجهة:</label><select class="inp" style="width:220px;font-size:12px" onchange="S.expFactory=this.value;S.expEditId='';renderContent()"><option value="" ${!selF?'selected':''}>الكل</option>${entityOpts}</select><span style="font-size:12px;font-weight:700;color:#64748b">${list.length} مصروف</span><input class="inp" id="exp_search_inp" placeholder="🔍 بحث في البيان، الشخص، المبلغ..." value="${esc(S.expSearch||'')}" oninput="setExpSearch(this.value,this.selectionStart)" style="min-width:180px;max-width:260px;font-size:12px">${expSearchTxt?`<button class="btn btn-gray" style="font-size:11px;padding:5px 10px" onclick="S.expSearch='';renderContent()">✕</button>`:''} ${selF?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="generateExpensesPDF('${selF}','${selMonth}')">📄 PDF الجهة</button>`:''}<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="generateExpensesPDF('','${selMonth}')">📄 PDF الكل</button><label class="btn btn-green" style="font-size:12px;padding:8px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-right:auto">📥 استيراد Excel (متعدد الشيتات)<input type="file" accept=".xlsx" style="display:none" onchange="importExpensesXLSX(this)"></label>${isManager()?`<button class="btn btn-gray" style="font-size:11px;padding:8px 14px" onclick="cleanupDuplicateExpenses()">🧹 تنظيف التكرارات</button>`:''}${isManager()?`<button class="btn btn-gray" style="font-size:11px;padding:8px 14px" onclick="openFixTextDatesReview()">📅 تحويل التواريخ النصية</button>`:''}</div></div>
   <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">${_tabBtns}</div>
   <div class="card" style="overflow:hidden;padding:0"><div style="padding:12px 16px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><span style="font-weight:900;font-size:13px;color:#7f1d1d">${selF||'الكل'} <span class="badge" style="background:#fee2e2;color:#dc2626">${list.length} مصروف</span></span><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:900;color:#92400e">💛 ${fmtM(totalD)} د.ع</span><span style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:900;color:#0f172a">🖤 ${fmtM(totalDol)} $</span></div><div style="display:flex;gap:6px;flex-wrap:wrap">${canEdit('expenses')?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="deleteSelectedExpenses()">🗑️ حذف المحدد</button>`:''}${isManager()&&selF?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px;background:#7f1d1d" onclick="clearFactoryExpenses('${selF}')">⛔ مسح كل مصاريف ${selF}</button>`:''}<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="exportExpensesXLSX('${selF}','${selMonth}')">📊 Excel</button></div></div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:620px"><thead><tr>${canEdit('expenses')?'<th class="th" style="background:#7f1d1d;width:32px"><input type="checkbox" id="exp-chk-all" onchange="toggleSelectAllExp(this)" style="width:15px;height:15px;cursor:pointer;accent-color:#fca5a5" title="تحديد الكل"></th>':''}<th class="th" style="background:#7f1d1d">ت</th><th class="th" style="background:#7f1d1d">التاريخ</th><th class="th" style="background:#7f1d1d">الجهة</th><th class="th" style="background:#7f1d1d">الشخص</th><th class="th" style="background:#7f1d1d">💛 دينار</th><th class="th" style="background:#7f1d1d">🖤 دولار</th><th class="th" style="background:#7f1d1d">التفاصيل</th>${canEdit('expenses')?'<th class="th" style="background:#7f1d1d">الإجراء</th>':''}</tr></thead><tbody>${rows||`<tr><td colspan="${canEdit('expenses')?'8':'6'}" class="td" style="padding:24px;color:#94a3b8">لا توجد مصاريف</td></tr>`}${totalRow}</tbody></table></div></div></div>`;
 }
@@ -1610,6 +1679,11 @@ function importExpensesXLSX(input){
     };
     const skipKW=['مجموع','المجموع','الواصل','المتبقي','متبقي','واصل','اجمالي','الاجمالي','إجمالي','الإجمالي','جملة','الجملة','ملاحظة','تاريخ','البيان'];
     const normAr=s=>String(s||'').replace(/[أإآ]/g,'ا').trim();
+    // تطبيع اسم الشخص في عمود F إلى الاسم القياسي المستخدم في حقل person بجميع أنحاء النظام
+    const personMap={
+      'حيدر صبري':'حيدر صبري','حيدر':'حيدر صبري','صبري':'حيدر صبري',
+      'محمد خالد':'محمد خالد','خالد':'محمد خالد','محمد':'محمد خالد'
+    };
     const isSkip=(...cols)=>skipKW.some(kw=>cols.some(c=>normAr(c).includes(normAr(kw))));
     let expenses=DB.get('expenses',[]);
     let imported=0,skippedDup=0;
@@ -1630,6 +1704,8 @@ function importExpensesXLSX(input){
         var col2=String(row[2]||'').replace(/,/g,'').trim();
         var col3=String(row[3]||'').replace(/,/g,'').trim();
         var col4=String(row[4]||'').trim();
+        var col5=normAr(String(row[5]||'')).trim();
+        var person=personMap[col5]||(col5?String(row[5]).trim():'');
 
         // استخراج التاريخ مع دعم Date Object من XLSX
         var col1raw=row[1];
@@ -1663,7 +1739,7 @@ function importExpensesXLSX(input){
         }
 
         var id='exp_xl_'+ts+'_'+r+'_'+Math.random().toString(36).slice(2,5);
-        var entry={id,factory,date:dateForRow,amount_dinar:dinar,amount_dollar:dollar,details:col4,accountant:currentUser?currentUser.email:'import',time:ts+r};
+        var entry={id,factory,date:dateForRow,amount_dinar:dinar,amount_dollar:dollar,details:col4,person,accountant:currentUser?currentUser.email:'import',time:ts+r};
         var dupKey=expDupKey(entry);
         importedCounts[dupKey]=(importedCounts[dupKey]||0)+1;
         // التاريخ الفارغ غير موثوق للمطابقة (قد يتطابق صدفة مع شهر آخر له نفس المبلغ والتفاصيل المتكررة)

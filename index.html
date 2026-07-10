@@ -123,6 +123,102 @@ const FDB = {
   }
 };
 
+// ===== رفع سكنر البوجر (base64 داخل Firestore — لا Storage، لا CORS) =====
+function isPdfFile(file){ return file.type==='application/pdf' || /\.pdf$/i.test(file.name||''); }
+function imageFileToCanvas(file, maxDim){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let {width, height} = img;
+      if (width > maxDim || height > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      resolve(canvas);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('فشل قراءة الصورة')); };
+    img.src = url;
+  });
+}
+async function pdfFileToCanvas(file, maxDim){
+  if (!window.pdfjsLib) throw new Error('PDF.js لم يُحمَّل بعد، أعد المحاولة');
+  if (!pdfjsLib.GlobalWorkerOptions.workerSrc)
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const arr = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: arr}).promise;
+  const page = await pdf.getPage(1);
+  const base = page.getViewport({scale: 1});
+  const scale = maxDim / Math.max(base.width, base.height);
+  const viewport = page.getViewport({scale});
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width; canvas.height = viewport.height;
+  await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
+  return canvas;
+}
+function canvasToCompressedDataUrl(canvas, startQuality, maxLen){
+  let q = startQuality, out = canvas.toDataURL('image/jpeg', q);
+  while (out.length > maxLen && q > 0.25) { q -= 0.1; out = canvas.toDataURL('image/jpeg', q); }
+  if (out.length > maxLen * 1.4) throw new Error('الملف كبير جداً حتى بعد الضغط');
+  return out;
+}
+async function compressFileToBase64(file, maxDim=1400, startQuality=0.6, maxLen=900000) {
+  const canvas = isPdfFile(file) ? await pdfFileToCanvas(file, maxDim) : await imageFileToCanvas(file, maxDim);
+  return canvasToCompressedDataUrl(canvas, startQuality, maxLen);
+}
+async function saveVoucherScan(file, entryId) {
+  const dataUrl = await compressFileToBase64(file);
+  await FDB.save('voucher_scans', entryId, {img: dataUrl});
+  return dataUrl;
+}
+const _scanCache = {};
+async function fetchVoucherScan(entryId) {
+  if (_scanCache[entryId]) return _scanCache[entryId];
+  if (!window._fbReady) throw new Error('Firebase غير جاهز');
+  const {db, doc, getDoc} = window._fb;
+  const snap = await getDoc(doc(db, 'voucher_scans', entryId));
+  if (!snap.exists()) throw new Error('لم يتم العثور على الصورة');
+  const img = snap.data().img;
+  _scanCache[entryId] = img;
+  return img;
+}
+
+// ===== سكنر بوجري التحميل/التفريغ لصفحة المبيعات (نفس نمط المشتريات، وثيقة واحدة بحقلين) =====
+async function saveSaleScan(file, saleId, field) {
+  const dataUrl = await compressFileToBase64(file);
+  let existing = {};
+  try {
+    const {db, doc, getDoc} = window._fb;
+    const snap = await getDoc(doc(db, 'sale_scans', saleId));
+    if (snap.exists()) existing = snap.data();
+  } catch(e) {}
+  existing[field] = dataUrl;
+  await FDB.save('sale_scans', saleId, existing);
+  return dataUrl;
+}
+const _saleScanCache = {};
+async function fetchSaleScan(saleId, field) {
+  const cacheKey = saleId + '_' + field;
+  if (_saleScanCache[cacheKey]) return _saleScanCache[cacheKey];
+  if (!window._fbReady) throw new Error('Firebase غير جاهز');
+  const {db, doc, getDoc} = window._fb;
+  const snap = await getDoc(doc(db, 'sale_scans', saleId));
+  if (!snap.exists() || !snap.data()[field]) throw new Error('لم يتم العثور على الصورة');
+  const img = snap.data()[field];
+  _saleScanCache[cacheKey] = img;
+  return img;
+}
+async function viewSaleScan(saleId, field) {
+  showToast('جاري تحميل الصورة...','info',2000);
+  try{ const img=await fetchSaleScan(saleId, field); showScanModal(img); }
+  catch(err){ showToast('تعذر تحميل الصورة','error'); }
+}
+
 async function syncFromCloud(silent=false) {
   try {
     const [entries,sales,drivers,salaf] = await Promise.all([FDB.getAll('entries'),FDB.getAll('sales'),FDB.getAll('drivers'),FDB.getAll('salaf')]);
@@ -691,6 +787,11 @@ function viewForm(){
         <span style="font-size:12px;font-weight:900;color:#1e3a8a">إجمالي سعر المصفى:</span>
         <span id="f_tot" style="font-size:18px;font-weight:900;color:#2563eb">0 د.ع</span>
       </div>
+      <div style="grid-column:span 3;border-top:1px dashed #e2e8f0;padding-top:12px">
+        <label class="lbl">📎 صورة أو PDF سكنر البوجر الأصلي *</label>
+        <input class="inp" type="file" accept="image/*,application/pdf,.pdf" capture="environment" id="f_scan" onchange="handleScanSelect(this)" style="padding:7px">
+        <div id="f_scan_preview" style="margin-top:8px">${e.has_scan?`<div style="display:flex;align-items:center;gap:10px"><button type="button" class="btn btn-gray" style="font-size:11px;padding:6px 12px" onclick="viewVoucherScan('${e.id}')">🔍 عرض الصورة الحالية</button><span style="font-size:11px;color:#64748b">اختر ملفاً جديداً أدناه لاستبدالها</span></div>`:''}</div>
+      </div>
     </div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
       ${e.id?`<button class="btn btn-gray" onclick="go('table')">← الجدول</button>`:''}
@@ -698,6 +799,34 @@ function viewForm(){
     </div>
     <div id="form-msg" style="display:none;margin-top:10px;padding:10px;border-radius:8px;text-align:center;font-size:12px"></div>
   </div>`;
+}
+
+let pendingScanFile=null;
+function handleScanSelect(inp){
+  const file=inp.files&&inp.files[0];
+  pendingScanFile=file||null;
+  const prev=el('f_scan_preview');
+  if(!prev)return;
+  if(!file){prev.innerHTML='';return;}
+  if(isPdfFile(file)){
+    prev.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><div style="width:70px;height:70px;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:center;font-size:26px">📄</div><span style="font-size:11px;color:#059669;font-weight:700">✅ ${esc(file.name)} — سيتم تحويل الصفحة الأولى وضغطها عند الحفظ</span></div>`;
+    return;
+  }
+  const url=URL.createObjectURL(file);
+  prev.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><img src="${url}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0"><span style="font-size:11px;color:#059669;font-weight:700">✅ سيتم رفع هذه الصورة عند الحفظ</span></div>`;
+}
+function showScanModal(url){
+  const m=document.createElement('div');
+  m.id='scan-modal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;cursor:zoom-out';
+  m.onclick=()=>m.remove();
+  m.innerHTML=`<img src="${url}" style="max-width:95%;max-height:95%;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.5)"><button onclick="event.stopPropagation();document.getElementById('scan-modal').remove()" style="position:absolute;top:20px;left:20px;background:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:18px;cursor:pointer;font-weight:900">✕</button>`;
+  document.body.appendChild(m);
+}
+async function viewVoucherScan(entryId){
+  showToast('جاري تحميل الصورة...','info',2000);
+  try{ const img=await fetchVoucherScan(entryId); showScanModal(img); }
+  catch(err){ showToast('تعذر تحميل صورة البوجر','error'); }
 }
 
 function updateProduct(){const r=gv('f_ref'),pt=el('f_pt');if(pt)pt.value=r==='مصفى كربلاء'?'HFO':r==='مصفى صلاح الدين'?'VR':'';}
@@ -730,35 +859,10 @@ function validateQty(inp){
   }
 }
 
-function showDriversList(inputId,carId,locId){
-  const drivers=DB.get('drivers',{});
-  const list=Object.values(drivers);
-  if(!list.length)return;
-  const old=document.getElementById('drv-drop');if(old)old.remove();
-  const input=el(inputId);if(!input)return;
-  const rect=input.getBoundingClientRect();
-  const drop=document.createElement('div');
-  drop.id='drv-drop';
-  drop.style.cssText=`position:fixed;top:${rect.bottom+2}px;right:${window.innerWidth-rect.right}px;width:${rect.width}px;background:#fff;border:1.5px solid #bfdbfe;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:99999;max-height:220px;overflow-y:auto`;
-  const filter=(input.value||'').toLowerCase();
-  const filtered=filter?list.filter(d=>(d.name||'').toLowerCase().includes(filter)||(d.car_no||'').toLowerCase().includes(filter)):list;
-  filtered.forEach(d=>{
-    const item=document.createElement('div');
-    item.style.cssText='padding:9px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9';
-    item.innerHTML=`<div style="font-size:13px;font-weight:900;color:#0f172a">${d.name}</div><div style="font-size:10px;color:#64748b;margin-top:2px">🚗 ${d.car_no||'—'} | 📍 ${d.location||'—'}</div>`;
-    item.onmouseover=()=>item.style.background='#eff6ff';
-    item.onmouseout=()=>item.style.background='';
-    item.onmousedown=(ev)=>{ev.preventDefault();input.value=d.name;const c=el(carId),l=el(locId);if(c)c.value=d.car_no||'';if(l)l.value=d.location||'';drop.remove();};
-    drop.appendChild(item);
-  });
-  document.body.appendChild(drop);
-  input.oninput=()=>{drop.remove();showDriversList(inputId,carId,locId);};
-  input.onblur=()=>setTimeout(()=>{const d=document.getElementById('drv-drop');if(d)d.remove();},200);
-}
 function autoFillDriver(name){const d=DB.get('drivers',{});if(d[name]){const c=el('f_car'),l=el('f_loc');if(c)c.value=d[name].car_no||'';if(l)l.value=d[name].location||'';}}
 function autoFillSaleDriver(name){const d=DB.get('drivers',{});if(d[name]){const c=el('s_car'),l=el('s_loc');if(c)c.value=d[name].car_no||'';if(l)l.value=d[name].location||'';}}
 
-function saveEntry(){
+async function saveEntry(){
   const sf=S.selectedFactory,e=S.editEntry||{};
   const v=gv('f_voucher'),date=gv('f_date'),ref=gv('f_ref'),pt=gv('f_pt');
   const driver=gv('f_driver'),car=gv('f_car'),loc=gv('f_loc'),po=gv('f_po');
@@ -767,7 +871,19 @@ function saveEntry(){
   const dupVoucher=allEntries.find(x=>x.voucher_no==v&&x.id!==(e.id||''));
   if(dupVoucher){showToast('رقم البوجر '+v+' موجود مسبقاً!','error');return;}
   if(!v||!date||!ref||!driver||!car||!loc||!po||!liters){showToast('يرجى ملء جميع الحقول (*)','error');return;}
-  const entry={id:e.id||('e_'+Date.now()),voucher_no:v,refinery:ref,date,product_type:pt,driver_name:driver,car_no:car,location:loc,qty_tons:tons,natural_liters:liters,weight_kg:kg,po_no:po,price:150,transport_fee:42,refinery_price:150*liters,factory:sf,accountant:currentUser.email,time:Date.now()};
+  const hasScan0=e.has_scan||false;
+  if(!hasScan0&&!pendingScanFile){showToast('صورة أو PDF سكنر البوجر إلزامي','error');return;}
+  const entryId=e.id||('e_'+Date.now());
+  let hasScan=hasScan0;
+  if(pendingScanFile){
+    const btn=document.querySelector('button.btn-blue[onclick="saveEntry()"]');
+    if(btn){btn.disabled=true;btn.textContent='⏳ جاري حفظ الصورة...';}
+    try{ await saveVoucherScan(pendingScanFile,entryId); hasScan=true; }
+    catch(err){ console.warn('scan save error:',err); showToast('تعذر حفظ صورة البوجر، حاول مرة أخرى','error'); if(btn){btn.disabled=false;btn.textContent='💾 حفظ وتأكيد';} return; }
+    if(btn){btn.disabled=false;btn.textContent='💾 حفظ وتأكيد';}
+  }
+  pendingScanFile=null;
+  const entry={id:entryId,voucher_no:v,refinery:ref,date,product_type:pt,driver_name:driver,car_no:car,location:loc,qty_tons:tons,natural_liters:liters,weight_kg:kg,po_no:po,price:150,transport_fee:42,refinery_price:150*liters,factory:sf,has_scan:hasScan,accountant:currentUser.email,time:Date.now()};
   let entries=DB.get('entries',[]);
   if(e.id){const idx=entries.findIndex(x=>x.id===e.id);if(idx>=0)entries[idx]=entry;else entries.push(entry);}else entries.push(entry);
   DB.set('entries',entries);FDB.save('entries',entry.id,entry);
@@ -801,11 +917,23 @@ function viewSaleForm(){
       <div><label class="lbl">الكبان *</label><input class="inp" id="s_kaban" type="number" step="0.001" value="${e.kaban||''}" oninput="updateSaleTotal()"></div>
       <div><label class="lbl">كمية اللتر</label><input class="inp" id="s_liters" type="number" step="0.001" value="${e.qty_liters||''}"></div>
       <div><label class="lbl">أجرة سائق/طن</label><input class="inp" id="s_advance" type="number" step="0.001" value="${e.advance||''}"></div>
-      <div><label class="lbl">الواصل</label><input class="inp" id="s_received" type="number" step="0.001" value="${e.received||''}"></div>
+      <div><label class="lbl">الواصل</label><input class="inp" id="s_received" type="number" step="0.001" value="${e.received||''}" oninput="updateUnloadScanRequirement()"></div>
       <div><label class="lbl">مصدر السيارة</label><input class="inp" id="s_source" value="${e.car_source||''}"></div>
       <div><label class="lbl">سعر البيع/طن</label><input class="inp" id="s_price" type="number" step="0.001" value="${e.sale_price||''}" oninput="updateSaleTotal()"></div>
       <div><label class="lbl">إجمالي البيع</label><input class="inp" id="s_total" value="${fmtM((parseFloat(e.sale_price)||0)*(parseFloat(e.kaban)||0))}" disabled style="background:#f8fafc;color:#1e3a8a;font-weight:900"></div>
       <div><label class="lbl">مكافأة السائق</label><input class="inp" id="s_bonus" type="number" step="0.001" value="${e.driver_bonus||''}"></div>
+      <div style="grid-column:span 3;border-top:1px dashed #e9d5ff;padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <label class="lbl">📎 صورة/PDF بوجر التحميل *</label>
+          <input class="inp" type="file" accept="image/*,application/pdf,.pdf" capture="environment" id="s_scan_load" onchange="handleSaleScanSelect(this,'load')" style="padding:7px">
+          <div id="s_scan_load_preview" style="margin-top:8px">${e.has_load_scan?`<button type="button" class="btn btn-gray" style="font-size:11px;padding:6px 12px" onclick="viewSaleScan('${e.id}','img_load')">🔍 عرض الصورة الحالية</button>`:''}</div>
+        </div>
+        <div>
+          <label class="lbl" id="s_scan_unload_lbl">📎 صورة/PDF بوجر التفريغ ${(parseFloat(e.received)||0)>0?'*':'(عند وصول المنتوج)'}</label>
+          <input class="inp" type="file" accept="image/*,application/pdf,.pdf" capture="environment" id="s_scan_unload" onchange="handleSaleScanSelect(this,'unload')" style="padding:7px">
+          <div id="s_scan_unload_preview" style="margin-top:8px">${e.has_unload_scan?`<button type="button" class="btn btn-gray" style="font-size:11px;padding:6px 12px" onclick="viewSaleScan('${e.id}','img_unload')">🔍 عرض الصورة الحالية</button>`:''}</div>
+        </div>
+      </div>
     </div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
       ${e.id?`<button class="btn btn-gray" onclick="go('sale_table')">← الجدول</button>`:''}
@@ -819,7 +947,26 @@ function updateSaleTotal(){
   const kaban=parseFloat(el('s_kaban')?.value||0),price=parseFloat(el('s_price')?.value||0);
   const t=el('s_total');if(t)t.value=fmtM(price*kaban);
 }
-function saveSale(){
+function updateUnloadScanRequirement(){
+  const received=parseFloat(el('s_received')?.value||0);
+  const lbl=el('s_scan_unload_lbl');
+  if(lbl)lbl.textContent='📎 صورة/PDF بوجر التفريغ '+(received>0?'*':'(عند وصول المنتوج)');
+}
+let pendingLoadScanFile=null,pendingUnloadScanFile=null;
+function handleSaleScanSelect(inp,slot){
+  const file=inp.files&&inp.files[0];
+  if(slot==='load')pendingLoadScanFile=file||null;else pendingUnloadScanFile=file||null;
+  const prev=el(slot==='load'?'s_scan_load_preview':'s_scan_unload_preview');
+  if(!prev)return;
+  if(!file){prev.innerHTML='';return;}
+  if(isPdfFile(file)){
+    prev.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><div style="width:60px;height:60px;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:center;font-size:22px">📄</div><span style="font-size:11px;color:#059669;font-weight:700">✅ ${esc(file.name)}</span></div>`;
+    return;
+  }
+  const url=URL.createObjectURL(file);
+  prev.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><img src="${url}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0"><span style="font-size:11px;color:#059669;font-weight:700">✅ سيُحفظ عند الحفظ</span></div>`;
+}
+async function saveSale(){
   const sf=S.selectedFactory,e=S.editSale||{};
   const driver=gv('s_driver'),car=gv('s_car'),date=gv('s_date'),loc=gv('s_loc');
   const addr=gv('s_addr'),type=gv('s_type');
@@ -828,7 +975,25 @@ function saveSale(){
   const source=gv('s_source');
   const salePrice=parseFloat(el('s_price')?.value||0),saleTotal=salePrice*kaban,driverBonus=parseFloat(el('s_bonus')?.value||0);
   if(!driver||!car||!date||!kaban){showToast('يرجى ملء الحقول الإلزامية (*)','warning');return;}
-  const sale={id:e.id||('s_'+Date.now()),driver_name:driver,car_no:car,date,location:loc,address:addr,product_type:type,kaban,qty_liters:liters,advance,received,car_source:source,sale_price:salePrice,sale_total:saleTotal,driver_bonus:driverBonus,factory:sf,accountant:currentUser.email,time:Date.now()};
+  const hasLoadScan=e.has_load_scan||false,hasUnloadScan=e.has_unload_scan||false;
+  if(!hasLoadScan&&!pendingLoadScanFile){showToast('صورة بوجر التحميل إلزامية','error');return;}
+  if(received>0&&!hasUnloadScan&&!pendingUnloadScanFile){showToast('صورة بوجر التفريغ إلزامية عند إدخال الكمية الواصلة','error');return;}
+  const saleId=e.id||('s_'+Date.now());
+  const btn=document.querySelector('button.btn-purple[onclick="saveSale()"]');
+  let finalHasLoad=hasLoadScan,finalHasUnload=hasUnloadScan;
+  if(pendingLoadScanFile){
+    if(btn){btn.disabled=true;btn.textContent='⏳ جاري حفظ صورة التحميل...';}
+    try{ await saveSaleScan(pendingLoadScanFile,saleId,'img_load'); finalHasLoad=true; }
+    catch(err){ console.warn('load scan save error:',err); showToast('تعذر حفظ صورة بوجر التحميل، حاول مرة أخرى','error'); if(btn){btn.disabled=false;btn.textContent='💾 حفظ وتأكيد';} return; }
+  }
+  if(pendingUnloadScanFile){
+    if(btn){btn.disabled=true;btn.textContent='⏳ جاري حفظ صورة التفريغ...';}
+    try{ await saveSaleScan(pendingUnloadScanFile,saleId,'img_unload'); finalHasUnload=true; }
+    catch(err){ console.warn('unload scan save error:',err); showToast('تعذر حفظ صورة بوجر التفريغ، حاول مرة أخرى','error'); if(btn){btn.disabled=false;btn.textContent='💾 حفظ وتأكيد';} return; }
+  }
+  if(btn){btn.disabled=false;btn.textContent='💾 حفظ وتأكيد';}
+  pendingLoadScanFile=null;pendingUnloadScanFile=null;
+  const sale={id:saleId,driver_name:driver,car_no:car,date,location:loc,address:addr,product_type:type,kaban,qty_liters:liters,advance,received,car_source:source,sale_price:salePrice,sale_total:saleTotal,driver_bonus:driverBonus,factory:sf,has_load_scan:finalHasLoad,has_unload_scan:finalHasUnload,accountant:currentUser.email,time:Date.now()};
   let sales=DB.get('sales',[]);
   if(e.id){const idx=sales.findIndex(x=>x.id===e.id);if(idx>=0)sales[idx]=sale;else sales.push(sale);}else sales.push(sale);
   auditLog(e.id ? 'تعديل مبيعات' : 'إضافة مبيعات', `سائق: ${sale.driver_name} | ${sale.product_type} | ${sale.factory}`);
@@ -849,7 +1014,7 @@ function viewTable(){
   if(pDateFrom)list=list.filter(e=>e.date>=pDateFrom);
   if(pDateTo)list=list.filter(e=>e.date<=pDateTo);
   const rows=list.map((e,i)=>`<tr>
-    <td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900">${esc(e.voucher_no)}</td><td class="td">${esc(e.refinery)}</td>
+    <td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900">${esc(e.voucher_no)}${e.has_scan?` <button title="عرض صورة البوجر" onclick="viewVoucherScan('${e.id}')" style="border:none;background:none;cursor:pointer;font-size:12px">📷</button>`:''}</td><td class="td">${esc(e.refinery)}</td>
     <td class="td" style="color:#94a3b8;font-size:11px">${e.date}</td><td class="td" style="color:#2563eb;font-size:10px">${esc(e.product_type)}</td>
     <td class="td">${esc(e.driver_name)}</td><td class="td">${esc(e.car_no)}</td><td class="td" style="font-size:11px">${esc(e.location)}</td>
     <td class="td">${fmtTon(e.qty_tons)}</td><td class="td">${fmtLiter(e.natural_liters)}</td><td class="td">${fmtKg(e.weight_kg)}</td>
@@ -894,7 +1059,7 @@ function viewTable(){
   </div>`;
 }
 
-function editEntry(id){const e=DB.get('entries',[]);S.editEntry=e.find(x=>x.id===id)||null;S.view='form';render();}
+function editEntry(id){const e=DB.get('entries',[]);S.editEntry=e.find(x=>x.id===id)||null;S.view='form';pendingScanFile=null;render();}
 function deleteEntry(id){if(!confirm('حذف هذا السجل؟'))return;const entry=DB.get('entries',[]).find(x=>x.id===id);auditLog('حذف مشتريات',`بوجر: ${entry?.voucher_no||id} | ${entry?.factory||''}`);let e=DB.get('entries',[]);DB.set('entries',e.filter(x=>x.id!==id));FDB.delete('entries',id);renderContent();}
 
 // ===== سجل المبيعات =====
@@ -908,7 +1073,7 @@ function viewSaleTable(){
   if(sDateTo)list=list.filter(e=>e.date<=sDateTo);
   const totKaban=list.reduce((s,e)=>s+parseFloat(e.kaban||0),0);
   const rows=list.map((e,i)=>`<tr>
-    <td class="td-p" style="color:#94a3b8">${i+1}</td><td class="td-p">${esc(e.driver_name)}</td><td class="td-p">${esc(e.car_no)}</td>
+    <td class="td-p" style="color:#94a3b8">${i+1}</td><td class="td-p">${esc(e.driver_name)}${e.has_load_scan?` <button title="عرض بوجر التحميل" onclick="viewSaleScan('${e.id}','img_load')" style="border:none;background:none;cursor:pointer;font-size:11px">🚚📷</button>`:''}${e.has_unload_scan?` <button title="عرض بوجر التفريغ" onclick="viewSaleScan('${e.id}','img_unload')" style="border:none;background:none;cursor:pointer;font-size:11px">📥📷</button>`:''}</td><td class="td-p">${esc(e.car_no)}</td>
     <td class="td-p" style="color:#94a3b8;font-size:11px">${e.date}</td><td class="td-p" style="font-size:11px">${esc(e.location)}</td>
     <td class="td-p" style="font-size:11px">${esc(e.address||'')}</td><td class="td-p" style="color:#7c3aed;font-weight:900">${esc(e.product_type)}</td>
     <td class="td-p" style="color:#7c3aed;font-weight:900">${fmtKaban(e.kaban)}</td><td class="td-p">${fmt(e.qty_liters||0)}</td>
@@ -954,7 +1119,7 @@ function viewSaleTable(){
     </table></div>
   </div>`;
 }
-function editSale(id){const s=DB.get('sales',[]);S.editSale=s.find(x=>x.id===id)||null;S.view='sale_form';render();}
+function editSale(id){const s=DB.get('sales',[]);S.editSale=s.find(x=>x.id===id)||null;S.view='sale_form';pendingLoadScanFile=null;pendingUnloadScanFile=null;render();}
 function deleteSale(id){if(!confirm('حذف هذه العملية؟'))return;const sale=DB.get('sales',[]).find(x=>x.id===id);auditLog('حذف مبيعات',`سائق: ${sale?.driver_name||id} | ${sale?.factory||''}`);let s=DB.get('sales',[]);DB.set('sales',s.filter(x=>x.id!==id));FDB.delete('sales',id);renderContent();}
 
 // ===== التقارير والطباعة =====
@@ -4312,7 +4477,7 @@ function applyEnterNav(){
 }
 
 // ===== انتقال الصفحات =====
-function go(view){S.view=view;S.editEntry=null;S.editSale=null;render();}
+function go(view){S.view=view;S.editEntry=null;S.editSale=null;pendingScanFile=null;pendingLoadScanFile=null;pendingUnloadScanFile=null;render();}
 function setFactory(f){S.selectedFactory=f;renderContent();}
 function toggleMobileMenu(){const aside=document.querySelector('aside'),overlay=document.getElementById('mobile-overlay');if(aside){aside.classList.toggle('open');}if(overlay){overlay.classList.toggle('show');}}
 

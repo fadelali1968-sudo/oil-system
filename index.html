@@ -125,6 +125,211 @@ const FDB = {
 
 // ===== رفع سكنر البوجر (base64 داخل Firestore — لا Storage، لا CORS) =====
 function isPdfFile(file){ return file.type==='application/pdf' || /\.pdf$/i.test(file.name||''); }
+async function ensurePdfJs(){
+  if(!window.pdfjsLib) throw new Error('PDF.js لم يُحمَّل بعد');
+  if(!pdfjsLib.GlobalWorkerOptions.workerSrc) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+function canvasToJpegFile(canvas, name, quality=0.9){
+  return new Promise(resolve=>canvas.toBlob(blob=>resolve(new File([blob], name, {type:'image/jpeg'})), 'image/jpeg', quality));
+}
+
+// ===== أداة اختيار صفحة من PDF متعدد الصفحات (ملف واحد يحتوي عدة مستندات مسحوبة دفعة واحدة) =====
+function showPdfPagePickerModal(file, pdf, onConfirm){
+  let curPage=1; const total=pdf.numPages;
+  const modal=document.createElement('div');
+  modal.id='doc-picker-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML=`<div style="background:#fff;border-radius:14px;padding:18px;max-width:520px;width:100%;text-align:center">
+    <div style="font-weight:900;font-size:13px;margin-bottom:4px;color:#1e3a8a">📄 هذا الملف يحتوي ${total} صفحات</div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:10px">اختر الصفحة الخاصة بهذا القيد تحديداً (رقم البوجر المطبوع على الصفحة يساعدك على التأكد)</div>
+    <canvas id="dp-canvas" style="max-width:100%;border:1px solid #e2e8f0;border-radius:8px"></canvas>
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:10px">
+      <button type="button" id="dp-prev" class="btn btn-gray" style="padding:6px 14px">◀ السابقة</button>
+      <span id="dp-counter" style="font-weight:900;font-size:12px;min-width:90px">صفحة 1 من ${total}</span>
+      <button type="button" id="dp-next" class="btn btn-gray" style="padding:6px 14px">التالية ▶</button>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
+      <button type="button" id="dp-cancel" class="btn btn-gray" style="padding:8px 18px">إلغاء</button>
+      <button type="button" id="dp-use" class="btn btn-blue" style="padding:8px 18px">✅ استخدم هذه الصفحة</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  const canvas=modal.querySelector('#dp-canvas');
+  const prevBtn=modal.querySelector('#dp-prev'), nextBtn=modal.querySelector('#dp-next'), useBtn=modal.querySelector('#dp-use'), cancelBtn=modal.querySelector('#dp-cancel'), counterEl=modal.querySelector('#dp-counter');
+  let renderToken=0, renderTask=null;
+  async function renderPreview(n){
+    const myToken=++renderToken;
+    prevBtn.disabled=true; nextBtn.disabled=true; useBtn.disabled=true;
+    counterEl.textContent='⏳ جاري تحميل الصفحة...';
+    try{
+      if(renderTask){ try{ renderTask.cancel(); }catch(e){} }
+      const page=await pdf.getPage(n);
+      if(myToken!==renderToken) return;
+      const base=page.getViewport({scale:1});
+      const scale=Math.min(900/base.width, 900/base.height);
+      const viewport=page.getViewport({scale});
+      canvas.width=viewport.width; canvas.height=viewport.height;
+      renderTask=page.render({canvasContext:canvas.getContext('2d'), viewport});
+      await renderTask.promise;
+      renderTask=null;
+      if(myToken!==renderToken) return;
+      counterEl.textContent=`صفحة ${n} من ${total}`;
+    }catch(err){
+      console.warn('pdf page render failed:', err);
+      if(myToken===renderToken) counterEl.textContent='⚠️ تعذر عرض هذه الصفحة، جرّب مرة أخرى';
+    }finally{
+      if(myToken===renderToken){ prevBtn.disabled=false; nextBtn.disabled=false; useBtn.disabled=false; }
+    }
+  }
+  renderPreview(curPage);
+  prevBtn.onclick=()=>{ if(curPage>1 && !prevBtn.disabled){curPage--;renderPreview(curPage);} };
+  nextBtn.onclick=()=>{ if(curPage<total && !nextBtn.disabled){curPage++;renderPreview(curPage);} };
+  cancelBtn.onclick=()=>modal.remove();
+  useBtn.onclick=async()=>{
+    prevBtn.disabled=true; nextBtn.disabled=true; cancelBtn.disabled=true;
+    useBtn.disabled=true; useBtn.textContent='⏳ ...';
+    try{
+      const page=await pdf.getPage(curPage);
+      const base=page.getViewport({scale:1});
+      const scale=Math.min(1600/base.width, 1600/base.height);
+      const viewport=page.getViewport({scale});
+      const outCanvas=document.createElement('canvas');
+      outCanvas.width=viewport.width; outCanvas.height=viewport.height;
+      await page.render({canvasContext:outCanvas.getContext('2d'), viewport}).promise;
+      const outFile=await canvasToJpegFile(outCanvas, (file.name||'scan').replace(/\.pdf$/i,'')+'_p'+curPage+'.jpg');
+      modal.remove();
+      onConfirm(outFile);
+    }catch(err){
+      console.warn('pdf page export failed:', err);
+      counterEl.textContent='⚠️ تعذر استخراج هذه الصفحة، جرّب مرة أخرى';
+      prevBtn.disabled=false; nextBtn.disabled=false; cancelBtn.disabled=false;
+      useBtn.disabled=false; useBtn.textContent='✅ استخدم هذه الصفحة';
+    }
+  };
+}
+
+// ===== أداة قص جزء من صورة واحدة تحتوي عدة مستندات جنب بعض =====
+function showImageCropModal(file, onConfirm){
+  const modal=document.createElement('div');
+  modal.id='crop-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML=`<div style="background:#fff;border-radius:14px;padding:18px;max-width:600px;width:100%;text-align:center">
+    <div style="font-weight:900;font-size:13px;margin-bottom:4px;color:#1e3a8a">✂️ حدّد بالسحب جزء الصورة الخاص بهذا القيد فقط</div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:10px">اسحب مربعاً حول المستند المطلوب، ثم اضغط "تم القص"</div>
+    <div id="crop-wrap" style="position:relative;display:inline-block;max-width:100%;cursor:crosshair;touch-action:none">
+      <canvas id="crop-canvas" style="max-width:100%;display:block;border:1px solid #e2e8f0;border-radius:8px"></canvas>
+      <div id="crop-rect" style="position:absolute;border:2px dashed #2563eb;background:rgba(37,99,235,.15);display:none;pointer-events:none"></div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
+      <button type="button" id="crop-cancel" class="btn btn-gray" style="padding:8px 18px">إلغاء</button>
+      <button type="button" id="crop-use" class="btn btn-blue" style="padding:8px 18px" disabled>✅ تم القص</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  const canvas=modal.querySelector('#crop-canvas');
+  const rectEl=modal.querySelector('#crop-rect');
+  const useBtn=modal.querySelector('#crop-use');
+  const img=new Image();
+  const url=URL.createObjectURL(file);
+  let dispScale=1, dragging=false, startX=0, startY=0, curRect=null;
+  img.onload=()=>{
+    const maxW=560;
+    dispScale=Math.min(1, maxW/img.width);
+    canvas.width=img.width*dispScale; canvas.height=img.height*dispScale;
+    canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+    URL.revokeObjectURL(url);
+  };
+  img.src=url;
+  function getPos(ev){
+    const r=canvas.getBoundingClientRect();
+    const clientX=ev.touches?ev.touches[0].clientX:ev.clientX;
+    const clientY=ev.touches?ev.touches[0].clientY:ev.clientY;
+    return {x:clientX-r.left, y:clientY-r.top};
+  }
+  function updateRect(x,y,w,h){ curRect={x,y,w,h}; rectEl.style.left=x+'px'; rectEl.style.top=y+'px'; rectEl.style.width=w+'px'; rectEl.style.height=h+'px'; }
+  function onDown(ev){ ev.preventDefault(); const p=getPos(ev); dragging=true; startX=p.x; startY=p.y; rectEl.style.display='block'; updateRect(p.x,p.y,0,0); }
+  function onMove(ev){ if(!dragging)return; ev.preventDefault(); const p=getPos(ev); const x=Math.min(startX,p.x),y=Math.min(startY,p.y); updateRect(x,y,Math.abs(p.x-startX),Math.abs(p.y-startY)); }
+  function onUp(){ if(!dragging)return; dragging=false; useBtn.disabled = !curRect || curRect.w<10 || curRect.h<10; }
+  function cleanup(){ window.removeEventListener('mouseup',onUp); window.removeEventListener('touchend',onUp); }
+  canvas.addEventListener('mousedown',onDown); canvas.addEventListener('mousemove',onMove); window.addEventListener('mouseup',onUp);
+  canvas.addEventListener('touchstart',onDown,{passive:false}); canvas.addEventListener('touchmove',onMove,{passive:false}); window.addEventListener('touchend',onUp);
+  modal.querySelector('#crop-cancel').onclick=()=>{ cleanup(); modal.remove(); };
+  useBtn.onclick=async()=>{
+    if(!curRect) return;
+    const sx=curRect.x/dispScale, sy=curRect.y/dispScale, sw=curRect.w/dispScale, sh=curRect.h/dispScale;
+    const outCanvas=document.createElement('canvas');
+    outCanvas.width=sw; outCanvas.height=sh;
+    outCanvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    const outFile=await canvasToJpegFile(outCanvas, (file.name||'scan').replace(/\.[a-z0-9]+$/i,'')+'_crop.jpg');
+    cleanup(); modal.remove();
+    onConfirm(outFile);
+  };
+}
+
+// ===== نقطة دخول موحّدة: تعالج ملف سكنر واحد (صورة أو PDF)، وتفتح تلقائياً منتقي الصفحة/أداة القص عند الحاجة =====
+const _cropSlots={}, _cropSlotHandlers={};
+function renderPendingImagePreview(file, previewEl, cropSlotKey, isExtracted){
+  if(!previewEl) return;
+  _cropSlots[cropSlotKey]=file;
+  const url=URL.createObjectURL(file);
+  const note=isExtracted?'✅ تم استخراج الجزء المحدد، سيُحفظ عند الحفظ':'✅ سيتم رفع هذه الصورة عند الحفظ';
+  previewEl.innerHTML=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <img src="${url}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0">
+    <span style="font-size:11px;color:#059669;font-weight:700">${note}</span>
+    <button type="button" onclick="startCropForSlot('${cropSlotKey}')" style="border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer;color:#475569">✂️ الصورة فيها أكثر من مستند؟ قص</button>
+  </div>`;
+}
+function startCropForSlot(cropSlotKey){
+  const file=_cropSlots[cropSlotKey];
+  const handlers=_cropSlotHandlers[cropSlotKey];
+  if(!file || !handlers) return;
+  showImageCropModal(file, (croppedFile)=>{
+    handlers.setPending(croppedFile);
+    renderPendingImagePreview(croppedFile, handlers.previewEl, cropSlotKey, false);
+    if(handlers.onReady) handlers.onReady(croppedFile);
+  });
+}
+async function handleDocFileInput(file, setPending, previewEl, cropSlotKey, onReady){
+  if(!file){ setPending(null); if(previewEl) previewEl.innerHTML=''; return; }
+  _cropSlotHandlers[cropSlotKey]={setPending, previewEl, onReady};
+  if(isPdfFile(file)){
+    try{
+      await ensurePdfJs();
+      const arr=await file.arrayBuffer();
+      const pdf=await pdfjsLib.getDocument({data:arr}).promise;
+      if(pdf.numPages>1){
+        showPdfPagePickerModal(file, pdf, (pageFile)=>{
+          setPending(pageFile);
+          renderPendingImagePreview(pageFile, previewEl, cropSlotKey, true);
+          if(onReady) onReady(pageFile);
+        });
+        return;
+      }
+      // صفحة واحدة: حوّلها فوراً لصورة JPEG لإتاحة أداة القص أيضاً — قد تحتوي الصفحة الواحدة أكثر من مستند مرصوص بها معاً
+      const page=await pdf.getPage(1);
+      const base=page.getViewport({scale:1});
+      const scale=Math.min(1600/base.width, 1600/base.height);
+      const viewport=page.getViewport({scale});
+      const outCanvas=document.createElement('canvas');
+      outCanvas.width=viewport.width; outCanvas.height=viewport.height;
+      await page.render({canvasContext:outCanvas.getContext('2d'), viewport}).promise;
+      const outFile=await canvasToJpegFile(outCanvas, (file.name||'scan').replace(/\.pdf$/i,'')+'.jpg');
+      setPending(outFile);
+      renderPendingImagePreview(outFile, previewEl, cropSlotKey, false);
+      if(onReady) onReady(outFile);
+      return;
+    }catch(err){
+      console.warn('pdf render failed, falling back to raw file (no crop available):', err);
+      setPending(file);
+      if(previewEl) previewEl.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><div style="width:60px;height:60px;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:center;font-size:22px">📄</div><span style="font-size:11px;color:#059669;font-weight:700">✅ ${esc(file.name)} — سيتم تحويل الصفحة الأولى وضغطها عند الحفظ</span></div>`;
+      if(onReady) onReady(file);
+      return;
+    }
+  }
+  setPending(file);
+  renderPendingImagePreview(file, previewEl, cropSlotKey, false);
+  if(onReady) onReady(file);
+}
 function imageFileToCanvas(file, maxDim){
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -186,6 +391,63 @@ async function fetchVoucherScan(entryId) {
   const img = snap.data().img;
   _scanCache[entryId] = img;
   return img;
+}
+
+// ===== تعبئة تلقائية لحقول النموذج بقراءة صورة البوجر عبر Gemini Vision =====
+const GEMINI_API_KEY = "PASTE_YOUR_GEMINI_API_KEY_HERE";
+const GEMINI_MODEL = "gemini-2.5-flash";
+async function fileToBase64ForOCR(file, maxDim=1800, quality=0.9){
+  const canvas = isPdfFile(file) ? await pdfFileToCanvas(file, maxDim) : await imageFileToCanvas(file, maxDim);
+  const dataUrl = canvas.toDataURL('image/jpeg', quality);
+  return dataUrl.split(',')[1];
+}
+async function extractVoucherFieldsWithGemini(file){
+  if(!GEMINI_API_KEY || GEMINI_API_KEY==='PASTE_YOUR_GEMINI_API_KEY_HERE') throw new Error('مفتاح Gemini API غير مُفعّل بعد');
+  const base64 = await fileToBase64ForOCR(file);
+  const prompt = `هذه صورة بوجر (وثيقة تحميل منتوج نفطي عراقية صادرة عن OPDC، مزيج طباعة وخط يد وأختام).
+استخرج الحقول التالية فقط إن وُجدت بوضوح بالصورة، وأعد JSON فقط بلا أي نص إضافي:
+- voucher_no: الرقم الرئيسي المطبوع أعلى يسار الوثيقة تحت رمز QR (رقم البوجر/الوثيقة، غالباً يبدأ بحرف ثم أرقام مثل "A 192 85242").
+- date: القيمة المقابلة تحديداً لحقل "تاريخ الاصدار" الظاهر أعلى الوثيقة (وليس تاريخ الأمر التجهيزي ولا تاريخ الهوية)، بصيغة YYYY-MM-DD فقط (حوّل من أي صيغة أخرى). إن لم يظهر حقل "تاريخ الاصدار" اتركه فارغاً.
+- driver_name: القيمة المقابلة تحديداً لحقل "اسم السائق" الظاهر عادة أسفل الوثيقة (وليس اسم الشركة/المخول الناقل، وليس اسم موظف التجهيز). إن لم يظهر حقل "اسم السائق" اتركه فارغاً.
+- car_no: رقم السيارة/الشاحنة المقابل لحقل "رقم السيارة" كما هو مكتوب (مثال: 19151/21L).
+إن لم تكن متأكداً من قيمة حقل اتركه فارغاً "" بدلاً من التخمين.`;
+  const schema = {type:"OBJECT", properties:{
+    voucher_no:{type:"STRING"}, date:{type:"STRING"}, driver_name:{type:"STRING"}, car_no:{type:"STRING"}
+  }};
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      contents:[{parts:[{text:prompt},{inline_data:{mime_type:'image/jpeg', data:base64}}]}],
+      generationConfig:{responseMimeType:'application/json', responseSchema:schema}
+    })
+  });
+  if(!res.ok) throw new Error('فشل الاتصال بـ Gemini API ('+res.status+')');
+  const json = await res.json();
+  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if(!text) throw new Error('لم يُرجع Gemini أي نتيجة');
+  return JSON.parse(text);
+}
+async function autoFillVoucherFromScan(file){
+  // ملاحظة: معطّل فعلياً حالياً (حساب Gemini بلا فوترة مفعّلة بسبب قيد الدولة/العراق)،
+  // الفشل صامت عمداً حتى لا يظهر خطأ مربك لكل محاسب عند كل رفع صورة. الإدخال اليدوي هو الأساس.
+  const statusEl = el('f_scan_ocr_status');
+  try{
+    const fields = await extractVoucherFieldsWithGemini(file);
+    let filled=[];
+    const map=[['voucher_no','f_voucher','رقم البوجر'],['date','f_date','التاريخ'],['driver_name','f_driver','السائق'],['car_no','f_car','رقم السيارة']];
+    map.forEach(([k,id,label])=>{
+      const v=(fields[k]||'').toString().trim();
+      const inp=el(id);
+      if(!v || !inp) return;
+      // حقل التاريخ يُملأ افتراضياً بتاريخ اليوم عند فتح النموذج، لذا نستبدله بقيمة الصورة إن وُجدت
+      const isEmpty = !inp.value.trim();
+      const isUntouchedDate = id==='f_date' && inp.value===today();
+      if(isEmpty || isUntouchedDate){ inp.value=v; inp.style.background='#fef9c3'; filled.push(label); }
+    });
+    if(statusEl) statusEl.textContent = filled.length ? ('✅ تمت التعبئة التلقائية: '+filled.join('، ')+' — يرجى التحقق قبل الحفظ') : '';
+  }catch(err){
+    console.warn('gemini ocr error (feature inactive, ignored):', err);
+  }
 }
 
 // ===== سكنر بوجري التحميل/التفريغ لصفحة المبيعات (نفس نمط المشتريات، وثيقة واحدة بحقلين) =====
@@ -791,6 +1053,7 @@ function viewForm(){
         <label class="lbl">📎 صورة أو PDF سكنر البوجر الأصلي *</label>
         <input class="inp" type="file" accept="image/*,application/pdf,.pdf" capture="environment" id="f_scan" onchange="handleScanSelect(this)" style="padding:7px">
         <div id="f_scan_preview" style="margin-top:8px">${e.has_scan?`<div style="display:flex;align-items:center;gap:10px"><button type="button" class="btn btn-gray" style="font-size:11px;padding:6px 12px" onclick="viewVoucherScan('${e.id}')">🔍 عرض الصورة الحالية</button><span style="font-size:11px;color:#64748b">اختر ملفاً جديداً أدناه لاستبدالها</span></div>`:''}</div>
+        <div id="f_scan_ocr_status" style="margin-top:6px;font-size:11px;font-weight:700;color:#64748b"></div>
       </div>
     </div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
@@ -804,16 +1067,9 @@ function viewForm(){
 let pendingScanFile=null;
 function handleScanSelect(inp){
   const file=inp.files&&inp.files[0];
-  pendingScanFile=file||null;
-  const prev=el('f_scan_preview');
-  if(!prev)return;
-  if(!file){prev.innerHTML='';return;}
-  if(isPdfFile(file)){
-    prev.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><div style="width:70px;height:70px;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:center;font-size:26px">📄</div><span style="font-size:11px;color:#059669;font-weight:700">✅ ${esc(file.name)} — سيتم تحويل الصفحة الأولى وضغطها عند الحفظ</span></div>`;
-    return;
-  }
-  const url=URL.createObjectURL(file);
-  prev.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><img src="${url}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0"><span style="font-size:11px;color:#059669;font-weight:700">✅ سيتم رفع هذه الصورة عند الحفظ</span></div>`;
+  const statusEl=el('f_scan_ocr_status');
+  if(statusEl) statusEl.textContent='';
+  handleDocFileInput(file, f=>{pendingScanFile=f;}, el('f_scan_preview'), 'purchase', f=>autoFillVoucherFromScan(f));
 }
 function showScanModal(url){
   const m=document.createElement('div');
@@ -955,16 +1211,9 @@ function updateUnloadScanRequirement(){
 let pendingLoadScanFile=null,pendingUnloadScanFile=null;
 function handleSaleScanSelect(inp,slot){
   const file=inp.files&&inp.files[0];
-  if(slot==='load')pendingLoadScanFile=file||null;else pendingUnloadScanFile=file||null;
-  const prev=el(slot==='load'?'s_scan_load_preview':'s_scan_unload_preview');
-  if(!prev)return;
-  if(!file){prev.innerHTML='';return;}
-  if(isPdfFile(file)){
-    prev.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><div style="width:60px;height:60px;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:center;font-size:22px">📄</div><span style="font-size:11px;color:#059669;font-weight:700">✅ ${esc(file.name)}</span></div>`;
-    return;
-  }
-  const url=URL.createObjectURL(file);
-  prev.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><img src="${url}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0"><span style="font-size:11px;color:#059669;font-weight:700">✅ سيُحفظ عند الحفظ</span></div>`;
+  const setPending = slot==='load' ? f=>{pendingLoadScanFile=f;} : f=>{pendingUnloadScanFile=f;};
+  const previewEl = el(slot==='load'?'s_scan_load_preview':'s_scan_unload_preview');
+  handleDocFileInput(file, setPending, previewEl, 'sale_'+slot);
 }
 async function saveSale(){
   const sf=S.selectedFactory,e=S.editSale||{};
@@ -1013,6 +1262,8 @@ function viewTable(){
   if(pType)list=list.filter(e=>e.product_type===pType);
   if(pDateFrom)list=list.filter(e=>e.date>=pDateFrom);
   if(pDateTo)list=list.filter(e=>e.date<=pDateTo);
+  const canEditRow=e=>canEdit('purchases')||e.accountant===currentUser?.email;
+  const showActionCol=canEdit('purchases')||list.some(canEditRow);
   const rows=list.map((e,i)=>`<tr>
     <td class="td" style="color:#94a3b8">${i+1}</td><td class="td" style="font-weight:900">${esc(e.voucher_no)}${e.has_scan?` <button title="عرض صورة البوجر" onclick="viewVoucherScan('${e.id}')" style="border:none;background:none;cursor:pointer;font-size:12px">📷</button>`:''}</td><td class="td">${esc(e.refinery)}</td>
     <td class="td" style="color:#94a3b8;font-size:11px">${e.date}</td><td class="td" style="color:#2563eb;font-size:10px">${esc(e.product_type)}</td>
@@ -1020,7 +1271,7 @@ function viewTable(){
     <td class="td">${fmtTon(e.qty_tons)}</td><td class="td">${fmtLiter(e.natural_liters)}</td><td class="td">${fmtKg(e.weight_kg)}</td>
     <td class="td" style="color:#94a3b8">${e.po_no}</td><td class="td">${fmtM(e.price)}</td><td class="td">${fmtM(e.transport_fee||42)}</td>
     <td class="td" style="color:#1d4ed8;font-weight:900">${fmtM(e.refinery_price)}</td>
-    ${canEdit('purchases')?`<td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 8px;font-size:10px;margin-left:3px" onclick="editEntry('${e.id}')">✏️</button><button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteEntry('${e.id}')">🗑️</button></td>`:''}
+    ${showActionCol?`<td class="td" style="white-space:nowrap">${canEditRow(e)?`<button class="btn btn-gray" style="padding:3px 8px;font-size:10px;margin-left:3px" onclick="editEntry('${e.id}')">✏️</button>`:''}${canEdit('purchases')?`<button class="btn btn-red" style="padding:3px 8px;font-size:10px" onclick="deleteEntry('${e.id}')">🗑️</button>`:''}</td>`:''}
   </tr>`).join('');
   return `<div class="card" style="overflow:hidden;padding:0">
     <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border-bottom:1px solid #e2e8f0">
@@ -1051,9 +1302,9 @@ function viewTable(){
           <th class="th">ت</th><th class="th">البوجر</th><th class="th">المصفى</th><th class="th">التاريخ</th><th class="th">النوع</th>
           <th class="th">السائق</th><th class="th">السيارة</th><th class="th">العائدية</th><th class="th">طن</th>
           <th class="th">لتر</th><th class="th">كغم</th><th class="th">PO</th><th class="th">السعر</th>
-          <th class="th">نقل</th><th class="th">الإجمالي</th>${canEdit('purchases')?'<th class="th">الإجراء</th>':''}
+          <th class="th">نقل</th><th class="th">الإجمالي</th>${showActionCol?'<th class="th">الإجراء</th>':''}
         </tr></thead>
-        <tbody id="purchases-tbody">${rows||`<tr><td colspan="${canEdit('purchases')?16:15}" class="td" style="padding:30px;color:#94a3b8">لا توجد بيانات</td></tr>`}</tbody>
+        <tbody id="purchases-tbody">${rows||`<tr><td colspan="${showActionCol?16:15}" class="td" style="padding:30px;color:#94a3b8">لا توجد بيانات</td></tr>`}</tbody>
       </table>
     </div>
   </div>`;

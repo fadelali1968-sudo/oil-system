@@ -139,10 +139,10 @@ function showPdfPagePickerModal(file, pdf, onConfirm){
   const modal=document.createElement('div');
   modal.id='doc-picker-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
-  modal.innerHTML=`<div style="background:#fff;border-radius:14px;padding:18px;max-width:520px;width:100%;text-align:center">
+  modal.innerHTML=`<div style="background:#fff;border-radius:14px;padding:18px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;text-align:center">
     <div style="font-weight:900;font-size:13px;margin-bottom:4px;color:#1e3a8a">📄 هذا الملف يحتوي ${total} صفحات</div>
     <div style="font-size:11px;color:#64748b;margin-bottom:10px">اختر الصفحة الخاصة بهذا القيد تحديداً (رقم البوجر المطبوع على الصفحة يساعدك على التأكد)</div>
-    <canvas id="dp-canvas" style="max-width:100%;border:1px solid #e2e8f0;border-radius:8px"></canvas>
+    <canvas id="dp-canvas" style="max-width:100%;max-height:55vh;border:1px solid #e2e8f0;border-radius:8px"></canvas>
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:10px">
       <button type="button" id="dp-prev" class="btn btn-gray" style="padding:6px 14px">◀ السابقة</button>
       <span id="dp-counter" style="font-weight:900;font-size:12px;min-width:90px">صفحة 1 من ${total}</span>
@@ -394,7 +394,7 @@ async function fetchVoucherScan(entryId) {
 }
 
 // ===== تعبئة تلقائية لحقول النموذج بقراءة صورة البوجر عبر Gemini Vision =====
-const GEMINI_API_KEY = "PASTE_YOUR_GEMINI_API_KEY_HERE";
+const GEMINI_API_KEY = "AQ.Ab8RN6KEjl-_ppMg7UY0RquxNTGEBgCoGJ0-3-r_iw8SU4yM7g";
 const GEMINI_MODEL = "gemini-2.5-flash";
 async function fileToBase64ForOCR(file, maxDim=1800, quality=0.9){
   const canvas = isPdfFile(file) ? await pdfFileToCanvas(file, maxDim) : await imageFileToCanvas(file, maxDim);

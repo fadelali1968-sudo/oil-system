@@ -738,6 +738,7 @@ function getSaleList(){
 function render() {
   if(!currentUser){renderLogin();return;}
   migrateHaidarSalaf();
+  migrateStatementPerms();
   const sf=S.selectedFactory, isM=isManager();
   const factOpts=FACTORIES.map(f=>`<option value="${f}" ${sf===f?'selected':''}>${f}</option>`).join('');
   const canSelectFactory = isM||currentUser.factory==='الكل';
@@ -824,9 +825,9 @@ function buildNav(isM) {
   nav += isM ? `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('reports','📄 التقارير والطباعة','color:#fbbf24')}</div>` : '';
   if(hasPerm('salaf')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المالية</p>${ni('salaf','💰 السلف','color:#fbbf24')}${ni('salaf_settlement','📊 تسوية السلف','color:#fcd34d')}</div>`;
   if(hasPerm('expenses')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#f87171;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المصاريف</p>${ni('expenses','📋 المصاريف','color:#f87171')}</div>`;
-  if(hasPerm('kroob')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#34d399;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">الكروب / الصيرفة</p>${ni('kroob','🏦 كروب رافد فيصل','color:#34d399')}${ni('kroob_statement','📜 كشف الحساب','color:#34d399')}</div>`;
+  if(hasPerm('kroob')||hasPerm('kroob_statement')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#34d399;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">الكروب / الصيرفة</p>${hasPerm('kroob')?ni('kroob','🏦 كروب رافد فيصل','color:#34d399'):''}${hasPerm('kroob_statement')?ni('kroob_statement','📜 كشف الحساب','color:#34d399'):''}</div>`;
   // حسابات سيد رافد
-  if(hasPerm('rafid')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">حسابات سيد رافد</p>${ni('rafid_accounts','💼 حسابات سيد رافد','color:#fde68a')}${ni('rafid_statement','📜 كشف الحساب','color:#fde68a')}</div>`;
+  if(hasPerm('rafid')||hasPerm('rafid_statement')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">حسابات سيد رافد</p>${hasPerm('rafid')?ni('rafid_accounts','💼 حسابات سيد رافد','color:#fde68a'):''}${hasPerm('rafid_statement')?ni('rafid_statement','📜 كشف الحساب','color:#fde68a'):''}</div>`;
   // حساب المصفى
   if(hasPerm('refinery')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('refinery_account','🏭 حساب المصفى','color:#fbbf24')}</div>`;
   if(isM) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('admin','⚙️ إدارة النظام','color:#93c5fd')}${ni('permissions','🔐 الصلاحيات','color:#c084fc')}${ni('audit_log','🕵️ سجل النشاط','color:#fb923c')}</div>`;
@@ -852,7 +853,7 @@ function renderContent() {
   else if(v==='exp_dup_review') c.innerHTML = viewExpDupReview();
   else if(v==='exp_fixdates_review') c.innerHTML = viewExpFixDatesReview();
   else if(v==='kroob')         c.innerHTML = viewKroob();
-  else if(v==='kroob_statement') c.innerHTML = viewKroobStatement();
+  else if(v==='kroob_statement') c.innerHTML = hasPerm('kroob_statement') ? viewKroobStatement() : '<div style="padding:40px;text-align:center;color:#ef4444;font-weight:900">غير مصرح</div>';
   else if(v==='import_p')      c.innerHTML = viewImport('purchases');
   else if(v==='import_s')      c.innerHTML = viewImport('sales');
   else if(v==='admin')         c.innerHTML = viewAdmin();
@@ -860,7 +861,7 @@ function renderContent() {
   else if(v==='audit_log')     c.innerHTML = viewAuditLog();
   else if(v==='refinery_account') c.innerHTML = hasPerm('refinery') ? viewRefineryAccount() : '<div style="padding:40px;text-align:center;color:#ef4444;font-weight:900">غير مصرح</div>';
   else if(v==='rafid_accounts')   c.innerHTML = hasPerm('rafid') ? viewRafidAccounts() : '<div style="padding:40px;text-align:center;color:#ef4444;font-weight:900">غير مصرح</div>';
-  else if(v==='rafid_statement')  c.innerHTML = hasPerm('rafid') ? viewRafidStatement() : '<div style="padding:40px;text-align:center;color:#ef4444;font-weight:900">غير مصرح</div>';
+  else if(v==='rafid_statement')  c.innerHTML = hasPerm('rafid_statement') ? viewRafidStatement() : '<div style="padding:40px;text-align:center;color:#ef4444;font-weight:900">غير مصرح</div>';
   // تطبيق Enter navigation بعد العرض
   setTimeout(applyEnterNav, 200);
 }
@@ -1631,6 +1632,21 @@ function getMohammedKroobSalaf(){
 }
 function getMohammedRafidSalaf(){
   return DB.get('rafid_accounts',[]).filter(e=>(e.receiver||'').trim()==='محمد خالد'&&(e.type_dinar||'مدين').trim()==='مدين');
+}
+function migrateStatementPerms(){
+  if(DB.get('statement_perms_migrated')) return;
+  if(!isManager()) return;
+  const users=DB.get('users',{});
+  let anyChanged=false;
+  Object.keys(users).forEach(k=>{
+    const perms=users[k].permissions||[];
+    let changed=false;
+    if(perms.includes('kroob')&&!perms.includes('kroob_statement')){perms.push('kroob_statement');changed=true;}
+    if(perms.includes('rafid')&&!perms.includes('rafid_statement')){perms.push('rafid_statement');changed=true;}
+    if(changed){users[k].permissions=perms;FDB.save('users',k,users[k]);anyChanged=true;}
+  });
+  if(anyChanged)DB.set('users',users);
+  DB.set('statement_perms_migrated',true);
 }
 function migrateHaidarSalaf(){
   if(DB.get('haider_salaf_migrated')) return;
@@ -4560,8 +4576,8 @@ async function backupAndClearAllProcurement(){
 }
 
 // ===== إدارة الصلاحيات =====
-const ALL_PERMS=['salaf','expenses','kroob','table','sale_table','reports','import_p','import_s','rafid','refinery'];
-const PERM_LABELS={'salaf':'💰 السلف','expenses':'📋 المصاريف','kroob':'🏦 الكروب','table':'📋 سجل المشتريات','sale_table':'📋 سجل المبيعات','reports':'📄 التقارير','import_p':'📥 استيراد المشتريات','import_s':'📥 استيراد المبيعات','rafid':'💼 حسابات سيد رافد','refinery':'🏭 حساب المصفى'};
+const ALL_PERMS=['salaf','expenses','kroob','kroob_statement','table','sale_table','reports','import_p','import_s','rafid','rafid_statement','refinery'];
+const PERM_LABELS={'salaf':'💰 السلف','expenses':'📋 المصاريف','kroob':'🏦 الكروب','kroob_statement':'📜 كشف حساب الكروب','table':'📋 سجل المشتريات','sale_table':'📋 سجل المبيعات','reports':'📄 التقارير','import_p':'📥 استيراد المشتريات','import_s':'📥 استيراد المبيعات','rafid':'💼 حسابات سيد رافد','rafid_statement':'📜 كشف حساب سيد رافد','refinery':'🏭 حساب المصفى'};
 
 function viewPermissions(){
   const users=DB.get('users',{});

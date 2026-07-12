@@ -767,7 +767,7 @@ function render() {
       '<div style="flex:1;display:flex;flex-direction:column;overflow:hidden">' +
         '<header class="no-print" style="height:54px;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 10px 0 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">' +
           '<button class="mobile-menu-btn no-print" onclick="toggleMobileMenu()" style="margin-left:10px">☰</button>' +
-          (S.view!=='kroob'&&S.view!=='kroob_statement'?'<div style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700">المعمل:</span>'+factSel+'</div>':'') +
+          (['dashboard','whatsapp','form','table','import_p','sale_form','sale_table','import_s','reports'].includes(S.view)?'<div style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700">المعمل:</span>'+factSel+'</div>':'') +
           '<div style="display:flex;align-items:center;gap:10px">' +
           (isM?'<div style="position:relative;cursor:pointer" onclick="toggleNotif()"><div style="width:38px;height:38px;background:#f1f5f9;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;border:1px solid #e2e8f0">🔔</div><div id="notif-badge" class="notif-badge" style="display:none">0</div></div>':'') +
           '<div id="clock" style="background:#0f172a;color:#34d399;padding:5px 14px;border-radius:8px;font-size:13px;font-weight:900;font-family:monospace;letter-spacing:2px">00:00:00</div>' +

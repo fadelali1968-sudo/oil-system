@@ -394,7 +394,7 @@ async function fetchVoucherScan(entryId) {
 }
 
 // ===== تعبئة تلقائية لحقول النموذج بقراءة صورة البوجر عبر Gemini Vision =====
-const GEMINI_API_KEY = "AQ.Ab8RN6KEjl-_ppMg7UY0RquxNTGEBgCoGJ0-3-r_iw8SU4yM7g";
+const GEMINI_API_KEY = "PASTE_YOUR_GEMINI_API_KEY_HERE";
 const GEMINI_MODEL = "gemini-2.5-flash";
 async function fileToBase64ForOCR(file, maxDim=1800, quality=0.9){
   const canvas = isPdfFile(file) ? await pdfFileToCanvas(file, maxDim) : await imageFileToCanvas(file, maxDim);
@@ -1050,7 +1050,7 @@ function viewForm(){
         <span id="f_tot" style="font-size:18px;font-weight:900;color:#2563eb">0 د.ع</span>
       </div>
       <div style="grid-column:span 3;border-top:1px dashed #e2e8f0;padding-top:12px">
-        <label class="lbl">📎 صورة أو PDF سكنر البوجر الأصلي *</label>
+        <label class="lbl">📎 صورة أو PDF سكنر البوجر الأصلي (اختياري)</label>
         <input class="inp" type="file" accept="image/*,application/pdf,.pdf" capture="environment" id="f_scan" onchange="handleScanSelect(this)" style="padding:7px">
         <div id="f_scan_preview" style="margin-top:8px">${e.has_scan?`<div style="display:flex;align-items:center;gap:10px"><button type="button" class="btn btn-gray" style="font-size:11px;padding:6px 12px" onclick="viewVoucherScan('${e.id}')">🔍 عرض الصورة الحالية</button><span style="font-size:11px;color:#64748b">اختر ملفاً جديداً أدناه لاستبدالها</span></div>`:''}</div>
         <div id="f_scan_ocr_status" style="margin-top:6px;font-size:11px;font-weight:700;color:#64748b"></div>
@@ -1128,14 +1128,13 @@ async function saveEntry(){
   if(dupVoucher){showToast('رقم البوجر '+v+' موجود مسبقاً!','error');return;}
   if(!v||!date||!ref||!driver||!car||!loc||!po||!liters){showToast('يرجى ملء جميع الحقول (*)','error');return;}
   const hasScan0=e.has_scan||false;
-  if(!hasScan0&&!pendingScanFile){showToast('صورة أو PDF سكنر البوجر إلزامي','error');return;}
   const entryId=e.id||('e_'+Date.now());
   let hasScan=hasScan0;
   if(pendingScanFile){
     const btn=document.querySelector('button.btn-blue[onclick="saveEntry()"]');
     if(btn){btn.disabled=true;btn.textContent='⏳ جاري حفظ الصورة...';}
     try{ await saveVoucherScan(pendingScanFile,entryId); hasScan=true; }
-    catch(err){ console.warn('scan save error:',err); showToast('تعذر حفظ صورة البوجر، حاول مرة أخرى','error'); if(btn){btn.disabled=false;btn.textContent='💾 حفظ وتأكيد';} return; }
+    catch(err){ console.warn('scan save error:',err); showToast('تعذر حفظ صورة البوجر، سيُحفظ القيد بدونها','warning'); }
     if(btn){btn.disabled=false;btn.textContent='💾 حفظ وتأكيد';}
   }
   pendingScanFile=null;
@@ -1173,19 +1172,19 @@ function viewSaleForm(){
       <div><label class="lbl">الكبان *</label><input class="inp" id="s_kaban" type="number" step="0.001" value="${e.kaban||''}" oninput="updateSaleTotal()"></div>
       <div><label class="lbl">كمية اللتر</label><input class="inp" id="s_liters" type="number" step="0.001" value="${e.qty_liters||''}"></div>
       <div><label class="lbl">أجرة سائق/طن</label><input class="inp" id="s_advance" type="number" step="0.001" value="${e.advance||''}"></div>
-      <div><label class="lbl">الواصل</label><input class="inp" id="s_received" type="number" step="0.001" value="${e.received||''}" oninput="updateUnloadScanRequirement()"></div>
+      <div><label class="lbl">الواصل</label><input class="inp" id="s_received" type="number" step="0.001" value="${e.received||''}"></div>
       <div><label class="lbl">مصدر السيارة</label><input class="inp" id="s_source" value="${e.car_source||''}"></div>
       <div><label class="lbl">سعر البيع/طن</label><input class="inp" id="s_price" type="number" step="0.001" value="${e.sale_price||''}" oninput="updateSaleTotal()"></div>
       <div><label class="lbl">إجمالي البيع</label><input class="inp" id="s_total" value="${fmtM((parseFloat(e.sale_price)||0)*(parseFloat(e.kaban)||0))}" disabled style="background:#f8fafc;color:#1e3a8a;font-weight:900"></div>
       <div><label class="lbl">مكافأة السائق</label><input class="inp" id="s_bonus" type="number" step="0.001" value="${e.driver_bonus||''}"></div>
       <div style="grid-column:span 3;border-top:1px dashed #e9d5ff;padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div>
-          <label class="lbl">📎 صورة/PDF بوجر التحميل *</label>
+          <label class="lbl">📎 صورة/PDF بوجر التحميل (اختياري)</label>
           <input class="inp" type="file" accept="image/*,application/pdf,.pdf" capture="environment" id="s_scan_load" onchange="handleSaleScanSelect(this,'load')" style="padding:7px">
           <div id="s_scan_load_preview" style="margin-top:8px">${e.has_load_scan?`<button type="button" class="btn btn-gray" style="font-size:11px;padding:6px 12px" onclick="viewSaleScan('${e.id}','img_load')">🔍 عرض الصورة الحالية</button>`:''}</div>
         </div>
         <div>
-          <label class="lbl" id="s_scan_unload_lbl">📎 صورة/PDF بوجر التفريغ ${(parseFloat(e.received)||0)>0?'*':'(عند وصول المنتوج)'}</label>
+          <label class="lbl">📎 صورة/PDF بوجر التفريغ (اختياري)</label>
           <input class="inp" type="file" accept="image/*,application/pdf,.pdf" capture="environment" id="s_scan_unload" onchange="handleSaleScanSelect(this,'unload')" style="padding:7px">
           <div id="s_scan_unload_preview" style="margin-top:8px">${e.has_unload_scan?`<button type="button" class="btn btn-gray" style="font-size:11px;padding:6px 12px" onclick="viewSaleScan('${e.id}','img_unload')">🔍 عرض الصورة الحالية</button>`:''}</div>
         </div>
@@ -1202,11 +1201,6 @@ function viewSaleForm(){
 function updateSaleTotal(){
   const kaban=parseFloat(el('s_kaban')?.value||0),price=parseFloat(el('s_price')?.value||0);
   const t=el('s_total');if(t)t.value=fmtM(price*kaban);
-}
-function updateUnloadScanRequirement(){
-  const received=parseFloat(el('s_received')?.value||0);
-  const lbl=el('s_scan_unload_lbl');
-  if(lbl)lbl.textContent='📎 صورة/PDF بوجر التفريغ '+(received>0?'*':'(عند وصول المنتوج)');
 }
 let pendingLoadScanFile=null,pendingUnloadScanFile=null;
 function handleSaleScanSelect(inp,slot){
@@ -1225,20 +1219,18 @@ async function saveSale(){
   const salePrice=parseFloat(el('s_price')?.value||0),saleTotal=salePrice*kaban,driverBonus=parseFloat(el('s_bonus')?.value||0);
   if(!driver||!car||!date||!kaban){showToast('يرجى ملء الحقول الإلزامية (*)','warning');return;}
   const hasLoadScan=e.has_load_scan||false,hasUnloadScan=e.has_unload_scan||false;
-  if(!hasLoadScan&&!pendingLoadScanFile){showToast('صورة بوجر التحميل إلزامية','error');return;}
-  if(received>0&&!hasUnloadScan&&!pendingUnloadScanFile){showToast('صورة بوجر التفريغ إلزامية عند إدخال الكمية الواصلة','error');return;}
   const saleId=e.id||('s_'+Date.now());
   const btn=document.querySelector('button.btn-purple[onclick="saveSale()"]');
   let finalHasLoad=hasLoadScan,finalHasUnload=hasUnloadScan;
   if(pendingLoadScanFile){
     if(btn){btn.disabled=true;btn.textContent='⏳ جاري حفظ صورة التحميل...';}
     try{ await saveSaleScan(pendingLoadScanFile,saleId,'img_load'); finalHasLoad=true; }
-    catch(err){ console.warn('load scan save error:',err); showToast('تعذر حفظ صورة بوجر التحميل، حاول مرة أخرى','error'); if(btn){btn.disabled=false;btn.textContent='💾 حفظ وتأكيد';} return; }
+    catch(err){ console.warn('load scan save error:',err); showToast('تعذر حفظ صورة بوجر التحميل، سيُحفظ القيد بدونها','warning'); }
   }
   if(pendingUnloadScanFile){
     if(btn){btn.disabled=true;btn.textContent='⏳ جاري حفظ صورة التفريغ...';}
     try{ await saveSaleScan(pendingUnloadScanFile,saleId,'img_unload'); finalHasUnload=true; }
-    catch(err){ console.warn('unload scan save error:',err); showToast('تعذر حفظ صورة بوجر التفريغ، حاول مرة أخرى','error'); if(btn){btn.disabled=false;btn.textContent='💾 حفظ وتأكيد';} return; }
+    catch(err){ console.warn('unload scan save error:',err); showToast('تعذر حفظ صورة بوجر التفريغ، سيُحفظ القيد بدونها','warning'); }
   }
   if(btn){btn.disabled=false;btn.textContent='💾 حفظ وتأكيد';}
   pendingLoadScanFile=null;pendingUnloadScanFile=null;

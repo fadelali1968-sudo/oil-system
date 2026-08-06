@@ -1820,7 +1820,7 @@ function expDateMatchesMonth(dateStr,month){
 function expDupKey(e){
   const d=Math.round(parseFloat(e.amount_dinar)||0);
   const dl=Math.round((parseFloat(e.amount_dollar)||0)*100)/100;
-  return (e.factory||'')+'|'+(e.date||'')+'|'+d+'|'+dl+'|'+(e.details||'').trim();
+  return (e.factory||'')+'|'+(e.date||'')+'|'+d+'|'+dl+'|'+(e.details||'').trim()+'|'+(e.person||'').trim();
 }
 // دفعة الحركة: حركات الاستيراد من نفس عملية الاستيراد تشترك بنفس الدفعة (لا تُعتبر تكراراً فيما بينها)
 // الحركات اليدوية كل واحدة دفعة مستقلة بذاتها (لا تُحذف أبداً عبر هذه الأداة)

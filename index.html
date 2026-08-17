@@ -2151,7 +2151,7 @@ async function confirmImportExpensesSheets(){
   const normAr=s=>String(s||'').replace(/[أإآ]/g,'ا').trim();
   // تطبيع اسم الشخص في عمود F إلى الاسم القياسي المستخدم في حقل person بجميع أنحاء النظام
   const personMap={
-    'حيدر صبري':'حيدر صبري','حيدر':'حيدر صبري','صبري':'حيدر صبري',
+    'حيدر صبري':'حيدر صبري','حيدر':'حيدر صبري','صبري':'حيدر صبري','سيد حيدر':'حيدر صبري',
     'محمد خالد':'محمد خالد','خالد':'محمد خالد','محمد':'محمد خالد'
   };
   const isSkip=(...cols)=>skipKW.some(kw=>cols.some(c=>normAr(c).includes(normAr(kw))));

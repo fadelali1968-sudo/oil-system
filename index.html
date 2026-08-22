@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام المشتريات النفطية v44.2</title>
+<title>نظام المشتريات النفطية v44.4</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='14' y='16' width='36' height='34' rx='5' fill='%231e3a5f'/><ellipse cx='32' cy='16' rx='18' ry='6' fill='%232563eb'/><ellipse cx='32' cy='50' rx='18' ry='6' fill='%231e293b'/><rect x='14' y='26' width='36' height='5' fill='%23f59e0b'/><rect x='14' y='37' width='36' height='5' fill='%23f59e0b'/><text x='32' y='35' text-anchor='middle' fill='%2334d399' font-size='10' font-weight='bold' font-family='Arial'>OIL</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -782,13 +782,49 @@ function fixSale(s){ return s; }
 function loadEntries(){ return DB.get('entries',[]).map(fixEntry); }
 function loadSales(){ return DB.get('sales',[]).map(fixSale); }
 
+// ===== توحيد أسماء المعامل: الفروق غير المرئية (مسافة زائدة/نوع الألف/التطويل/التشكيل) كانت تُسقط بيانات المعمل من اللوحة =====
+function normFactory(x){
+  return (x||'').toString()
+    .replace(/[\u064B-\u0652\u0640\u200B-\u200F\uFEFF]/g,'')
+    .replace(/\u00A0/g,' ')
+    .replace(/[\u0623\u0625\u0622\u0671]/g,'\u0627')
+    .replace(/\u0649/g,'\u064A')
+    .replace(/\u0629/g,'\u0647')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function sameFactory(a,b){ return normFactory(a)===normFactory(b); }
+const EMPTY_AN={today:{cars:0,tons:0,liters:0,kg:0,money:0,kaban:0},total:{cars:0,tons:0,liters:0,kg:0,money:0,kaban:0}};
+function anOf(an,f){ return (an&&an[f])||EMPTY_AN; }
+// معامل موجودة فعلياً بالبيانات لكنها غير مسجَّلة بقائمة المعامل
+function unregisteredFactories(){
+  const regs=new Set(FACTORIES.map(normFactory)), seen=new Set(), out=[];
+  const scan=arr=>(arr||[]).forEach(r=>{
+    const raw=(r&&r.factory)||'', n=normFactory(raw);
+    if(n && !regs.has(n) && !seen.has(n)){ seen.add(n); out.push(raw); }
+  });
+  scan(DB.get('entries',[])); scan(DB.get('sales',[]));
+  return out;
+}
+// كل المعامل التي يجب أن تظهر باللوحة/الموقف: المسجَّلة + الموجودة بالبيانات
+function allFactoryNames(){ return FACTORIES.concat(unregisteredFactories()); }
+function addMissingFactories(){
+  const miss=unregisteredFactories();
+  if(!miss.length){ showToast('لا توجد معامل غير مسجلة','info'); return; }
+  const f=DB.get('factories',FACTORIES).slice();
+  miss.forEach(m=>{ if(!f.some(x=>sameFactory(x,m))) f.push(m); });
+  DB.set('factories',f); FACTORIES=f;
+  FDB.save('settings','factories',{id:'factories',list:f});
+  showToast('تمت إضافة '+miss.length+' معمل لقائمة المعامل','success');
+  renderContent();
+}
 function getAnalysis(fromDate,toDate){
   let entries=loadEntries();
   if(fromDate)entries=entries.filter(e=>e.date>=fromDate);
   if(toDate)entries=entries.filter(e=>e.date<=toDate);
   const t=today(),res={};
-  for(const f of FACTORIES){
-    const ft=entries.filter(e=>e.factory===f),fd=ft.filter(e=>e.date===t);
+  for(const f of allFactoryNames()){
+    const ft=entries.filter(e=>sameFactory(e.factory,f)),fd=ft.filter(e=>e.date===t);
     const agg=arr=>({cars:arr.length,tons:arr.reduce((s,e)=>s+sc(e.qty_tons),0),liters:arr.reduce((s,e)=>s+sc(e.natural_liters),0),kg:arr.reduce((s,e)=>s+sc(e.weight_kg),0),money:arr.reduce((s,e)=>s+parseFloat(e.refinery_price||0),0)});
     res[f]={today:agg(fd),total:agg(ft)};
   }
@@ -799,8 +835,8 @@ function getSaleAnalysis(fromDate,toDate){
   if(fromDate)sales=sales.filter(s=>s.date>=fromDate);
   if(toDate)sales=sales.filter(s=>s.date<=toDate);
   const t=today(),res={};
-  for(const f of FACTORIES){
-    const ft=sales.filter(s=>s.factory===f),fd=ft.filter(s=>s.date===t);
+  for(const f of allFactoryNames()){
+    const ft=sales.filter(s=>sameFactory(s.factory,f)),fd=ft.filter(s=>s.date===t);
     const agg=arr=>({cars:arr.length,kaban:arr.reduce((s,e)=>s+parseFloat(e.kaban||0),0),liters:arr.reduce((s,e)=>s+parseFloat(e.qty_liters||0),0),money:arr.reduce((s,e)=>s+(parseFloat(e.advance||0)*parseFloat(e.received||0)),0)});
     res[f]={today:agg(fd),total:agg(ft)};
   }
@@ -809,7 +845,7 @@ function getSaleAnalysis(fromDate,toDate){
 function getList(){
   const sf=S.selectedFactory;
   let list=loadEntries();
-  if(sf!=='الكل')list=list.filter(e=>e.factory===sf);
+  if(sf!=='الكل')list=list.filter(e=>sameFactory(e.factory,sf));
   if(S.wFrom)list=list.filter(e=>e.date>=S.wFrom);
   if(S.wTo)list=list.filter(e=>e.date<=S.wTo);
   return list.reverse();
@@ -817,7 +853,7 @@ function getList(){
 function getSaleList(){
   const sf=S.selectedFactory;
   let list=loadSales();
-  if(sf!=='الكل')list=list.filter(s=>s.factory===sf);
+  if(sf!=='الكل')list=list.filter(s=>sameFactory(s.factory,sf));
   if(S.wFrom)list=list.filter(s=>s.date>=S.wFrom);
   if(S.wTo)list=list.filter(s=>s.date<=S.wTo);
   return list.reverse();
@@ -829,7 +865,7 @@ function render() {
   migrateHaidarSalaf();
   migrateStatementPerms();
   const sf=S.selectedFactory, isM=isManager();
-  const factOpts=FACTORIES.map(f=>`<option value="${f}" ${sf===f?'selected':''}>${f}</option>`).join('');
+  const factOpts=allFactoryNames().map(f=>`<option value="${f}" ${sf===f?'selected':''}>${f}</option>`).join('');
   const canSelectFactory = isM||currentUser.factory==='الكل';
   const factSel = canSelectFactory
     ? `<select class="inp" style="width:160px;padding:5px 10px" onchange="setFactory(this.value)"><option value="الكل" ${sf==='الكل'?'selected':''}>كل المعامل</option>${factOpts}</select>`
@@ -848,7 +884,7 @@ function render() {
       '<aside style="width:225px;background:#0f172a;display:flex;flex-direction:column;flex-shrink:0;z-index:50">' +
         '<div style="padding:10px;background:#020617;border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
           '<div style="width:34px;height:34px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:11px;margin:0 auto 5px">OIL</div>' +
-          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v44.2</p>' +
+          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v44.4</p>' +
           '<p style="font-size:10px;color:#94a3b8;margin-top:2px;font-weight:900;letter-spacing:0.5px">'+(isM?'المدققين':'محاسب: '+currentUser.factory)+'</p>' +
         '</div>' +
         '<nav id="sidebar-nav" style="flex:1;padding:8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
@@ -961,15 +997,15 @@ function sr(l,v,c=''){return`<div style="display:flex;justify-content:space-betw
 function viewDashboard() {
   const analysis=getAnalysis(),saleAn=getSaleAnalysis(),t=today();
   const sf=S.selectedFactory;
-  const facts=sf&&sf!=='الكل'?[sf]:(isManager()||currentUser.factory==='الكل')?FACTORIES:[currentUser.factory].filter(f=>FACTORIES.includes(f));
-  const totalCars=facts.reduce((s,f)=>s+analysis[f].total.cars,0);
-  const totalLiters=facts.reduce((s,f)=>s+analysis[f].total.liters,0);
-  const totalMoney=facts.reduce((s,f)=>s+analysis[f].total.money,0);
-  const todayCars=facts.reduce((s,f)=>s+analysis[f].today.cars,0);
-  const totalSaleCars=facts.reduce((s,f)=>s+saleAn[f].total.cars,0);
-  const totalKaban=facts.reduce((s,f)=>s+saleAn[f].total.kaban,0);
-  const totalTons=facts.reduce((s,f)=>s+analysis[f].total.tons,0);
-  const totalKg=facts.reduce((s,f)=>s+analysis[f].total.kg,0);
+  const facts=sf&&sf!=='الكل'?[sf]:(isManager()||currentUser.factory==='الكل')?allFactoryNames():allFactoryNames().filter(f=>sameFactory(f,currentUser.factory));
+  const totalCars=facts.reduce((s,f)=>s+anOf(analysis,f).total.cars,0);
+  const totalLiters=facts.reduce((s,f)=>s+anOf(analysis,f).total.liters,0);
+  const totalMoney=facts.reduce((s,f)=>s+anOf(analysis,f).total.money,0);
+  const todayCars=facts.reduce((s,f)=>s+anOf(analysis,f).today.cars,0);
+  const totalSaleCars=facts.reduce((s,f)=>s+anOf(saleAn,f).total.cars,0);
+  const totalKaban=facts.reduce((s,f)=>s+anOf(saleAn,f).total.kaban,0);
+  const totalTons=facts.reduce((s,f)=>s+anOf(analysis,f).total.tons,0);
+  const totalKg=facts.reduce((s,f)=>s+anOf(analysis,f).total.kg,0);
 
   const kpiCards=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:20px">
     <div class="card" style="text-align:center;border-top:4px solid #2563eb">
@@ -1001,7 +1037,7 @@ function viewDashboard() {
 
   const factoryCards=`<h3 style="font-size:14px;font-weight:900;margin-bottom:14px;color:#0f172a">تفاصيل أداء المعامل</h3>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
-  ${facts.map(f=>{const d=analysis[f],sd=saleAn[f];return`<div class="card">
+  ${facts.map(f=>{const d=anOf(analysis,f),sd=anOf(saleAn,f);return`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f1f5f9"><span style="font-weight:900;color:#2563eb;font-size:13px">${f}</span><span class="badge" style="background:#ecfdf5;color:#059669;font-size:10px">مُشغَّل ✓</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div style="background:#eff6ff;border-radius:8px;padding:10px"><p style="font-size:10px;color:#2563eb;font-weight:700;text-align:center;margin-bottom:6px">إجمالي المشتريات</p>${sr('السيارات',d.total.cars)}${sr('طن',fmt(d.total.tons),'#059669')}${sr('المبلغ',fmtM(d.total.money),'#1e3a8a')}</div>
@@ -1009,7 +1045,12 @@ function viewDashboard() {
     </div></div>`;}).join('')}
   </div>`;
 
-  return kpiCards+factoryCards;
+  const miss=unregisteredFactories();
+  const missBanner=miss.length?`<div class="card no-print" style="margin-bottom:14px;background:#fffbeb;border:1px solid #fcd34d;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:900;color:#92400e">⚠️ معامل موجودة بالبيانات وغير مسجَّلة بقائمة المعامل: ${miss.map(m=>esc(m)).join('، ')} — بياناتها معروضة أدناه، لكن يُفضَّل تسجيلها</span>
+    ${isManager()?`<button class="btn btn-amber" style="font-size:11px;padding:6px 12px;white-space:nowrap" onclick="addMissingFactories()">➕ إضافتها لقائمة المعامل</button>`:''}
+  </div>`:'';
+  return missBanner+kpiCards+factoryCards;
 }
 
 // ===== موقف المبيعات =====
@@ -1017,15 +1058,15 @@ function copyPortWhatsapp(){var t=window._portWAText||'';if(navigator.clipboard)
 
 function viewPorts(){
   var wf=S.wFrom,wt=S.wTo,sf=S.selectedFactory;
-  var facts=sf==='الكل'?FACTORIES:[sf];
+  var facts=sf==='الكل'?allFactoryNames():[sf];
   var periodLabel=wf&&wt?wf+' → '+wt:wf?'من '+wf:wt?'إلى '+wt:'الكل';
   var allSales=DB.get('sales',[]);
-  var fs=allSales.filter(function(s){if(sf!=='الكل'&&s.factory!==sf)return false;if(wf&&s.date<wf)return false;if(wt&&s.date>wt)return false;return(s.address||'').includes('الخور')||(s.address||'').includes('الحرة');});
+  var fs=allSales.filter(function(s){if(sf!=='الكل'&&!sameFactory(s.factory,sf))return false;if(wf&&s.date<wf)return false;if(wt&&s.date>wt)return false;return(s.address||'').includes('الخور')||(s.address||'').includes('الحرة');});
   var html='',wa='موقف مبيعات الموانئ\n'+periodLabel+'\n---\n';
   facts.forEach(function(fac){
     var fH='',fT=fac+'\n',ok=false;
     [['ميناء الخور','الخور'],['ميناء الحرة','الحرة']].forEach(function(p){
-      var ps=fs.filter(function(s){return s.factory===fac&&(s.address||'').includes(p[1]);});
+      var ps=fs.filter(function(s){return sameFactory(s.factory,fac)&&(s.address||'').includes(p[1]);});
       if(ps.length){var c=ps.length,k=ps.reduce((s,e)=>s+(parseFloat(e.kaban)||0),0),m=ps.reduce((s,e)=>s+(parseFloat(e.advance||0)*parseFloat(e.received||0)),0);
         fH+='<div style="display:flex;justify-content:space-between;padding:8px 10px;background:#f5f3ff;border-radius:6px;margin:4px 0"><span style="color:#7c3aed;font-weight:700">'+p[0]+'</span><span>'+c+' سيارة | كبان: <b style="color:#7c3aed">'+fmtKaban(k)+'</b></span></div>';
         fT+=p[0]+'\nالسيارات: '+c+' | الكبان: '+fmtKaban(k)+'\n';ok=true;}
@@ -1043,12 +1084,12 @@ function viewPorts(){
 function viewWhatsapp() {
   const wf=S.wFrom,wt=S.wTo;
   const analysis=getAnalysis(wf,wt),saleAn=getSaleAnalysis(wf,wt),sf=S.selectedFactory;
-  const facts=sf==='الكل'?FACTORIES:[sf];
+  const facts=sf==='الكل'?allFactoryNames():[sf];
   const periodLabel=wf&&wt?wf+' → '+wt:wf?'من '+wf:wt?'إلى '+wt:'الكلي';
   const targetDate=wf&&wt&&wf===wt?wf:(wf||today());
 
-  const pRows=facts.map((f,i)=>{const d=analysis[f].total;return`<tr><td class="td" style="color:#64748b">${i+1}</td><td class="td" style="font-weight:900">${f}</td><td class="td">${d.cars}</td><td class="td" style="color:#2563eb;font-weight:900">${fmt(d.tons)}</td><td class="td" style="color:#059669;font-weight:900">${fmt(d.liters)}</td><td class="td" style="color:#d97706;font-weight:900">${fmt(d.kg)}</td></tr>`;}).join('');
-  const sRows=facts.map((f,i)=>{const d=saleAn[f].total;return`<tr><td class="td-p" style="color:#64748b">${i+1}</td><td class="td-p" style="font-weight:900">${f}</td><td class="td-p">${d.cars}</td><td class="td-p" style="color:#7c3aed;font-weight:900">${fmtKaban(d.kaban)}</td><td class="td-p" style="color:#1e3a8a;font-weight:900">${fmtM(d.money)}</td></tr>`;}).join('');
+  const pRows=facts.map((f,i)=>{const d=anOf(analysis,f).total;return`<tr><td class="td" style="color:#64748b">${i+1}</td><td class="td" style="font-weight:900">${f}</td><td class="td">${d.cars}</td><td class="td" style="color:#2563eb;font-weight:900">${fmt(d.tons)}</td><td class="td" style="color:#059669;font-weight:900">${fmt(d.liters)}</td><td class="td" style="color:#d97706;font-weight:900">${fmt(d.kg)}</td></tr>`;}).join('');
+  const sRows=facts.map((f,i)=>{const d=anOf(saleAn,f).total;return`<tr><td class="td-p" style="color:#64748b">${i+1}</td><td class="td-p" style="font-weight:900">${f}</td><td class="td-p">${d.cars}</td><td class="td-p" style="color:#7c3aed;font-weight:900">${fmtKaban(d.kaban)}</td><td class="td-p" style="color:#1e3a8a;font-weight:900">${fmtM(d.money)}</td></tr>`;}).join('');
 
   let html = `
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px" class="no-print">
@@ -1092,14 +1133,14 @@ function setThisMonth(){const now=new Date();S.wFrom=new Date(now.getFullYear(),
 function copyWhatsapp(){
   const wf=S.wFrom,wt=S.wTo;
   const analysis=getAnalysis(wf,wt),saleAn=getSaleAnalysis(wf,wt),sf=S.selectedFactory;
-  const facts=sf==='الكل'?FACTORIES:[sf];
+  const facts=sf==='الكل'?allFactoryNames():[sf];
   const periodLabel=wf&&wt?wf+' → '+wt:wf?'من '+wf:wt?'إلى '+wt:'الكلي';
   let txt=`*📊 الموقف الإجمالي*\n📅 ${periodLabel}\n`;
   txt+=`\n*🛢️ المشتريات:*\n`;
-  for(const f of facts){const d=analysis[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmt(d.kg)} كغم\n`;}
+  for(const f of facts){const d=anOf(analysis,f).total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmt(d.kg)} كغم\n`;}
   txt+=`\n*📦 المبيعات:*\n`;
-  for(const f of facts){const d=saleAn[f].total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
-  txt+=`\n✅ نظام المراقبة v44.2`;
+  for(const f of facts){const d=anOf(saleAn,f).total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
+  txt+=`\n✅ نظام المراقبة v44.4`;
   navigator.clipboard?.writeText(txt).catch(()=>{});
   const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}
 }
@@ -1116,6 +1157,7 @@ function viewForm(){
     </div>
     <datalist id="dlist">${dlist}</datalist>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      ${sf==='الكل'?`<div style="grid-column:span 3;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px"><label class="lbl" for="f_factory">🏭 المعمل * <span style="color:#b45309;font-weight:700;font-size:10px">(مطلوب — المختار أعلى الصفحة «الكل» فلا يمكن معرفة المعمل تلقائياً)</span></label><select class="inp" id="f_factory"><option value="">اختر المعمل...</option>${allFactoryNames().filter(x=>!sameFactory(x,'الكل')).map(x=>`<option value="${esc(x)}" ${sameFactory(e.factory,x)?'selected':''}>${esc(x)}</option>`).join('')}</select></div>`:''}
       <div><label class="lbl" for="f_voucher">رقم البوجر *</label><input class="inp" id="f_voucher" value="${e.voucher_no||''}"></div>
       <div><label class="lbl" for="f_date">التاريخ *</label><input class="inp" id="f_date" type="date" value="${e.date||today()}"></div>
       <div><label class="lbl" for="f_ref">المصفى *</label>
@@ -1218,6 +1260,8 @@ async function saveEntry(){
   const dupVoucher=allEntries.find(x=>x.voucher_no==v&&x.id!==(e.id||''));
   if(dupVoucher){showToast('رقم البوجر '+v+' موجود مسبقاً!','error');return;}
   if(!v||!date||!ref||!driver||!car||!loc||!po||!liters){showToast('يرجى ملء جميع الحقول (*)','error');return;}
+  const fac = sf==='الكل' ? gv('f_factory') : sf;
+  if(!fac || sameFactory(fac,'الكل')){showToast('اختر المعمل الذي يخصّه هذا القيد من حقل «المعمل»','error',4000);return;}
   const hasScan0=e.has_scan||false;
   const entryId=e.id||('e_'+Date.now());
   let hasScan=hasScan0;
@@ -1229,7 +1273,7 @@ async function saveEntry(){
     if(btn){btn.disabled=false;btn.textContent='💾 حفظ وتأكيد';}
   }
   pendingScanFile=null;
-  const entry={id:entryId,voucher_no:v,refinery:ref,date,product_type:pt,driver_name:driver,car_no:car,location:loc,qty_tons:tons,natural_liters:liters,weight_kg:kg,po_no:po,price:150,transport_fee:42,refinery_price:150*liters,factory:sf,has_scan:hasScan,accountant:currentUser.email,time:Date.now()};
+  const entry={id:entryId,voucher_no:v,refinery:ref,date,product_type:pt,driver_name:driver,car_no:car,location:loc,qty_tons:tons,natural_liters:liters,weight_kg:kg,po_no:po,price:150,transport_fee:42,refinery_price:150*liters,factory:fac,has_scan:hasScan,accountant:currentUser.email,time:Date.now()};
   let entries=DB.get('entries',[]);
   if(e.id){const idx=entries.findIndex(x=>x.id===e.id);if(idx>=0)entries[idx]=entry;else entries.push(entry);}else entries.push(entry);
   DB.set('entries',entries);FDB.save('entries',entry.id,entry);
@@ -1251,6 +1295,7 @@ function viewSaleForm(){
     </div>
     <datalist id="dlist2">${dlist}</datalist>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      ${sf==='الكل'?`<div style="grid-column:span 3;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px"><label class="lbl" for="s_factory">🏭 المعمل * <span style="color:#b45309;font-weight:700;font-size:10px">(مطلوب — المختار أعلى الصفحة «الكل» فلا يمكن معرفة المعمل تلقائياً)</span></label><select class="inp" id="s_factory"><option value="">اختر المعمل...</option>${allFactoryNames().filter(x=>!sameFactory(x,'الكل')).map(x=>`<option value="${esc(x)}" ${sameFactory(e.factory,x)?'selected':''}>${esc(x)}</option>`).join('')}</select></div>`:''}
       <div style="grid-column:span 2"><label class="lbl" for="s_driver">اسم السائق *</label><input class="inp" id="s_driver" list="dlist2" value="${e.driver_name||''}" oninput="autoFillSaleDriver(this.value)" onfocus="showDriversList('s_driver','s_car','s_loc')" autocomplete="off" placeholder="اضغط لاختيار سائق..."></div>
       <div><label class="lbl" for="s_car">رقم السيارة *</label><input class="inp" id="s_car" value="${e.car_no||''}"></div>
       <div><label class="lbl" for="s_date">التاريخ *</label><input class="inp" id="s_date" type="date" value="${e.date||today()}"></div>
@@ -1309,10 +1354,12 @@ async function saveSale(){
   const source=gv('s_source');
   const salePrice=parseFloat(el('s_price')?.value||0),saleTotal=salePrice*kaban,driverBonus=parseFloat(el('s_bonus')?.value||0);
   if(!driver||!car||!date||!kaban){showToast('يرجى ملء الحقول الإلزامية (*)','warning');return;}
+  const fac = sf==='الكل' ? gv('s_factory') : sf;
+  if(!fac || sameFactory(fac,'الكل')){showToast('اختر المعمل الذي تخصّه هذه العملية من حقل «المعمل»','error',4000);return;}
   const btn=document.querySelector('button.btn-purple[onclick="saveSale()"]');
   if(btn&&btn.disabled)return;
   const allSales=DB.get('sales',[]);
-  const dupSale=allSales.find(x=>x.driver_name===driver&&x.car_no===car&&x.date===date&&x.kaban===kaban&&x.factory===sf&&x.id!==(e.id||''));
+  const dupSale=allSales.find(x=>x.driver_name===driver&&x.car_no===car&&x.date===date&&x.kaban===kaban&&sameFactory(x.factory,fac)&&x.id!==(e.id||''));
   if(dupSale){showToast('يبدو أن هذه العملية مسجلة مسبقاً (نفس السائق/السيارة/التاريخ/الكبان)!','error');return;}
   if(btn){btn.disabled=true;btn.textContent='⏳ جاري الحفظ...';}
   const hasLoadScan=e.has_load_scan||false,hasUnloadScan=e.has_unload_scan||false;
@@ -1330,7 +1377,7 @@ async function saveSale(){
   }
   if(btn){btn.disabled=false;btn.textContent='💾 حفظ وتأكيد';}
   pendingLoadScanFile=null;pendingUnloadScanFile=null;
-  const sale={id:saleId,driver_name:driver,car_no:car,date,location:loc,address:addr,product_type:type,kaban,qty_liters:liters,advance,received,car_source:source,sale_price:salePrice,sale_total:saleTotal,driver_bonus:driverBonus,factory:sf,has_load_scan:finalHasLoad,has_unload_scan:finalHasUnload,accountant:currentUser.email,time:Date.now()};
+  const sale={id:saleId,driver_name:driver,car_no:car,date,location:loc,address:addr,product_type:type,kaban,qty_liters:liters,advance,received,car_source:source,sale_price:salePrice,sale_total:saleTotal,driver_bonus:driverBonus,factory:fac,has_load_scan:finalHasLoad,has_unload_scan:finalHasUnload,accountant:currentUser.email,time:Date.now()};
   let sales=DB.get('sales',[]);
   if(e.id){const idx=sales.findIndex(x=>x.id===e.id);if(idx>=0)sales[idx]=sale;else sales.push(sale);}else sales.push(sale);
   auditLog(e.id ? 'تعديل مبيعات' : 'إضافة مبيعات', `سائق: ${sale.driver_name} | ${sale.product_type} | ${sale.factory}`);
@@ -3795,7 +3842,7 @@ function renderKroobDailySection(date){
   todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isInD2=kroobDir(e,'dinar')==='دائن',isInDol2=kroobDir(e,'dollar')==='دائن',badgeIn2=d2?isInD2:(dl2?isInDol2:isInD2);let r='\n'+(badgeIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+(isInD2?'+':'-')+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 '+(isInDol2?'+':'-')+'$'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
   waTextK+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextK+=' | $'+fmtM(balDollar);
-  waTextK+='\n✅ نظام المراقبة v44.2';
+  waTextK+='\n✅ نظام المراقبة v44.4';
   window._kroobWaText=waTextK;
 
   return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #34d399"><div style="padding:12px 16px;background:#ecfdf5;border-bottom:1px solid #6ee7b7;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#065f46">🏦 كشف الكروب اليومي — ${date}</span><span class="badge" style="background:#d1fae5;color:#059669;margin-right:8px">${todayList.length} حركة</span></div><button class="btn btn-green" style="font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._kroobWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._kroobWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
@@ -3832,7 +3879,7 @@ function renderRafidDailySection(date){
   todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(e2.type_dollar==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
   waTextR+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextR+=' | $'+fmtM(balDollar);
-  waTextR+='\n✅ نظام المراقبة v44.2';
+  waTextR+='\n✅ نظام المراقبة v44.4';
   window._rafidWaText=waTextR;
 
   return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #f59e0b"><div style="padding:12px 16px;background:#92400e;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#fff">💼 كشف حسابات سيد رافد — ${date}</span><span class="badge" style="background:rgba(255,255,255,0.2);color:#fff;margin-right:8px">${todayList.length} حركة</span></div><button class="btn" style="background:#f59e0b;color:#fff;font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._rafidWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._rafidWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
@@ -4330,7 +4377,7 @@ function sendRefineryWhatsapp(){
     lines.push((grandRemaining>0?'⚠️':'✅')+' المتبقي: '+fmtM(Math.abs(grandRemaining))+' د.ع '+(grandRemaining>0?'(غير مسوى)':'(مسوى)'));
     lines.push(sep);
   });
-  lines.push('✅ نظام المراقبة v44.2');
+  lines.push('✅ نظام المراقبة v44.4');
   var msg=lines.join(NL);
   if(navigator.clipboard){
     navigator.clipboard.writeText(msg).then(function(){showToast('تم نسخ نص الواتساب','success');}).catch(function(){});
@@ -4423,6 +4470,14 @@ function viewAdmin(){
     </div>
     <div id="chg-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px;font-weight:700"></div>
   </div>
+  ${(()=>{const b=orphanFactoryRecords();const n=b.entries.length+b.sales.length;return n?`<div class="card" style="margin-bottom:14px;border:2px solid #f59e0b;background:#fffbeb">
+    <h3 style="font-size:14px;font-weight:900;margin-bottom:6px;color:#92400e">🛠️ سجلات محفوظة بلا معمل (${n} سجل)</h3>
+    <p style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:10px">هذه السجلات (${b.entries.length} مشتريات + ${b.sales.length} مبيعات) حُفظت والمعمل المختار «الكل»، فلا تظهر باللوحة الرئيسية ولا بالموقف الإجمالي رغم ظهورها بالسجل. اختر المعمل الصحيح واضغط إصلاح.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <select class="inp" id="orphan_factory_sel" style="flex:1;min-width:200px"><option value="">اختر المعمل الصحيح...</option>${allFactoryNames().filter(x=>!sameFactory(x,'الكل')).map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select>
+      <button class="btn btn-amber" onclick="fixOrphanFactory()">🛠️ إصلاح وربط السجلات</button>
+    </div>
+  </div>`:'';})()}
   <div class="card" style="margin-bottom:14px">
     <h3 style="font-size:14px;font-weight:900;margin-bottom:14px;color:#0f172a">إضافة معمل جديد</h3>
     <div style="display:flex;gap:10px"><input class="inp" id="new_factory" placeholder="اسم المعمل..." style="flex:1"><button class="btn btn-blue" onclick="addFactory()">إضافة</button></div>
@@ -4519,6 +4574,31 @@ async function cleanupExpensesSettlementData(){
     auditLog('حذف بيانات تسوية المصاريف','إزالة نهائية بعد إلغاء ميزة تسوية المصاريف');
     showToast('✅ تم حذف البيانات نهائياً','success');
   }catch(e){showToast('خطأ أثناء الحذف: '+e.message,'error');}
+  renderContent();
+}
+// ===== سجلات محفوظة بمعمل «الكل» أو بلا معمل (كانت تختفي من اللوحة والموقف الإجمالي) =====
+function orphanFactoryRecords(){
+  const bad=r=>{const n=normFactory(r&&r.factory); return !n || n===normFactory('الكل');};
+  return {entries:DB.get('entries',[]).filter(bad), sales:DB.get('sales',[]).filter(bad)};
+}
+async function fixOrphanFactory(){
+  const target=gv('orphan_factory_sel');
+  if(!target || sameFactory(target,'الكل')){showToast('اختر المعمل الهدف أولاً','error');return;}
+  const bad=orphanFactoryRecords();
+  const eIds=new Set(bad.entries.map(x=>x.id)), sIds=new Set(bad.sales.map(x=>x.id));
+  if(!eIds.size && !sIds.size){showToast('لا توجد سجلات بلا معمل','info');return;}
+  if(!confirm('سيتم نقل '+eIds.size+' سجل مشتريات و '+sIds.size+' سجل مبيعات إلى معمل: '+target+'\nهل أنت متأكد؟'))return;
+  const allE=DB.get('entries',[]), changedE=[];
+  allE.forEach(x=>{ if(eIds.has(x.id)){ x.factory=target; changedE.push(x); } });
+  DB.set('entries',allE);
+  const allS=DB.get('sales',[]), changedS=[];
+  allS.forEach(x=>{ if(sIds.has(x.id)){ x.factory=target; changedS.push(x); } });
+  DB.set('sales',allS);
+  showToast('جاري المزامنة مع السحابة...','info',4000);
+  for(const x of changedE) await FDB.save('entries',x.id,x);
+  for(const x of changedS) await FDB.save('sales',x.id,x);
+  auditLog('إصلاح معمل السجلات', changedE.length+' مشتريات + '+changedS.length+' مبيعات ← '+target);
+  showToast('تم تحديث '+(changedE.length+changedS.length)+' سجل وربطها بمعمل '+target,'success',5000);
   renderContent();
 }
 function addFactory(){const n=gv('new_factory');if(!n)return;let f=DB.get('factories',FACTORIES);if(f.includes(n)){showToast('موجود مسبقاً','warning');return;}f.push(n);DB.set('factories',f);FACTORIES=f;FDB.save('settings','factories',{id:'factories',list:f});renderContent();}

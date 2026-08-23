@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام المشتريات النفطية v44.4</title>
+<title>نظام المشتريات النفطية v44.5</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='14' y='16' width='36' height='34' rx='5' fill='%231e3a5f'/><ellipse cx='32' cy='16' rx='18' ry='6' fill='%232563eb'/><ellipse cx='32' cy='50' rx='18' ry='6' fill='%231e293b'/><rect x='14' y='26' width='36' height='5' fill='%23f59e0b'/><rect x='14' y='37' width='36' height='5' fill='%23f59e0b'/><text x='32' y='35' text-anchor='middle' fill='%2334d399' font-size='10' font-weight='bold' font-family='Arial'>OIL</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -884,7 +884,7 @@ function render() {
       '<aside style="width:225px;background:#0f172a;display:flex;flex-direction:column;flex-shrink:0;z-index:50">' +
         '<div style="padding:10px;background:#020617;border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
           '<div style="width:34px;height:34px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:11px;margin:0 auto 5px">OIL</div>' +
-          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v44.4</p>' +
+          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v44.5</p>' +
           '<p style="font-size:10px;color:#94a3b8;margin-top:2px;font-weight:900;letter-spacing:0.5px">'+(isM?'المدققين':'محاسب: '+currentUser.factory)+'</p>' +
         '</div>' +
         '<nav id="sidebar-nav" style="flex:1;padding:8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
@@ -1140,7 +1140,7 @@ function copyWhatsapp(){
   for(const f of facts){const d=anOf(analysis,f).total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmt(d.kg)} كغم\n`;}
   txt+=`\n*📦 المبيعات:*\n`;
   for(const f of facts){const d=anOf(saleAn,f).total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
-  txt+=`\n✅ نظام المراقبة v44.4`;
+  txt+=`\n✅ نظام المراقبة v44.5`;
   navigator.clipboard?.writeText(txt).catch(()=>{});
   const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}
 }
@@ -1610,7 +1610,7 @@ function generatePDF(type){
 }
 
 // ===== استيراد Excel =====
-let importedRows=[], importType='purchases';
+let importedRows=[], importType='purchases', importHasVoucherCol=false;
 const COL_MAP_P={
   'المصدر':'refinery','مصفى':'refinery','المصفى':'refinery',
   'اسم السائق':'driver_name','السائق':'driver_name',
@@ -1659,6 +1659,33 @@ function normalizeCol(col,map){
 function autoScale(val){var n=parseFloat(val)||0;if(n>0&&n<1000)return n*1000;return n;}
 function parseXLDate(d){if(!d)return'';d=d.toString().trim();const m1=d.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/);if(m1)return`${m1[1]}-${m1[2].padStart(2,'0')}-${m1[3].padStart(2,'0')}`;const m2=d.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);if(m2)return`${m2[3]}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`;const m3=d.match(/^(\d{1,2})[\/](\d{1,2})[\/](\d{4})$/);if(m3)return`${m3[3]}-${m3[2].padStart(2,'0')}-${m3[1].padStart(2,'0')}`;if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;const n=parseFloat(d);if(!isNaN(n)&&n>40000){const dt=new Date((n-25569)*86400*1000);return dt.toISOString().split('T')[0];}return d;}
 
+// ===== منع تكرار الاستيراد =====
+// المفتاح الأساسي للمشتريات هو رقم البوجر ضمن نفس المعمل. لكن عند غياب عمود بوجر حقيقي
+// بالملف يضع النظام تسلسلاً بديلاً (ت أو رقم الصف) وهو يتكرر بكل ملف — لذلك يُستخدم
+// حينها مفتاح مركّب (تاريخ+سيارة+سائق+كمية) بدلاً منه، وإلا لأُسقط ملف شهر جديد بالكامل.
+function normVoucher(v){
+  return (v==null?'':v).toString().trim()
+    .replace(/[\u0660-\u0669]/g,function(d){return String.fromCharCode(d.charCodeAt(0)-0x0660+48);})
+    .replace(/[\u06F0-\u06F9]/g,function(d){return String.fromCharCode(d.charCodeAt(0)-0x06F0+48);})
+    .replace(/[,\s]/g,'').replace(/\.0+$/,'').replace(/^0+(?=\d)/,'');
+}
+function normTxtKey(v){
+  return (v==null?'':v).toString().replace(/[\u0623\u0625\u0622\u0671]/g,'\u0627')
+    .replace(/\u0649/g,'\u064A').replace(/\u0629/g,'\u0647').replace(/\s+/g,' ').trim();
+}
+function normNumKey(v){ var x=parseFloat(v); return isNaN(x)?'':String(Math.round(x)); }
+// المفتاح المركّب: يعود فارغاً إذا لم يوجد تاريخ حقيقي (تاريخ فارغ غير موثوق للمطابقة)
+function purchaseCompKey(e){
+  var d=(e&&e.date||'').toString().trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return '';
+  return normFactory(e.factory)+'|'+d+'|'+normTxtKey(e.car_no)+'|'+normTxtKey(e.driver_name)+'|'+normNumKey(e.natural_liters);
+}
+function saleCompKey(s){
+  var d=(s&&s.date||'').toString().trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return '';
+  return normFactory(s.factory)+'|'+d+'|'+normTxtKey(s.car_no)+'|'+normTxtKey(s.driver_name)+'|'+normNumKey(s.qty_liters);
+}
+
 function viewImport(presetType){
   const facts=FACTORIES.map(f=>`<option value="${f}">${f}</option>`).join('');
   return `<div class="card" style="max-width:680px;margin:0 auto">
@@ -1666,7 +1693,7 @@ function viewImport(presetType){
       ${presetType==='sales'?'<span style="background:#7c3aed;color:#fff;padding:5px 12px;border-radius:8px;font-size:11px;font-weight:900">مبيعات</span>':'<span style="background:#2563eb;color:#fff;padding:5px 12px;border-radius:8px;font-size:11px;font-weight:900">مشتريات</span>'}
       <h2 style="font-size:15px;font-weight:900">استيراد البيانات من Excel 📥</h2>
     </div>
-    <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#92400e;font-weight:700">⚠️ لاستيراد تصحيح — احذف البيانات القديمة أولاً من ⚙️ إدارة النظام</div>
+    <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#065f46;font-weight:700">🛡️ منع التكرار مُفعَّل: السجلات المستوردة سابقاً لنفس المعمل تُتجاهَل تلقائياً (المطابقة برقم البوجر، وعند غيابه بالتاريخ+السيارة+السائق+الكمية).<br><span style="color:#92400e">⚠️ لاستيراد تصحيح لبيانات موجودة — احذف القديمة أولاً من ⚙️ إدارة النظام</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
       <div><label class="lbl">نوع البيانات *</label><select class="inp" id="imp_type" onchange="importType=this.value"><option value="purchases" ${presetType==='sales'?'':'selected'}>مشتريات منتوج</option><option value="sales" ${presetType==='sales'?'selected':''}>مبيعات منتوج</option></select></div>
       <div><label class="lbl">المعمل المستهدف *</label><select class="inp" id="imp_factory">${facts}</select></div>
@@ -1706,6 +1733,7 @@ function previewExcel(file){
       const headers=raw[hrow]||[];
       const colMap={};
       headers.forEach((h,i)=>{const m=normalizeCol(h,map);if(m)colMap[i]=m;});
+      importHasVoucherCol=Object.values(colMap).indexOf('voucher_no')>=0;
       importedRows=[];
       for(let r=hrow+1;r<raw.length;r++){
         const row=raw[r];
@@ -1730,15 +1758,36 @@ async function doImport(){
   window._importing=true;
   if(!importedRows.length){window._importing=false;return;}
   const factory=gv('imp_factory'),iType=gv('imp_type')||'purchases';
-  let drivers=DB.get('drivers',{}),added=0;
+  let drivers=DB.get('drivers',{}),added=0,skippedDup=0;
   if(iType==='purchases'){
     let entries=DB.get('entries',[]);
     const newEntries=[];
+    // فهرسة سجلات نفس المعمل الموجودة مسبقاً بمفتاحين: رقم البوجر + المفتاح المركّب
+    const exV={},exC={};
+    entries.forEach(e=>{
+      if(!sameFactory(e.factory,factory))return;
+      const v=normVoucher(e.voucher_no); if(v)exV[v]=(exV[v]||0)+1;
+      const c=purchaseCompKey(e); if(c)exC[c]=(exC[c]||0)+1;
+    });
+    const inV={},inC={};
     importedRows.forEach((row,i)=>{
       const xlTons=autoScale(row.qty_tons),xlLiters=autoScale(row.natural_liters),xlKg=autoScale(row.weight_kg);
       const xlPrice=parseFloat(row.price)||150,xlRefPrice=parseFloat(row.refinery_price)||(xlPrice*xlLiters);
       const dName=(row.driver_name||'').toString().trim(),carNo=(row.car_no||'').toString().trim().replace(/\.0$/,''),loc=(row.location||'').toString().trim();
-      const entry={id:'xl_p_'+Date.now()+'_'+i,voucher_no:row.voucher_no||(row._num||String(i+1)),refinery:(row.refinery||'').toString().trim(),date:parseXLDate(row.date),product_type:(row.product_type||'').toString().trim(),driver_name:dName,car_no:carNo,location:loc,qty_tons:xlTons,natural_liters:xlLiters,weight_kg:xlKg,po_no:(row.po_no||'').toString().trim(),price:xlPrice,transport_fee:42,refinery_price:xlRefPrice,factory,accountant:currentUser.email,time:Date.now()+i};
+      const xlDate=parseXLDate(row.date);
+      // تجاهل صامت لأي سجل مستورد سابقاً لنفس المعمل
+      const rawV=importHasVoucherCol?normVoucher(row.voucher_no):'';
+      if(rawV){
+        inV[rawV]=(inV[rawV]||0)+1;
+        if(inV[rawV]<=(exV[rawV]||0)){skippedDup++;return;}
+      }else{
+        const ck=purchaseCompKey({factory:factory,date:xlDate,car_no:carNo,driver_name:dName,natural_liters:xlLiters});
+        if(ck){
+          inC[ck]=(inC[ck]||0)+1;
+          if(inC[ck]<=(exC[ck]||0)){skippedDup++;return;}
+        }
+      }
+      const entry={id:'xl_p_'+Date.now()+'_'+i,voucher_no:row.voucher_no||(row._num||String(i+1)),refinery:(row.refinery||'').toString().trim(),date:xlDate,product_type:(row.product_type||'').toString().trim(),driver_name:dName,car_no:carNo,location:loc,qty_tons:xlTons,natural_liters:xlLiters,weight_kg:xlKg,po_no:(row.po_no||'').toString().trim(),price:xlPrice,transport_fee:42,refinery_price:xlRefPrice,factory,accountant:currentUser.email,time:Date.now()+i};
       entries.push(entry);newEntries.push(entry);
       if(dName)drivers[dName]={name:dName,car_no:carNo,location:loc};
       added++;
@@ -1748,9 +1797,22 @@ async function doImport(){
     for(let i=0;i<newEntries.length;i++) await FDB.save('entries',newEntries[i].id,newEntries[i]);
   }else{
     let sales=DB.get('sales',[]);const newSales=[];
+    // المبيعات بلا رقم بوجر بالملف — المطابقة بالمفتاح المركّب ضمن نفس المعمل
+    const exSC={};
+    sales.forEach(s=>{
+      if(!sameFactory(s.factory,factory))return;
+      const c=saleCompKey(s); if(c)exSC[c]=(exSC[c]||0)+1;
+    });
+    const inSC={};
     importedRows.forEach((row,i)=>{
       const dName=(row.driver_name||'').toString().trim(),carNo=(row.car_no||'').toString().trim().replace(/\.0$/,''),loc=(row.location||'').toString().trim();
-      const sale={id:'xl_s_'+Date.now()+'_'+i,driver_name:dName,car_no:carNo,date:parseXLDate(row.date),location:loc,address:(row.address||'').toString().trim(),product_type:(row.product_type||'').toString().trim(),kaban:autoScale(row.kaban),qty_liters:autoScale(row.qty_liters),advance:parseFloat(row.advance)||0,received:parseFloat(row.received)||0,car_source:(row.car_source||'').toString().trim(),factory,accountant:currentUser.email,time:Date.now()+i};
+      const xlDate=parseXLDate(row.date),xlQty=autoScale(row.qty_liters);
+      const ck=saleCompKey({factory:factory,date:xlDate,car_no:carNo,driver_name:dName,qty_liters:xlQty});
+      if(ck){
+        inSC[ck]=(inSC[ck]||0)+1;
+        if(inSC[ck]<=(exSC[ck]||0)){skippedDup++;return;}
+      }
+      const sale={id:'xl_s_'+Date.now()+'_'+i,driver_name:dName,car_no:carNo,date:xlDate,location:loc,address:(row.address||'').toString().trim(),product_type:(row.product_type||'').toString().trim(),kaban:autoScale(row.kaban),qty_liters:xlQty,advance:parseFloat(row.advance)||0,received:parseFloat(row.received)||0,car_source:(row.car_source||'').toString().trim(),factory,accountant:currentUser.email,time:Date.now()+i};
       sales.push(sale);newSales.push(sale);
       if(dName)drivers[dName]={name:dName,car_no:carNo,location:loc};
       added++;
@@ -1761,11 +1823,12 @@ async function doImport(){
   }
   DB.set('drivers',drivers);
   const res=el('imp-result');
-  if(res){res.style.display='block';res.style.background='#ecfdf5';res.style.color='#065f46';res.style.border='1px solid #6ee7b7';res.textContent=`✅ تم استيراد ${added} سجل إلى "${factory}"`;}
+  if(res){res.style.display='block';res.style.background='#ecfdf5';res.style.color='#065f46';res.style.border='1px solid #6ee7b7';res.textContent=`✅ تم استيراد ${added} سجل إلى "${factory}"`+(skippedDup?` | ⏭️ تم تجاهل ${skippedDup} سجل مكرر (مستورد سابقاً)`:'');}
+  if(skippedDup)showToast('⏭️ تم تجاهل '+skippedDup+' سجل مكرر كان مستورداً سابقاً لمعمل "'+factory+'"','warning',7000);
   importedRows=[];window._importing=false;
   setTimeout(()=>{S.view=iType==='sales'?'sale_table':'table';S.selectedFactory=factory;render();},1500);
 }
-function resetImport(){importedRows=[];const p=el('imp-preview'),r=el('imp-result'),f=el('imp_file');if(p)p.style.display='none';if(r)r.style.display='none';if(f)f.value='';}
+function resetImport(){importedRows=[];importHasVoucherCol=false;const p=el('imp-preview'),r=el('imp-result'),f=el('imp_file');if(p)p.style.display='none';if(r)r.style.display='none';if(f)f.value='';}
 
 // ===== نظام السلف =====
 const SALAF_PERSONS=['سيد حيدر','محمد خالد','سيد رافد','فايق رويمي'];
@@ -3842,7 +3905,7 @@ function renderKroobDailySection(date){
   todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isInD2=kroobDir(e,'dinar')==='دائن',isInDol2=kroobDir(e,'dollar')==='دائن',badgeIn2=d2?isInD2:(dl2?isInDol2:isInD2);let r='\n'+(badgeIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+(isInD2?'+':'-')+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 '+(isInDol2?'+':'-')+'$'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
   waTextK+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextK+=' | $'+fmtM(balDollar);
-  waTextK+='\n✅ نظام المراقبة v44.4';
+  waTextK+='\n✅ نظام المراقبة v44.5';
   window._kroobWaText=waTextK;
 
   return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #34d399"><div style="padding:12px 16px;background:#ecfdf5;border-bottom:1px solid #6ee7b7;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#065f46">🏦 كشف الكروب اليومي — ${date}</span><span class="badge" style="background:#d1fae5;color:#059669;margin-right:8px">${todayList.length} حركة</span></div><button class="btn btn-green" style="font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._kroobWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._kroobWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
@@ -3879,7 +3942,7 @@ function renderRafidDailySection(date){
   todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(e2.type_dollar==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
   waTextR+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextR+=' | $'+fmtM(balDollar);
-  waTextR+='\n✅ نظام المراقبة v44.4';
+  waTextR+='\n✅ نظام المراقبة v44.5';
   window._rafidWaText=waTextR;
 
   return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #f59e0b"><div style="padding:12px 16px;background:#92400e;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#fff">💼 كشف حسابات سيد رافد — ${date}</span><span class="badge" style="background:rgba(255,255,255,0.2);color:#fff;margin-right:8px">${todayList.length} حركة</span></div><button class="btn" style="background:#f59e0b;color:#fff;font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._rafidWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._rafidWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
@@ -4377,7 +4440,7 @@ function sendRefineryWhatsapp(){
     lines.push((grandRemaining>0?'⚠️':'✅')+' المتبقي: '+fmtM(Math.abs(grandRemaining))+' د.ع '+(grandRemaining>0?'(غير مسوى)':'(مسوى)'));
     lines.push(sep);
   });
-  lines.push('✅ نظام المراقبة v44.4');
+  lines.push('✅ نظام المراقبة v44.5');
   var msg=lines.join(NL);
   if(navigator.clipboard){
     navigator.clipboard.writeText(msg).then(function(){showToast('تم نسخ نص الواتساب','success');}).catch(function(){});

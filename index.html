@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام المشتريات النفطية v44.5</title>
+<title>نظام المشتريات النفطية v44.6</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='14' y='16' width='36' height='34' rx='5' fill='%231e3a5f'/><ellipse cx='32' cy='16' rx='18' ry='6' fill='%232563eb'/><ellipse cx='32' cy='50' rx='18' ry='6' fill='%231e293b'/><rect x='14' y='26' width='36' height='5' fill='%23f59e0b'/><rect x='14' y='37' width='36' height='5' fill='%23f59e0b'/><text x='32' y='35' text-anchor='middle' fill='%2334d399' font-size='10' font-weight='bold' font-family='Arial'>OIL</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -584,6 +584,14 @@ async function syncFromCloud(silent=false) {
       DB.set('sales',Object.values(byId));
     }
     if(Array.isArray(salaf)) DB.set('salaf',salaf);
+    const privSalaf=await FDB.getAll('private_salaf');
+    if(privSalaf&&privSalaf.length){
+      const pTomb=DB.get('deleted_private_salaf_ids',[]);
+      const merged={};
+      DB.get('private_salaf',[]).forEach(function(e){if(e.id)merged[e.id]=e;});
+      privSalaf.forEach(function(e){if(!e.id)return;if(!merged[e.id]||(e.time||0)>=(merged[e.id].time||0))merged[e.id]=e;});
+      DB.set('private_salaf',Object.values(merged).filter(function(e){return!pTomb.includes(e.id);}).sort(function(a,b){return(a.date||'').localeCompare(b.date||'');}));
+    }
     const expenses=await FDB.getAll('expenses');
     if(expenses&&expenses.length){
       const tombstones=DB.get('deleted_expense_ids',[]);
@@ -721,7 +729,8 @@ let S = {
   kroobMonth: (new Date()).toISOString().slice(0,7),
   rafidMonth: (new Date()).toISOString().slice(0,7),
   kroobSelected: new Set(),
-  rafidSelected: new Set()
+  rafidSelected: new Set(),
+  privSalafTab:'سيد رافد', privSalafEditId:'', privSalafMonth:'', privSalafSearch:''
 };
 
 // ===== دوال مساعدة =====
@@ -756,7 +765,7 @@ function el(id){ return document.getElementById(id); }
 function gv(id){ return el(id)?.value?.trim()||''; }
 function isManager(){ return currentUser?.role==='manager'; }
 function hasPerm(perm){ if(!_checkIntegrity())return false; if(isManager())return true; const perms=currentUser?.permissions; if(!perms)return false; return perms.includes(perm); }
-function canEdit(section){ if(!_checkIntegrity())return false; if(isManager())return true; if(currentUser?.email==='mohammed.ridha@gmail.com')return true; if(section==='purchases'&&hasPerm('table'))return true; if(section==='sales'&&hasPerm('sale_table'))return true; if(section==='salaf'&&hasPerm('salaf'))return true; if(section==='expenses'&&hasPerm('expenses'))return true; return false; }
+function canEdit(section){ if(!_checkIntegrity())return false; if(isManager())return true; if(currentUser?.email==='mohammed.ridha@gmail.com')return true; if(section==='purchases'&&hasPerm('table'))return true; if(section==='sales'&&hasPerm('sale_table'))return true; if(section==='salaf'&&hasPerm('salaf'))return true; if(section==='private_salaf'&&hasPerm('private_salaf'))return true; if(section==='expenses'&&hasPerm('expenses'))return true; return false; }
 
 // ===== سجل النشاط (Audit Log) =====
 function auditLog(action, details){
@@ -884,7 +893,7 @@ function render() {
       '<aside style="width:225px;background:#0f172a;display:flex;flex-direction:column;flex-shrink:0;z-index:50">' +
         '<div style="padding:10px;background:#020617;border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
           '<div style="width:34px;height:34px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:11px;margin:0 auto 5px">OIL</div>' +
-          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v44.5</p>' +
+          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v44.6</p>' +
           '<p style="font-size:10px;color:#94a3b8;margin-top:2px;font-weight:900;letter-spacing:0.5px">'+(isM?'المدققين':'محاسب: '+currentUser.factory)+'</p>' +
         '</div>' +
         '<nav id="sidebar-nav" style="flex:1;padding:8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
@@ -915,10 +924,11 @@ function render() {
       sal:DB.get('sales',[]).length,
       kr:DB.get('kroob',[]).length,
       rf:DB.get('rafid_accounts',[]).length,
-      slf:DB.get('salaf',[]).length
+      slf:DB.get('salaf',[]).length,
+      psl:DB.get('private_salaf',[]).length
     };
     await syncFromCloud(true);
-    const changed=DB.get('expenses',[]).length!==snap.exp||DB.get('entries',[]).length!==snap.ent||DB.get('sales',[]).length!==snap.sal||DB.get('kroob',[]).length!==snap.kr||DB.get('rafid_accounts',[]).length!==snap.rf||DB.get('salaf',[]).length!==snap.slf;
+    const changed=DB.get('expenses',[]).length!==snap.exp||DB.get('entries',[]).length!==snap.ent||DB.get('sales',[]).length!==snap.sal||DB.get('kroob',[]).length!==snap.kr||DB.get('rafid_accounts',[]).length!==snap.rf||DB.get('salaf',[]).length!==snap.slf||DB.get('private_salaf',[]).length!==snap.psl;
     if(changed){showToast('📥 تم استلام بيانات جديدة','info',4000);renderContent();}
   },90000);
   renderContent();
@@ -948,7 +958,8 @@ function buildNav(isM) {
   nav += isM ? ni('import_s',"📥 استيراد مبيعات",'color:#c4b5fd') : '';
   nav += '</div>';
   nav += isM ? `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('reports','📄 التقارير والطباعة','color:#fbbf24')}</div>` : '';
-  if(hasPerm('salaf')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المالية</p>${ni('salaf','💰 السلف','color:#fbbf24')}${ni('salaf_settlement','📊 تسوية السلف','color:#fcd34d')}</div>`;
+  if(hasPerm('salaf')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المالية</p>${ni('salaf','💰 السلف','color:#fbbf24')}${ni('salaf_settlement','📊 تسوية السلف','color:#fcd34d')}${hasPerm('private_salaf')?ni('private_salaf','🔐 سلف خاصة','color:#fca5a5'):''}</div>`;
+  else if(hasPerm('private_salaf')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المالية</p>${ni('private_salaf','🔐 سلف خاصة','color:#fca5a5')}</div>`;
   if(hasPerm('expenses')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#f87171;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المصاريف</p>${ni('expenses','📋 المصاريف','color:#f87171')}</div>`;
   if(hasPerm('kroob')||hasPerm('kroob_statement')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#34d399;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">الكروب / الصيرفة</p>${hasPerm('kroob')?ni('kroob','🏦 كروب رافد فيصل','color:#34d399'):''}${hasPerm('kroob_statement')?ni('kroob_statement','📜 كشف الحساب','color:#34d399'):''}</div>`;
   // حسابات سيد رافد
@@ -974,6 +985,7 @@ function renderContent() {
   else if(v==='reports')       c.innerHTML = viewReports();
   else if(v==='salaf')         c.innerHTML = viewSalafForm();
   else if(v==='salaf_settlement') c.innerHTML = hasPerm('salaf') ? viewSalafSettlement() : '<div style="padding:40px;text-align:center;color:#ef4444;font-weight:900">غير مصرح</div>';
+  else if(v==='private_salaf') c.innerHTML = hasPerm('private_salaf') ? viewPrivateSalaf() : '<div style="padding:40px;text-align:center;color:#ef4444;font-weight:900">غير مصرح</div>';
   else if(v==='expenses')      c.innerHTML = viewExpenses();
   else if(v==='exp_dup_review') c.innerHTML = viewExpDupReview();
   else if(v==='exp_fixdates_review') c.innerHTML = viewExpFixDatesReview();
@@ -1140,7 +1152,7 @@ function copyWhatsapp(){
   for(const f of facts){const d=anOf(analysis,f).total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmt(d.kg)} كغم\n`;}
   txt+=`\n*📦 المبيعات:*\n`;
   for(const f of facts){const d=anOf(saleAn,f).total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
-  txt+=`\n✅ نظام المراقبة v44.5`;
+  txt+=`\n✅ نظام المراقبة v44.6`;
   navigator.clipboard?.writeText(txt).catch(()=>{});
   const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}
 }
@@ -1996,6 +2008,264 @@ function saveSalaf(){
 function deleteSalaf(id){if(!confirm('حذف هذه السلفة؟'))return;const sl=DB.get('salaf',[]).find(s=>s.id===id);auditLog('حذف سلفة',`${sl?.person||id} | دينار: ${sl?.amount_dinar||0}`);let salaf=DB.get('salaf',[]).filter(s=>s.id!==id);DB.set('salaf',salaf);FDB.delete('salaf',id);renderContent();}
 async function clearAllSalaf(){if(!confirm('مسح جميع بيانات السلف؟'))return;if(!confirm('تأكيد نهائي!'))return;const salaf=DB.get('salaf',[]);DB.set('salaf',[]);try{await Promise.all(salaf.map(s=>FDB.delete('salaf',s.id)));}catch(e){console.warn(e);}renderContent();}
 function exportSalafXLSX(){if(typeof XLSX==='undefined')return;const salafMonthFilter=S.salafMonthFilter||'';const personFilter=(S.salafPersonFilter||'').trim();let list=DB.get('salaf',[]);if(salafMonthFilter)list=list.filter(e=>(e.date||'').startsWith(salafMonthFilter));if(personFilter)list=list.filter(e=>(e.person||'').includes(personFilter));const rows=[['ت','الشخص','التاريخ','المبلغ دينار','المبلغ دولار','البيان']];list.forEach((e,i)=>rows.push([i+1,e.person,e.date,e.amount_dinar||0,e.amount_dollar||0,e.note||'']));const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:5},{wch:15},{wch:14},{wch:16},{wch:16},{wch:30}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'السلف');XLSX.writeFile(wb,'السلف_'+today()+'.xlsx');}
+
+// ===== سلف خاصة (سيد رافد / فايق رويمي) =====
+const PRIV_SALAF_PERSONS=['سيد رافد','فايق رويمي'];
+const PRIV_SALAF_COLORS={'سيد رافد':{main:'#b91c1c',soft:'#fee2e2',line:'#fca5a5'},'فايق رويمي':{main:'#7c3aed',soft:'#ede9fe',line:'#c4b5fd'}};
+const PRIV_SALAF_MONTHS={'01':'كانون الثاني','02':'شباط','03':'آذار','04':'نيسان','05':'أيار','06':'حزيران','07':'تموز','08':'آب','09':'أيلول','10':'تشرين الأول','11':'تشرين الثاني','12':'كانون الأول'};
+function privNormAr(s){return String(s==null?'':s).replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/\s+/g,' ').trim();}
+// اسم الشخص المعتمد من اسم شيت Excel (يتحمل اختلاف الهمزات والمسافات وصيغة "سلف ...")
+function privPersonFromSheet(name){
+  const n=privNormAr(name).replace(/^سلف\s*/,'');
+  for(const p of PRIV_SALAF_PERSONS){ if(n===privNormAr(p)||n.indexOf(privNormAr(p))>=0) return p; }
+  return '';
+}
+function privSalafAll(){ return DB.get('private_salaf',[]); }
+function privSalafByPerson(person){ return privSalafAll().filter(e=>e.person===person).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0)); }
+// مفتاح منع تكرار الاستيراد: الشخص + التاريخ + المبلغان + المستلم + البيان
+function privSalafDupKey(e){
+  const d=Math.round(safeNum(e.amount_dinar));
+  const dl=Math.round(safeNum(e.amount_dollar)*100)/100;
+  return (e.person||'')+'|'+(e.date||'')+'|'+d+'|'+dl+'|'+privNormAr(e.receiver)+'|'+privNormAr(e.note);
+}
+function addPrivSalafTombstones(ids){
+  const t=DB.get('deleted_private_salaf_ids',[]);
+  ids.forEach(function(id){ if(t.indexOf(id)<0) t.push(id); });
+  DB.set('deleted_private_salaf_ids',t.slice(-4000));
+}
+
+function viewPrivateSalaf(){
+  const tab=PRIV_SALAF_PERSONS.indexOf(S.privSalafTab)>=0?S.privSalafTab:PRIV_SALAF_PERSONS[0];
+  const col=PRIV_SALAF_COLORS[tab];
+  const month=S.privSalafMonth||'';
+  const search=(S.privSalafSearch||'').trim();
+  const editId=S.privSalafEditId||'';
+  const editData=editId?privSalafAll().find(e=>e.id===editId):null;
+  const editTab=editData?editData.person:tab;
+  let list=privSalafByPerson(tab);
+  const totalCount=list.length;
+  if(month) list=list.filter(e=>(e.date||'').startsWith(month));
+  if(search) list=list.filter(e=>[(e.receiver||''),(e.note||''),String(e.amount_dinar||''),String(e.amount_dollar||''),(e.date||'')].some(f=>String(f).indexOf(search)>=0));
+  const sumD=list.reduce((s,e)=>s+safeNum(e.amount_dinar),0);
+  const sumDol=list.reduce((s,e)=>s+safeNum(e.amount_dollar),0);
+  const monthLabel=month?((PRIV_SALAF_MONTHS[month.slice(5)]||'')+' '+month.slice(0,4)):'';
+  const canEd=canEdit('private_salaf');
+
+  const tabsHtml=PRIV_SALAF_PERSONS.map(function(p){
+    const c=PRIV_SALAF_COLORS[p],act=p===tab,n=privSalafByPerson(p).length;
+    return `<button onclick="setPrivSalafTab('${esc(p)}')" style="padding:9px 22px;font-size:13px;font-weight:900;border-radius:9px;cursor:pointer;border:2px solid ${act?c.main:'#e2e8f0'};background:${act?c.main:'#fff'};color:${act?'#fff':'#64748b'}">👤 ${esc(p)} <span style="font-size:10px;opacity:.85">(${n})</span></button>`;
+  }).join('');
+
+  const rows=list.map(function(e,i){
+    return `<tr style="background:${e.id===editId?'#fffbeb':''}"><td class="td" style="color:#64748b">${i+1}</td><td class="td" style="white-space:nowrap">${esc(e.date||'')}</td><td class="td" style="color:#ca8a04;font-weight:900;background:#fffbeb">${e.amount_dinar?fmtM(e.amount_dinar):''}</td><td class="td" style="color:#0f172a;font-weight:900;background:#f8fafc">${e.amount_dollar?fmtM(e.amount_dollar):''}</td><td class="td" style="font-size:11px;font-weight:700;text-align:right">${esc(e.receiver||'')}</td><td class="td" style="font-size:11px;text-align:right">${esc(e.note||'')}</td>${canEd?`<td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:6px 10px;font-size:11px;margin-left:6px" onclick="editPrivateSalaf('${e.id}')">✏️</button><button class="btn btn-red" style="padding:6px 10px;font-size:11px" onclick="deletePrivateSalaf('${e.id}')">🗑️</button></td>`:''}</tr>`;
+  }).join('');
+  const totalRow=`<tr style="background:${col.main};color:#fff;font-weight:900"><td class="td" style="color:#fff" colspan="2">الإجمالي</td><td class="td" style="color:#fde68a;font-weight:900;font-size:13px">${fmtM(sumD)} د.ع</td><td class="td" style="color:#fff;font-weight:900;font-size:13px">${fmtM(sumDol)} $</td><td class="td" style="color:#fff" colspan="${canEd?3:2}">${list.length} حركة</td></tr>`;
+
+  const formHtml=canEd?`<div class="card" style="margin-bottom:14px;border-right:5px solid ${col.main}"><h3 style="font-size:13px;font-weight:900;margin-bottom:14px;color:${col.main}">${editId?'✏️ تعديل حركة':'➕ إضافة سلفة'} — ${esc(editTab)}</h3><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px"><div><label class="lbl">التاريخ *</label><input class="inp" id="ps_date" type="date" value="${editData?esc(editData.date||''):today()}"></div><div><label class="lbl">👤 المستلم *</label><input class="inp" id="ps_receiver" placeholder="اسم المستلم..." value="${editData?esc(editData.receiver||''):''}"></div><div><label class="lbl">💛 المبلغ دينار</label><input class="inp" id="ps_dinar" type="number" placeholder="0" value="${editData&&editData.amount_dinar?editData.amount_dinar:''}"></div><div><label class="lbl">🖤 المبلغ دولار</label><input class="inp" id="ps_dollar" type="number" placeholder="0" value="${editData&&editData.amount_dollar?editData.amount_dollar:''}"></div><div style="grid-column:span 2"><label class="lbl">البيان</label><input class="inp" id="ps_note" placeholder="وصف الحركة..." value="${editData?esc(editData.note||''):''}"></div></div><div style="display:flex;justify-content:flex-end;margin-top:12px;gap:8px">${editId?`<button class="btn btn-gray" style="padding:10px 20px;font-size:13px" onclick="S.privSalafEditId='';renderContent()">إلغاء</button>`:''}<button class="btn btn-amber" style="padding:10px 28px;font-size:14px" onclick="savePrivateSalaf()">💾 حفظ</button></div></div>`:'';
+
+  return `<div style="margin-bottom:6px"><h2 style="font-size:17px;font-weight:900;color:#0f172a">🔐 سلف خاصة</h2><p style="font-size:11px;color:#64748b;margin-top:3px">سجل السلف الخاصة لـ سيد رافد وفايق رويمي — مستقل تماماً عن صفحة «السلف» وتسويتها</p></div>
+  <div style="display:flex;align-items:center;gap:8px;margin:14px 0;flex-wrap:wrap">${tabsHtml}
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-right:auto">
+      <input type="month" value="${esc(month)}" class="inp" style="padding:5px 8px;font-size:11px;width:150px;cursor:pointer" onchange="S.privSalafMonth=this.value;S.privSalafEditId='';renderContent()" title="فلتر بالشهر">
+      ${month?`<button class="btn btn-gray" style="font-size:11px;padding:5px 10px" onclick="S.privSalafMonth='';renderContent()">✕ كل الأشهر</button>`:''}
+      <input class="inp" id="ps_search_inp" placeholder="🔍 بحث بالمستلم أو البيان أو المبلغ..." value="${esc(search)}" oninput="setPrivSalafSearch(this.value,this.selectionStart)" style="min-width:190px;max-width:250px;font-size:12px">
+      ${search?`<button class="btn btn-gray" style="font-size:11px;padding:5px 10px" onclick="S.privSalafSearch='';renderContent()">✕</button>`:''}
+      ${canEd?`<label class="btn btn-green" style="font-size:12px;padding:8px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">📥 استيراد Excel<input type="file" accept=".xlsx" style="display:none" onchange="importPrivateSalafXLSX(this)"></label>`:''}
+      <button class="btn btn-gray" style="font-size:12px;padding:8px 14px" onclick="exportPrivateSalafXLSX()">📤 تصدير Excel</button>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
+    <div class="card" style="text-align:center;border-top:4px solid ${col.main}"><div style="font-size:11px;color:#64748b">عدد الحركات${month?' (الشهر)':''}</div><div style="font-size:26px;font-weight:900;color:${col.main}">${list.length}</div>${month||search?`<div style="font-size:10px;color:#94a3b8">من أصل ${totalCount}</div>`:''}</div>
+    <div class="card" style="text-align:center;border-top:4px solid #ca8a04;background:#fffbeb"><div style="font-size:11px;color:#92400e;font-weight:700">💛 إجمالي الدينار</div><div style="font-size:20px;font-weight:900;color:#ca8a04">${fmtM(sumD)}</div></div>
+    <div class="card" style="text-align:center;border-top:4px solid #0f172a;background:#f8fafc"><div style="font-size:11px;color:#0f172a;font-weight:700">🖤 إجمالي الدولار</div><div style="font-size:20px;font-weight:900;color:#0f172a">${fmtM(sumDol)}</div></div>
+  </div>
+  ${formHtml}
+  <div class="card" style="overflow:hidden;padding:0">
+    <div style="padding:12px 16px;background:${col.soft};border-bottom:1px solid ${col.line};display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span style="font-weight:900;font-size:13px;color:${col.main}">📋 سلف ${esc(tab)} <span class="badge" style="background:#fff;color:${col.main}">${list.length} حركة</span></span>
+      ${month?`<span style="font-size:11px;font-weight:900;color:${col.main}">📅 ${esc(monthLabel)}</span>`:''}
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:640px"><thead><tr><th class="th" style="background:${col.main}">ت</th><th class="th" style="background:${col.main}">التاريخ</th><th class="th" style="background:${col.main}">المبلغ دينار</th><th class="th" style="background:${col.main}">المبلغ دولار</th><th class="th" style="background:${col.main}">المستلم</th><th class="th" style="background:${col.main}">البيان</th>${canEd?`<th class="th" style="background:${col.main}">إجراءات</th>`:''}</tr></thead><tbody>${rows||`<tr><td colspan="${canEd?7:6}" class="td" style="padding:24px;color:#64748b">لا توجد حركات — أضف يدوياً أو استورد من ملف Excel</td></tr>`}${list.length?totalRow:''}</tbody></table></div>
+  </div>`;
+}
+
+function setPrivSalafTab(p){ S.privSalafTab=p; S.privSalafEditId=''; renderContent(); }
+function setPrivSalafSearch(val,pos){ S.privSalafSearch=val; renderContent(); setTimeout(function(){const i=document.getElementById('ps_search_inp'); if(i){i.focus(); i.setSelectionRange(pos,pos);}},0); }
+
+function savePrivateSalaf(){
+  if(!canEdit('private_salaf')){showToast('غير مصرح','error');return;}
+  const editId=S.privSalafEditId||'';
+  let all=privSalafAll();
+  const cur=editId?all.find(e=>e.id===editId):null;
+  const person=cur?cur.person:(PRIV_SALAF_PERSONS.indexOf(S.privSalafTab)>=0?S.privSalafTab:PRIV_SALAF_PERSONS[0]);
+  const date=gv('ps_date'),receiver=gv('ps_receiver'),note=gv('ps_note');
+  const dinarEl=document.getElementById('ps_dinar'),dollarEl=document.getElementById('ps_dollar');
+  const dinar=safeNum(dinarEl?dinarEl.value:0);
+  const dollar=safeNum(dollarEl?dollarEl.value:0);
+  if(!date){showToast('يرجى تحديد التاريخ','error');return;}
+  if(!receiver){showToast('يرجى كتابة اسم المستلم','error');return;}
+  if(!dinar&&!dollar){showToast('يرجى إدخال مبلغ دينار أو دولار','error');return;}
+  let entry;
+  if(editId&&cur){
+    entry=Object.assign({},cur,{date,receiver,note,amount_dinar:dinar,amount_dollar:dollar,time:Date.now()});
+    all=all.map(function(e){return e.id===editId?entry:e;});
+    S.privSalafEditId='';
+  }else{
+    entry={id:'psl_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),person,date,receiver,note,amount_dinar:dinar,amount_dollar:dollar,accountant:currentUser?currentUser.email:'',time:Date.now()};
+    all.push(entry);
+  }
+  all.sort(function(a,b){return(a.person+'_'+(a.date||'')).localeCompare(b.person+'_'+(b.date||''));});
+  DB.set('private_salaf',all);
+  FDB.save('private_salaf',entry.id,entry);
+  auditLog(editId?'تعديل سلفة خاصة':'إضافة سلفة خاصة',person+' | '+receiver+' | دينار: '+dinar+' | دولار: '+dollar);
+  showToast('تم الحفظ','success');
+  setTimeout(function(){renderContent();},500);
+}
+function editPrivateSalaf(id){
+  const e=privSalafAll().find(x=>x.id===id);
+  if(!e)return;
+  S.privSalafTab=e.person; S.privSalafEditId=id; renderContent();
+  setTimeout(function(){const f=document.getElementById('ps_date'); if(f)f.scrollIntoView({behavior:'smooth',block:'center'});},100);
+}
+function deletePrivateSalaf(id){
+  if(!canEdit('private_salaf')){showToast('غير مصرح','error');return;}
+  if(!confirm('حذف هذه الحركة؟'))return;
+  const e=privSalafAll().find(x=>x.id===id);
+  auditLog('حذف سلفة خاصة',(e?e.person:'')+' | '+(e?e.receiver:id)+' | دينار: '+(e?e.amount_dinar:0));
+  addPrivSalafTombstones([id]);
+  DB.set('private_salaf',privSalafAll().filter(x=>x.id!==id));
+  FDB.delete('private_salaf',id);
+  if(S.privSalafEditId===id)S.privSalafEditId='';
+  renderContent();
+}
+function exportPrivateSalafXLSX(){
+  if(typeof XLSX==='undefined'){showToast('مكتبة Excel غير محملة','error');return;}
+  const month=S.privSalafMonth||'';
+  const wb=XLSX.utils.book_new();
+  PRIV_SALAF_PERSONS.forEach(function(p){
+    let list=privSalafByPerson(p);
+    if(month)list=list.filter(e=>(e.date||'').startsWith(month));
+    const rows=[['سلف '+p,'','','','',''],['ت','التاريخ','المبلغ دينار','المبلغ دولار','المستلم','البيان']];
+    list.forEach(function(e,i){rows.push([i+1,e.date||'',safeNum(e.amount_dinar)||'',safeNum(e.amount_dollar)||'',e.receiver||'',e.note||'']);});
+    rows.push(['','الإجمالي',list.reduce(function(s,e){return s+safeNum(e.amount_dinar);},0),list.reduce(function(s,e){return s+safeNum(e.amount_dollar);},0),'','']);
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:5},{wch:13},{wch:16},{wch:14},{wch:22},{wch:32}];
+    XLSX.utils.book_append_sheet(wb,ws,p);
+  });
+  XLSX.writeFile(wb,'سلف_خاصة_'+(month||today())+'.xlsx');
+}
+
+// --- استيراد Excel ---
+let _privImportWb=null;
+function importPrivateSalafXLSX(input){
+  const file=input.files[0];
+  if(!file)return;
+  if(typeof XLSX==='undefined'){alert('مكتبة Excel غير محملة، يرجى تحديث الصفحة');input.value='';return;}
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    let wb;
+    try{ wb=XLSX.read(ev.target.result,{type:'array'}); }
+    catch(err){ input.value=''; showToast('تعذّر قراءة الملف','error'); return; }
+    input.value='';
+    showPrivSalafSheetPicker(wb);
+  };
+  reader.readAsArrayBuffer(file);
+}
+function showPrivSalafSheetPicker(wb){
+  _privImportWb=wb;
+  const names=wb.SheetNames;
+  const rowsHtml=names.map(function(n,i){
+    const det=privPersonFromSheet(n);
+    const opts=PRIV_SALAF_PERSONS.map(function(p){return `<option value="${esc(p)}" ${det===p?'selected':''}>${esc(p)}</option>`;}).join('');
+    return `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;font-weight:700;color:#334155;cursor:pointer;background:${det?'#f0fdf4':'#fff'}"><input type="checkbox" class="priv-sheet-chk" data-idx="${i}" value="${esc(n)}" ${det?'checked':''} style="width:16px;height:16px"><span style="flex:1">${esc(n)}</span><select class="priv-sheet-person inp" data-idx="${i}" style="width:130px;font-size:11px;padding:3px 6px">${opts}</select></label>`;
+  }).join('');
+  const m=document.createElement('div');
+  m.id='priv-sheet-picker-modal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  m.innerHTML=`<div class="card" style="max-width:520px;width:100%;max-height:82vh;display:flex;flex-direction:column;padding:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0;font-size:15px;font-weight:900;color:#1e293b">📥 اختر الشيتات وحدّد صاحب كل شيت</h3><button onclick="closePrivSalafSheetPicker()" aria-label="إغلاق" style="background:none;border:none;font-size:18px;cursor:pointer;font-weight:900;color:#64748b">✕</button></div>
+    <p style="font-size:11px;color:#64748b;margin:0 0 10px">الشيتات المحددة تلقائياً هي التي طابق اسمها أحد الاسمين. الأعمدة المتوقعة: التاريخ | دينار | دولار | المستلم | البيان.</p>
+    <div style="overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;flex:1">${rowsHtml}</div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px"><button class="btn btn-gray" onclick="closePrivSalafSheetPicker()">إلغاء</button><button class="btn btn-green" onclick="confirmImportPrivSalafSheets()">📥 استيراد المحدد</button></div>
+  </div>`;
+  document.body.appendChild(m);
+}
+function closePrivSalafSheetPicker(){ const m=document.getElementById('priv-sheet-picker-modal'); if(m)m.remove(); _privImportWb=null; }
+function privCellDate(raw){
+  if(raw instanceof Date){
+    const y=raw.getFullYear(),mo=String(raw.getMonth()+1).padStart(2,'0'),dy=String(raw.getDate()).padStart(2,'0');
+    return y+'-'+mo+'-'+dy;
+  }
+  const s=String(raw==null?'':raw).trim();
+  if(!s)return '';
+  const p=parseXLDate(s);
+  return /^\d{4}-\d{2}-\d{2}$/.test(p)?p:'';
+}
+async function confirmImportPrivSalafSheets(){
+  const wb=_privImportWb;
+  const boxes=Array.from(document.querySelectorAll('.priv-sheet-chk:checked'));
+  if(!wb||!boxes.length){showToast('يرجى تحديد شيت واحد على الأقل','error');return;}
+  const picks=boxes.map(function(c){
+    const sel=document.querySelector('.priv-sheet-person[data-idx="'+c.dataset.idx+'"]');
+    return {sheet:c.value,person:sel?sel.value:PRIV_SALAF_PERSONS[0]};
+  });
+  closePrivSalafSheetPicker();
+  // كلمات صفوف التجميع فقط — تُطبَّق حصراً على صف بلا تاريخ خاص به،
+  // لأن كلمات مثل «واصل» و«رصيد» ترد داخل بيانات حركات حقيقية
+  const skipKW=['مجموع','اجمالي','الجمله','جمله','المتبقي','الرصيد','تصفيه ذمه'];
+  let all=privSalafAll();
+  const existingCounts={};
+  all.forEach(function(e){const k=privSalafDupKey(e);existingCounts[k]=(existingCounts[k]||0)+1;});
+  const importedCounts={};
+  const ts=Date.now();
+  let imported=0,skippedDup=0,skippedRows=0;
+  picks.forEach(function(pick){
+    const ws=wb.Sheets[pick.sheet];
+    if(!ws)return;
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    // تحديد صف العناوين ديناميكياً (لا يُفترض رقم صف ثابت)
+    let headIdx=-1;
+    for(let r=0;r<Math.min(rows.length,8);r++){
+      const joined=(rows[r]||[]).map(function(c){return privNormAr(c);}).join('|');
+      if(joined.indexOf('تاريخ')>=0){headIdx=r;break;}
+    }
+    const start=headIdx>=0?headIdx+1:1;
+    let lastDate='';
+    for(let r=start;r<rows.length;r++){
+      const row=rows[r]||[];
+      const date=privCellDate(row[1]);
+      const dinar=safeNum(String(row[2]==null?'':row[2]).replace(/,/g,'').trim());
+      const dollar=safeNum(String(row[3]==null?'':row[3]).replace(/,/g,'').trim());
+      const receiver=String(row[4]==null?'':row[4]).trim();
+      const note=String(row[5]==null?'':row[5]).trim();
+      if(date)lastDate=date;
+      const dateForRow=date||lastDate;
+      // صف الإجمالي / الرصيد يُتجاهل: كلمة دالة، أو مبالغ بلا تاريخ ولا مستلم ولا بيان
+      const kwHit=skipKW.some(function(kw){return privNormAr(receiver).indexOf(privNormAr(kw))>=0||privNormAr(note).indexOf(privNormAr(kw))>=0;});
+      if(!date&&kwHit){skippedRows++;continue;}
+      if(!dinar&&!dollar){skippedRows++;continue;}
+      if(!date&&!receiver&&!note){skippedRows++;continue;}
+      const entry={id:'psl_xl_'+ts+'_'+r+'_'+Math.random().toString(36).slice(2,5),person:pick.person,date:dateForRow,receiver,note,amount_dinar:dinar,amount_dollar:dollar,accountant:currentUser?currentUser.email:'import',time:ts+r};
+      const k=privSalafDupKey(entry);
+      importedCounts[k]=(importedCounts[k]||0)+1;
+      // بلا تاريخ فعلي: لا يُعتبر مكرراً أبداً (نفس مبدأ المصاريف والمشتريات)
+      if(dateForRow&&importedCounts[k]<=(existingCounts[k]||0)){skippedDup++;continue;}
+      all.push(entry);
+      imported++;
+    }
+  });
+  all.sort(function(a,b){return(a.person+'_'+(a.date||'')).localeCompare(b.person+'_'+(b.date||''));});
+  DB.set('private_salaf',all);
+  renderContent();
+  if(!imported){showToast('لم يُستورد أي سجل'+(skippedDup?(' | تم تجاهل '+skippedDup+' مكرر'):''),'warning',5000);return;}
+  auditLog('استيراد سلف خاصة','مستورد: '+imported+' | مكرر متجاهَل: '+skippedDup+' | صفوف متجاوَزة: '+skippedRows);
+  showToast('⏳ جاري الحفظ في السحابة...','info',3000);
+  try{
+    const fresh=all.filter(function(e){return e.id.indexOf('psl_xl_'+ts+'_')===0;});
+    await Promise.all(fresh.map(function(e){return FDB.save('private_salaf',e.id,e);}));
+    showToast('✅ تم استيراد '+imported+' حركة'+(skippedDup?(' | ⏭️ تجاهل '+skippedDup+' مكرر'):'')+' وحفظها في السحابة ☁️','success',6000);
+  }catch(err){showToast('✅ تم الاستيراد محلياً | ⚠️ فشل الحفظ في السحابة','warning',5000);}
+}
 
 // ===== نظام المصاريف (مختصر) =====
 const EXPENSE_FACTORIES=['مصاريف الجوهرة','الوطنية','عطاء الذهب','ايجار كراج','الفهد','روعة المشرق','الذهب الأسود','ابرار شط العرب','الذهب الأصفر','نذره الذهب','إياد عودة','الكرستال','حميد جاسم','رافد خاص'];
@@ -3905,7 +4175,7 @@ function renderKroobDailySection(date){
   todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isInD2=kroobDir(e,'dinar')==='دائن',isInDol2=kroobDir(e,'dollar')==='دائن',badgeIn2=d2?isInD2:(dl2?isInDol2:isInD2);let r='\n'+(badgeIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+(isInD2?'+':'-')+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 '+(isInDol2?'+':'-')+'$'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
   waTextK+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextK+=' | $'+fmtM(balDollar);
-  waTextK+='\n✅ نظام المراقبة v44.5';
+  waTextK+='\n✅ نظام المراقبة v44.6';
   window._kroobWaText=waTextK;
 
   return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #34d399"><div style="padding:12px 16px;background:#ecfdf5;border-bottom:1px solid #6ee7b7;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#065f46">🏦 كشف الكروب اليومي — ${date}</span><span class="badge" style="background:#d1fae5;color:#059669;margin-right:8px">${todayList.length} حركة</span></div><button class="btn btn-green" style="font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._kroobWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._kroobWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
@@ -3942,7 +4212,7 @@ function renderRafidDailySection(date){
   todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(e2.type_dollar==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
   waTextR+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextR+=' | $'+fmtM(balDollar);
-  waTextR+='\n✅ نظام المراقبة v44.5';
+  waTextR+='\n✅ نظام المراقبة v44.6';
   window._rafidWaText=waTextR;
 
   return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #f59e0b"><div style="padding:12px 16px;background:#92400e;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#fff">💼 كشف حسابات سيد رافد — ${date}</span><span class="badge" style="background:rgba(255,255,255,0.2);color:#fff;margin-right:8px">${todayList.length} حركة</span></div><button class="btn" style="background:#f59e0b;color:#fff;font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._rafidWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._rafidWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
@@ -4440,7 +4710,7 @@ function sendRefineryWhatsapp(){
     lines.push((grandRemaining>0?'⚠️':'✅')+' المتبقي: '+fmtM(Math.abs(grandRemaining))+' د.ع '+(grandRemaining>0?'(غير مسوى)':'(مسوى)'));
     lines.push(sep);
   });
-  lines.push('✅ نظام المراقبة v44.5');
+  lines.push('✅ نظام المراقبة v44.6');
   var msg=lines.join(NL);
   if(navigator.clipboard){
     navigator.clipboard.writeText(msg).then(function(){showToast('تم نسخ نص الواتساب','success');}).catch(function(){});
@@ -4875,8 +5145,8 @@ async function backupAndClearAllProcurement(){
 }
 
 // ===== إدارة الصلاحيات =====
-const ALL_PERMS=['salaf','expenses','kroob','kroob_statement','table','sale_table','reports','import_p','import_s','rafid','rafid_statement','refinery'];
-const PERM_LABELS={'salaf':'💰 السلف','expenses':'📋 المصاريف','kroob':'🏦 الكروب','kroob_statement':'📜 كشف حساب الكروب','table':'📋 سجل المشتريات','sale_table':'📋 سجل المبيعات','reports':'📄 التقارير','import_p':'📥 استيراد المشتريات','import_s':'📥 استيراد المبيعات','rafid':'💼 حسابات سيد رافد','rafid_statement':'📜 كشف حساب سيد رافد','refinery':'🏭 حساب المصفى'};
+const ALL_PERMS=['salaf','private_salaf','expenses','kroob','kroob_statement','table','sale_table','reports','import_p','import_s','rafid','rafid_statement','refinery'];
+const PERM_LABELS={'salaf':'💰 السلف','private_salaf':'🔐 سلف خاصة','expenses':'📋 المصاريف','kroob':'🏦 الكروب','kroob_statement':'📜 كشف حساب الكروب','table':'📋 سجل المشتريات','sale_table':'📋 سجل المبيعات','reports':'📄 التقارير','import_p':'📥 استيراد المشتريات','import_s':'📥 استيراد المبيعات','rafid':'💼 حسابات سيد رافد','rafid_statement':'📜 كشف حساب سيد رافد','refinery':'🏭 حساب المصفى'};
 
 function viewPermissions(){
   const users=DB.get('users',{});

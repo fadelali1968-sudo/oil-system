@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام المشتريات النفطية v44.6</title>
+<title>نظام المشتريات النفطية v44.7</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='14' y='16' width='36' height='34' rx='5' fill='%231e3a5f'/><ellipse cx='32' cy='16' rx='18' ry='6' fill='%232563eb'/><ellipse cx='32' cy='50' rx='18' ry='6' fill='%231e293b'/><rect x='14' y='26' width='36' height='5' fill='%23f59e0b'/><rect x='14' y='37' width='36' height='5' fill='%23f59e0b'/><text x='32' y='35' text-anchor='middle' fill='%2334d399' font-size='10' font-weight='bold' font-family='Arial'>OIL</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -83,6 +83,26 @@
   .print-header { display:none; }
   @media (max-width:768px) { aside { position:fixed !important; right:-225px; transition:right .3s; z-index:1000; height:100vh; } aside.open { right:0 !important; } .mobile-menu-btn { display:flex !important; } #main-content { padding:10px !important; } .card { padding:12px !important; border-radius:10px !important; } .inp { font-size:16px !important; } table { font-size:11px !important; } .td,.td-p { padding:5px 3px !important; } }
   .inp { color:#0f172a; }
+
+  /* ===== اللوحة الرئيسية: بطاقات متدرّجة ===== */
+  .kpi { position:relative; overflow:hidden; border-radius:18px; padding:16px 16px 14px; color:#fff; border:none;
+         box-shadow:0 10px 26px -10px var(--kg,rgba(15,23,42,.45)); transition:transform .18s ease, box-shadow .18s ease; }
+  .kpi:hover { transform:translateY(-4px); box-shadow:0 20px 38px -12px var(--kg,rgba(15,23,42,.55)); }
+  .kpi::after { content:''; position:absolute; inset:0; background:linear-gradient(160deg,rgba(255,255,255,.22),rgba(255,255,255,0) 55%); pointer-events:none; }
+  .kpi-ic { position:absolute; left:-8px; bottom:-16px; font-size:66px; line-height:1; opacity:.17; pointer-events:none;
+            filter:grayscale(1) contrast(0) brightness(2.4); }
+  .kpi-t { position:relative; z-index:1; font-size:11px; font-weight:900; opacity:.95; display:flex; align-items:center; gap:6px; }
+  .kpi-v { position:relative; z-index:1; font-size:30px; font-weight:900; line-height:1.15; margin-top:8px; letter-spacing:-.5px;
+           text-shadow:0 2px 10px rgba(0,0,0,.22); word-break:break-all; }
+  .kpi-u { position:relative; z-index:1; font-size:11px; font-weight:800; opacity:.85; margin-top:2px; }
+  .kpi-f { position:relative; z-index:1; margin-top:10px; font-size:11px; font-weight:900; display:inline-block;
+           background:rgba(255,255,255,.20); border:1px solid rgba(255,255,255,.28); border-radius:9px; padding:4px 10px; }
+  .fcard { position:relative; overflow:hidden; transition:transform .18s ease, box-shadow .18s ease; }
+  .fcard:hover { transform:translateY(-3px); box-shadow:0 16px 32px -14px rgba(15,23,42,.38); }
+  .fcard::before { content:''; position:absolute; top:0; right:0; left:0; height:5px; background:var(--fc,#2563eb); }
+  .qbar { height:10px; border-radius:99px; background:#e2e8f0; overflow:hidden; box-shadow:inset 0 1px 2px rgba(15,23,42,.12); }
+  .qfill { height:100%; border-radius:99px; transition:width .45s ease; }
+  @media (max-width:768px) { .kpi { padding:12px !important; border-radius:12px !important; } .kpi-v { font-size:24px !important; } .kpi-ic { font-size:48px !important; } }
 
   /* ===== Toast Notifications ===== */
   #toast-container{position:fixed;bottom:24px;left:24px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
@@ -617,7 +637,7 @@ async function syncFromCloud(silent=false) {
       const rafidAccounts = await FDB.getAll('rafid_accounts'); if(rafidAccounts&&rafidAccounts.length) DB.set('rafid_accounts',rafidAccounts);
       const rafidOpArr = await FDB.getAll('rafid_opening'); if(rafidOpArr&&rafidOpArr.length){const op=rafidOpArr.find(x=>x.id==='opening')||rafidOpArr[0];if(op)DB.set('rafid_opening',{dinar:parseFloat(op.dinar||0),dollar:parseFloat(op.dollar||0)});}
     }
-    const settings=await FDB.getAll('settings');if(settings&&settings.length){const fd=settings.find(x=>x.id==='factories');if(fd&&fd.list&&fd.list.length){DB.set('factories',fd.list);}const kot=settings.find(x=>x.id==='kroob_op_types');if(kot&&kot.list&&kot.list.length)DB.set('kroob_op_types',kot.list);}
+    const settings=await FDB.getAll('settings');if(settings&&settings.length){const fd=settings.find(x=>x.id==='factories');if(fd&&fd.list&&fd.list.length){DB.set('factories',fd.list);}const kot=settings.find(x=>x.id==='kroob_op_types');if(kot&&kot.list&&kot.list.length)DB.set('kroob_op_types',kot.list);const fq=settings.find(x=>x.id==='factory_quotas');if(fq&&fq.map&&typeof fq.map==='object')DB.set('factory_quotas',fq.map);const qh=settings.find(x=>x.id==='quota_history');if(qh&&Array.isArray(qh.list))DB.set('quota_history',qh.list);}
     const expEntArr=await FDB.getAll('expense_entities');if(expEntArr&&expEntArr.length)DB.set('expense_entities',expEntArr);
     if(!silent) showToast('تمت المزامنة مع Firebase','info',2000);
     return true;
@@ -716,6 +736,7 @@ function _checkIntegrity(){
 setInterval(()=>{ if(currentUser) _checkIntegrity(); }, 30000);
 let S = {
   view:'dashboard', selectedFactory:'الكل', filterFrom:'', filterTo:'',
+  quotaNewIdx:-1,
   editEntry:null, editSale:null, wFrom:'', wTo:'',
   pSearch:'', pRefinery:'', pType:'', pDateFrom:'', pDateTo:'',
   sSearch:'', sTypeFilter:'', sDateFrom:'', sDateTo:'',
@@ -924,7 +945,7 @@ function render() {
       '<aside style="width:225px;background:#0f172a;display:flex;flex-direction:column;flex-shrink:0;z-index:50">' +
         '<div style="padding:10px;background:#020617;border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
           '<div style="width:34px;height:34px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:11px;margin:0 auto 5px">OIL</div>' +
-          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v44.6</p>' +
+          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v44.7</p>' +
           '<p style="font-size:10px;color:#94a3b8;margin-top:2px;font-weight:900;letter-spacing:0.5px">'+(isM?'المدققين':'محاسب: '+currentUser.factory)+'</p>' +
         '</div>' +
         '<nav id="sidebar-nav" style="flex:1;padding:8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
@@ -1050,42 +1071,58 @@ function viewDashboard() {
   const totalTons=facts.reduce((s,f)=>s+anOf(analysis,f).total.tons,0);
   const totalKg=facts.reduce((s,f)=>s+anOf(analysis,f).total.kg,0);
 
-  const kpiCards=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:20px">
-    <div class="card" style="text-align:center;border-top:4px solid #2563eb">
-      <div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:6px">🚛 سيارات المشتريات</div>
-      <div style="font-size:32px;font-weight:900;color:#2563eb">${totalCars}</div>
-      <div style="font-size:11px;color:#64748b;margin-top:4px">اليوم: <b style="color:#2563eb">${todayCars}</b> سيارة</div>
-    </div>
-    <div class="card" style="text-align:center;border-top:4px solid #0891b2">
-      <div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:6px">⚖️ إجمالي الطن</div>
-      <div style="font-size:22px;font-weight:900;color:#0891b2">${fmt(totalTons)}</div>
-      <div style="font-size:10px;color:#64748b;margin-top:4px">طن</div>
-    </div>
-    <div class="card" style="text-align:center;border-top:4px solid #059669">
-      <div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:6px">💧 إجمالي اللترات</div>
-      <div style="font-size:22px;font-weight:900;color:#059669">${fmt(totalLiters)}</div>
-      <div style="font-size:10px;color:#64748b;margin-top:4px">لتر</div>
-    </div>
-    <div class="card" style="text-align:center;border-top:4px solid #d97706;background:#fffbeb">
-      <div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:6px">⚡ إجمالي الكغم</div>
-      <div style="font-size:22px;font-weight:900;color:#d97706">${fmt(totalKg)}</div>
-      <div style="font-size:10px;color:#92400e;margin-top:4px">كيلوغرام</div>
-    </div>
-    <div class="card" style="text-align:center;border-top:4px solid #7c3aed">
-      <div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:6px">📦 سيارات المبيعات</div>
-      <div style="font-size:32px;font-weight:900;color:#7c3aed">${totalSaleCars}</div>
-      <div style="font-size:12px;color:#7c3aed;font-weight:900;margin-top:6px;background:#f5f3ff;border-radius:8px;padding:4px 8px">الكبان: <span style="font-size:16px;font-weight:900">${fmtKaban(totalKaban)}</span></div>
-    </div>
+  const totalSaleMoney=facts.reduce((s,f)=>s+anOf(saleAn,f).total.money,0);
+  const kpi=(g,glow,ic,title,val,unit,foot)=>`<div class="kpi" style="background:linear-gradient(135deg,${g});--kg:${glow}">
+      <span class="kpi-ic">${ic}</span>
+      <div class="kpi-t">${ic} ${title}</div>
+      <div class="kpi-v">${val}</div>
+      ${unit?`<div class="kpi-u">${unit}</div>`:''}
+      ${foot?`<div class="kpi-f">${foot}</div>`:''}
+    </div>`;
+
+  const kpiCards=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:14px;margin-bottom:22px">
+    ${kpi('#3b82f6,#1d4ed8','rgba(37,99,235,.55)','🚛','سيارات المشتريات',totalCars,'سيارة',`اليوم: ${todayCars} سيارة`)}
+    ${kpi('#22d3ee,#0e7490','rgba(8,145,178,.55)','⚖️','إجمالي الطن',fmt(totalTons),'طن','')}
+    ${kpi('#34d399,#047857','rgba(5,150,105,.55)','💧','إجمالي اللترات',fmt(totalLiters),'لتر طبيعي','')}
+    ${kpi('#fbbf24,#b45309','rgba(217,119,6,.55)','⚡','إجمالي الكغم',fmt(totalKg),'كيلوغرام','')}
+    ${kpi('#a78bfa,#5b21b6','rgba(124,58,237,.55)','📦','سيارات المبيعات',totalSaleCars,'سيارة',`الكبان: ${fmtKaban(totalKaban)}`)}
+    ${kpi('#64748b,#0f172a','rgba(15,23,42,.55)','💰','مبالغ المشتريات',fmtM(totalMoney),'دينار',`المبيعات: ${fmtM(totalSaleMoney)}`)}
   </div>`;
 
-  const factoryCards=`<h3 style="font-size:14px;font-weight:900;margin-bottom:14px;color:#0f172a">تفاصيل أداء المعامل</h3>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
-  ${facts.map(f=>{const d=anOf(analysis,f),sd=anOf(saleAn,f);return`<div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f1f5f9"><span style="font-weight:900;color:#2563eb;font-size:13px">${f}</span><span class="badge" style="background:#ecfdf5;color:#059669;font-size:10px">مُشغَّل ✓</span></div>
+  const FC=['#2563eb','#7c3aed','#059669','#d97706','#0891b2','#db2777','#4f46e5','#b45309'];
+  const factoryCards=`<h3 style="font-size:14px;font-weight:900;margin-bottom:14px;color:#0f172a">🏭 تفاصيل أداء المعامل</h3>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(285px,1fr));gap:14px">
+  ${facts.map((f,fi)=>{
+    const d=anOf(analysis,f),sd=anOf(saleAn,f),ac=FC[fi%FC.length];
+    const q=getQuotaStatus(f);
+    let qb='';
+    if(q){
+      const w=Math.max(0,Math.min(100,q.pct));
+      const bar=q.over?'linear-gradient(90deg,#ef4444,#991b1b)':'linear-gradient(90deg,#34d399,#047857)';
+      qb=`<div style="margin-top:10px;padding:10px;border-radius:10px;background:${q.over?'#fef2f2':'#f8fafc'};border:1px solid ${q.over?'#fecaca':'#e2e8f0'}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:10px;font-weight:900;color:${q.over?'#991b1b':'#334155'}">⛽ حصة القطع${q.start?` · من ${esc(q.start)}`:''}</span>
+          <span style="font-size:11px;font-weight:900;color:${q.over?'#dc2626':'#059669'}">${fmt(q.pct,1)}%</span>
+        </div>
+        <div class="qbar"><div class="qfill" style="width:${w}%;background:${bar}"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;font-weight:800;color:#64748b">
+          <span>المستهلك: <b style="color:#0f172a">${fmtM(q.used)}</b> لتر</span>
+          <span>الحصة: <b style="color:#0f172a">${fmtM(q.quota)}</b> لتر</span>
+        </div>
+        <div style="margin-top:7px;text-align:center;font-size:11px;font-weight:900;padding:6px;border-radius:9px;background:${q.over?'#dc2626':'#ecfdf5'};color:${q.over?'#fff':'#047857'};border:1px solid ${q.over?'#dc2626':'#a7f3d0'}">
+          ${q.over?`⚠️ تجاوز الحصة بـ ${fmtM(Math.abs(q.remaining))} لتر`:`المتبقي من الحصة: ${fmtM(q.remaining)} لتر`}
+        </div>
+      </div>`;
+    }
+    return`<div class="card fcard" style="--fc:${ac};padding-top:22px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f1f5f9">
+      <span style="font-weight:900;color:${ac};font-size:13px;display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:50%;background:${ac};display:inline-block"></span>${esc(f)}</span>
+      ${q&&q.over?`<span class="badge" style="background:#fee2e2;color:#dc2626;font-size:10px">⚠️ تجاوز الحصة</span>`:`<span class="badge" style="background:#ecfdf5;color:#059669;font-size:10px">مُشغَّل ✓</span>`}
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div style="background:#eff6ff;border-radius:8px;padding:10px"><p style="font-size:10px;color:#2563eb;font-weight:700;text-align:center;margin-bottom:6px">إجمالي المشتريات</p>${sr('السيارات',d.total.cars)}${sr('طن',fmt(d.total.tons),'#059669')}${sr('المبلغ',fmtM(d.total.money),'#1e3a8a')}</div>
-      <div style="background:#f5f3ff;border-radius:8px;padding:10px"><p style="font-size:10px;color:#7c3aed;font-weight:700;text-align:center;margin-bottom:6px">إجمالي المبيعات</p>${sr('السيارات',sd.total.cars)}${sr('كبان',fmtKaban(sd.total.kaban),'#7c3aed')}${sr('المبلغ',fmtM(sd.total.money),'#1e3a8a')}</div>
-    </div></div>`;}).join('')}
+      <div style="background:linear-gradient(160deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;border-radius:10px;padding:10px"><p style="font-size:10px;color:#1d4ed8;font-weight:900;text-align:center;margin-bottom:6px">إجمالي المشتريات</p>${sr('السيارات',d.total.cars)}${sr('طن',fmt(d.total.tons),'#059669')}${sr('المبلغ',fmtM(d.total.money),'#1e3a8a')}</div>
+      <div style="background:linear-gradient(160deg,#f5f3ff,#ede9fe);border:1px solid #ddd6fe;border-radius:10px;padding:10px"><p style="font-size:10px;color:#6d28d9;font-weight:900;text-align:center;margin-bottom:6px">إجمالي المبيعات</p>${sr('السيارات',sd.total.cars)}${sr('كبان',fmtKaban(sd.total.kaban),'#7c3aed')}${sr('المبلغ',fmtM(sd.total.money),'#1e3a8a')}</div>
+    </div>${qb}</div>`;}).join('')}
   </div>`;
 
   const miss=unregisteredFactories();
@@ -1183,7 +1220,7 @@ function copyWhatsapp(){
   for(const f of facts){const d=anOf(analysis,f).total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmt(d.kg)} كغم\n`;}
   txt+=`\n*📦 المبيعات:*\n`;
   for(const f of facts){const d=anOf(saleAn,f).total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
-  txt+=`\n✅ نظام المراقبة v44.6`;
+  txt+=`\n✅ نظام المراقبة v44.7`;
   navigator.clipboard?.writeText(txt).catch(()=>{});
   const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}
 }
@@ -4206,7 +4243,7 @@ function renderKroobDailySection(date){
   todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isInD2=kroobDir(e,'dinar')==='دائن',isInDol2=kroobDir(e,'dollar')==='دائن',badgeIn2=d2?isInD2:(dl2?isInDol2:isInD2);let r='\n'+(badgeIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+(isInD2?'+':'-')+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 '+(isInDol2?'+':'-')+'$'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
   waTextK+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextK+=' | $'+fmtM(balDollar);
-  waTextK+='\n✅ نظام المراقبة v44.6';
+  waTextK+='\n✅ نظام المراقبة v44.7';
   window._kroobWaText=waTextK;
 
   return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #34d399"><div style="padding:12px 16px;background:#ecfdf5;border-bottom:1px solid #6ee7b7;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#065f46">🏦 كشف الكروب اليومي — ${date}</span><span class="badge" style="background:#d1fae5;color:#059669;margin-right:8px">${todayList.length} حركة</span></div><button class="btn btn-green" style="font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._kroobWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._kroobWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
@@ -4243,7 +4280,7 @@ function renderRafidDailySection(date){
   todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(e2.type_dollar==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
   waTextR+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextR+=' | $'+fmtM(balDollar);
-  waTextR+='\n✅ نظام المراقبة v44.6';
+  waTextR+='\n✅ نظام المراقبة v44.7';
   window._rafidWaText=waTextR;
 
   return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #f59e0b"><div style="padding:12px 16px;background:#92400e;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#fff">💼 كشف حسابات سيد رافد — ${date}</span><span class="badge" style="background:rgba(255,255,255,0.2);color:#fff;margin-right:8px">${todayList.length} حركة</span></div><button class="btn" style="background:#f59e0b;color:#fff;font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._rafidWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._rafidWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
@@ -4741,7 +4778,7 @@ function sendRefineryWhatsapp(){
     lines.push((grandRemaining>0?'⚠️':'✅')+' المتبقي: '+fmtM(Math.abs(grandRemaining))+' د.ع '+(grandRemaining>0?'(غير مسوى)':'(مسوى)'));
     lines.push(sep);
   });
-  lines.push('✅ نظام المراقبة v44.6');
+  lines.push('✅ نظام المراقبة v44.7');
   var msg=lines.join(NL);
   if(navigator.clipboard){
     navigator.clipboard.writeText(msg).then(function(){showToast('تم نسخ نص الواتساب','success');}).catch(function(){});
@@ -4847,6 +4884,7 @@ function viewAdmin(){
     <div style="display:flex;gap:10px"><input class="inp" id="new_factory" placeholder="اسم المعمل..." style="flex:1"><button class="btn btn-blue" onclick="addFactory()">إضافة</button></div>
   </div>
   <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px"><div style="padding:12px 16px;background:#0f172a;font-weight:900;font-size:13px;color:#94a3b8">قائمة المعامل</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">ت</th><th class="th">اسم المعمل</th><th class="th">حذف</th></tr></thead><tbody>${factRows}</tbody></table></div></div>
+  ${renderQuotaAdmin()}
   ${!DB.get('expenses_haidar_migrated',false)?`<div class="card" style="margin-bottom:14px;border:2px solid #f59e0b;background:#fffbeb">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <div style="flex:1"><h3 style="font-size:13px;font-weight:900;color:#92400e;margin:0 0 4px">🔄 ترحيل المصاريف القديمة → حيدر صبري</h3><p style="font-size:11px;color:#78350f;margin:0">المصاريف المدخلة قبل إضافة حقل "الشخص" ستُنسب لـ حيدر صبري وتُؤشَّر كمُسوَّاة — اضغط مرة واحدة فقط</p></div>
@@ -4965,6 +5003,141 @@ async function fixOrphanFactory(){
   showToast('تم تحديث '+(changedE.length+changedS.length)+' سجل وربطها بمعمل '+target,'success',5000);
   renderContent();
 }
+// ===== إدارة حصص القطع (المدير فقط) =====
+function _qFactList(){ return allFactoryNames().filter(function(x){return !sameFactory(x,'الكل');}); }
+function _qF(i){ var l=_qFactList(); return l[parseInt(i,10)]||''; }
+function _qNum(id){ return parseFloat(String(gv(id)||'').replace(/[,\s]/g,''))||0; }
+
+function saveFactoryQuota(i){
+  if(!isManager()){showToast('غير مصرّح','error');return;}
+  var f=_qF(i); if(!f)return;
+  var amt=_qNum('q_amt_'+i), st=gv('q_start_'+i);
+  var m=getQuotaMap(), k=quotaKey(f), prev=m[k]||null;
+  if(amt<=0){
+    if(!prev){showToast('أدخل حصة القطع باللتر','warning');return;}
+    if(!confirm('حذف حصة معمل: '+f+' ؟ (لن يظهر شريط الحصة باللوحة)'))return;
+    delete m[k]; saveQuotaMap(m);
+    auditLog('حذف حصة معمل','المعمل: '+f);
+    showToast('حُذفت حصة '+f,'info'); renderContent(); return;
+  }
+  if(!st){showToast('حدّد تاريخ بدء القطع','warning');return;}
+  m[k]={name:f,quota:amt,start:st,started_at:(prev&&prev.started_at)||Date.now(),started_by:(prev&&prev.started_by)||(currentUser?currentUser.email:'')};
+  saveQuotaMap(m);
+  auditLog(prev?'تعديل حصة معمل':'تحديد حصة معمل','المعمل: '+f+' | الحصة: '+fmtM(amt)+' لتر | من: '+st);
+  showToast('حُفظت حصة '+f,'success'); renderContent();
+}
+
+function startNewQuota(i){ if(!isManager()){showToast('غير مصرّح','error');return;} S.quotaNewIdx=parseInt(i,10); renderContent(); }
+function cancelNewQuota(){ S.quotaNewIdx=-1; renderContent(); }
+
+function confirmNewQuota(i){
+  if(!isManager()){showToast('غير مصرّح','error');return;}
+  var f=_qF(i); if(!f)return;
+  var amt=_qNum('nq_amt'), st=gv('nq_start')||today();
+  if(amt<=0){showToast('أدخل حصة القطع الجديد باللتر','warning');return;}
+  var old=getFactoryQuota(f), oq=old?(parseFloat(old.quota)||0):0;
+  if(old&&old.start&&st<old.start){showToast('تاريخ بدء القطع الجديد لا يمكن أن يسبق بداية القطع الحالي ('+old.start+')','error');return;}
+  var closedTxt='';
+  if(oq>0){
+    var used=quotaUsedFor(f,old.start||'',st);
+    var forf=Math.max(0,oq-used);
+    var hist=quotaHistory();
+    hist.unshift({id:'qh_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+      factory:f,quota:oq,start:old.start||'',end:st,used:used,
+      forfeited:forf,over:Math.max(0,used-oq),
+      status:used>=oq?'مكتملة':'غير مكتملة',
+      closed_at:Date.now(),closed_by:currentUser?currentUser.email:''});
+    if(hist.length>300)hist.length=300;
+    saveQuotaHistory(hist);
+    closedTxt=' | أُقفل القطع السابق ('+fmtM(oq)+' لتر، مستهلك '+fmtM(used)+'، مُهمَل '+fmtM(forf)+')';
+  }
+  var m=getQuotaMap();
+  m[quotaKey(f)]={name:f,quota:amt,start:st,started_at:Date.now(),started_by:currentUser?currentUser.email:''};
+  saveQuotaMap(m);
+  auditLog('بدء قطع جديد','المعمل: '+f+' | الحصة: '+fmtM(amt)+' لتر | من: '+st+closedTxt);
+  S.quotaNewIdx=-1;
+  showToast('تم بدء قطع جديد لـ '+f,'success');
+  renderContent();
+}
+
+function deleteQuotaHistoryRow(id){
+  if(!isManager()){showToast('غير مصرّح','error');return;}
+  if(!confirm('حذف هذا السجل من تاريخ القطع؟'))return;
+  var l=quotaHistory().filter(function(x){return x.id!==id;});
+  saveQuotaHistory(l); auditLog('حذف سجل قطع','id: '+id); renderContent();
+}
+
+function renderQuotaAdmin(){
+  if(!isManager())return '';
+  var facts=_qFactList(), newIdx=(S.quotaNewIdx===undefined?-1:S.quotaNewIdx);
+  var rows=facts.map(function(f,i){
+    var q=getQuotaStatus(f), raw=getFactoryQuota(f);
+    var amtVal=raw?(parseFloat(raw.quota)||0):'';
+    var stVal=raw?(raw.start||''):'';
+    var usedCell='<span style="color:#94a3b8">—</span>', remCell=usedCell, pctCell=usedCell;
+    if(q){
+      usedCell='<b style="color:#0f172a">'+fmtM(q.used)+'</b>';
+      remCell=q.over?('<b style="color:#dc2626">تجاوز '+fmtM(Math.abs(q.remaining))+'</b>'):('<b style="color:#059669">'+fmtM(q.remaining)+'</b>');
+      pctCell='<b style="color:'+(q.over?'#dc2626':'#2563eb')+'">'+fmt(q.pct,1)+'%</b>';
+    }
+    var main='<tr'+(q&&q.over?' style="background:#fef2f2"':'')+'>'+
+      '<td class="td" style="color:#64748b">'+(i+1)+'</td>'+
+      '<td class="td" style="font-weight:900;text-align:right">'+esc(f)+'</td>'+
+      '<td class="td"><input class="inp" id="q_amt_'+i+'" type="text" inputmode="numeric" dir="ltr" value="'+(amtVal?fmtM(amtVal):'')+'" placeholder="6,000,000" style="width:150px;font-size:12px;padding:6px 8px;text-align:center"></td>'+
+      '<td class="td"><input class="inp" id="q_start_'+i+'" type="date" value="'+esc(stVal)+'" style="width:150px;font-size:12px;padding:6px 8px"></td>'+
+      '<td class="td">'+usedCell+'</td>'+
+      '<td class="td">'+remCell+'</td>'+
+      '<td class="td">'+pctCell+'</td>'+
+      '<td class="td" style="white-space:nowrap">'+
+        '<button class="btn btn-blue" style="padding:4px 10px;font-size:11px;margin-left:4px" onclick="saveFactoryQuota('+i+')">💾 حفظ</button>'+
+        (raw?('<button class="btn btn-amber" style="padding:4px 10px;font-size:11px" onclick="startNewQuota('+i+')">🔄 قطع جديد</button>'):'')+
+      '</td></tr>';
+    if(newIdx===i){
+      var rem=q?q.remaining:0;
+      main+='<tr><td class="td" colspan="8" style="background:#fffbeb;padding:14px;text-align:right">'+
+        '<div style="font-size:12px;font-weight:900;color:#92400e;margin-bottom:8px">🔄 بدء قطع جديد لـ «'+esc(f)+'»</div>'+
+        (q?('<div style="font-size:11px;font-weight:800;color:'+(q.over?'#991b1b':'#92400e')+';background:#fff;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px;margin-bottom:10px">'+
+            'القطع الحالي: '+fmtM(q.quota)+' لتر من '+esc(q.start||'—')+' — مستهلك '+fmtM(q.used)+' لتر. '+
+            (q.over?('<span style="color:#dc2626">تجاوز بـ '+fmtM(Math.abs(q.remaining))+' لتر</span>'):('سيُقفل ويُهمَل متبقيه: <span style="color:#dc2626">'+fmtM(Math.max(0,rem))+' لتر</span>'))+
+          '</div>'):'')+
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">'+
+          '<div><label class="lbl">حصة القطع الجديد (لتر) *</label><input class="inp" id="nq_amt" type="text" inputmode="numeric" dir="ltr" placeholder="6,000,000" style="width:180px;text-align:center"></div>'+
+          '<div><label class="lbl">تاريخ بدء القطع الجديد *</label><input class="inp" id="nq_start" type="date" value="'+today()+'" style="width:180px"></div>'+
+          '<button class="btn btn-amber" onclick="confirmNewQuota('+i+')">✅ تأكيد بدء القطع</button>'+
+          '<button class="btn btn-gray" onclick="cancelNewQuota()">إلغاء</button>'+
+        '</div></td></tr>';
+    }
+    return main;
+  }).join('');
+
+  var hist=quotaHistory();
+  var histRows=hist.map(function(h,i){
+    return '<tr><td class="td" style="color:#64748b">'+(i+1)+'</td>'+
+      '<td class="td" style="font-weight:900;text-align:right">'+esc(h.factory||'')+'</td>'+
+      '<td class="td" style="font-size:11px">'+esc(h.start||'—')+' ← '+esc(h.end||'—')+'</td>'+
+      '<td class="td">'+fmtM(h.quota)+'</td>'+
+      '<td class="td"><b style="color:#0f172a">'+fmtM(h.used)+'</b></td>'+
+      '<td class="td">'+(parseFloat(h.over)>0?('<b style="color:#dc2626">تجاوز '+fmtM(h.over)+'</b>'):('<b style="color:#b45309">'+fmtM(h.forfeited)+'</b>'))+'</td>'+
+      '<td class="td"><span class="badge" style="background:'+(h.status==='مكتملة'?'#ecfdf5':'#fffbeb')+';color:'+(h.status==='مكتملة'?'#059669':'#b45309')+';font-size:10px">'+esc(h.status||'')+'</span></td>'+
+      '<td class="td"><button class="btn btn-red" style="padding:3px 9px;font-size:10px" onclick="deleteQuotaHistoryRow(&quot;'+h.id+'&quot;)">حذف</button></td></tr>';
+  }).join('');
+
+  return '<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px">'+
+    '<div style="padding:12px 16px;background:linear-gradient(135deg,#0f172a,#1e3a8a);font-weight:900;font-size:13px;color:#e0e7ff">⛽ حصص شراء المعامل (القطع) — باللتر الطبيعي</div>'+
+    '<div style="padding:10px 16px;background:#f8fafc;font-size:11px;color:#475569;font-weight:700;border-bottom:1px solid #e2e8f0">'+
+      'المتبقي = الحصة − مجموع اللترات الطبيعية المشتراة للمعمل من تاريخ بدء القطع. المعمل بلا حصة لا يظهر له شريط باللوحة. عند «قطع جديد» يُقفل القطع الحالي ويُسجَّل بالتاريخ ويُهمَل متبقيه.'+
+    '</div>'+
+    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:900px"><thead><tr>'+
+      '<th class="th">ت</th><th class="th">المعمل</th><th class="th">حصة القطع (لتر)</th><th class="th">تاريخ البدء</th>'+
+      '<th class="th">المستهلك</th><th class="th">المتبقي</th><th class="th">النسبة</th><th class="th">إجراءات</th>'+
+    '</tr></thead><tbody>'+(rows||'<tr><td class="td" colspan="8" style="color:#64748b;padding:16px">لا توجد معامل</td></tr>')+'</tbody></table></div>'+
+    (hist.length?('<div style="padding:12px 16px;background:#f1f5f9;font-weight:900;font-size:12px;color:#334155;border-top:1px solid #e2e8f0">📜 تاريخ القطع المُقفَلة ('+hist.length+')</div>'+
+      '<div style="overflow-x:auto;max-height:340px"><table style="width:100%;border-collapse:collapse;min-width:820px"><thead><tr>'+
+        '<th class="th">ت</th><th class="th">المعمل</th><th class="th">الفترة</th><th class="th">الحصة</th><th class="th">المستهلك</th><th class="th">المُهمَل / التجاوز</th><th class="th">الحالة</th><th class="th">حذف</th>'+
+      '</tr></thead><tbody>'+histRows+'</tbody></table></div>'):'')+
+  '</div>';
+}
+
 function addFactory(){const n=gv('new_factory');if(!n)return;let f=DB.get('factories',FACTORIES);if(f.includes(n)){showToast('موجود مسبقاً','warning');return;}f.push(n);DB.set('factories',f);FACTORIES=f;FDB.save('settings','factories',{id:'factories',list:f});renderContent();}
 function deleteFactory(name){if(!confirm('حذف معمل: '+name+'?'))return;let f=DB.get('factories',FACTORIES).filter(x=>x!==name);DB.set('factories',f);FACTORIES=f;FDB.save('settings','factories',{id:'factories',list:f});renderContent();}
 function togglePass(id,el){const inp=document.getElementById(id);if(!inp)return;if(inp.type==='password'){inp.type='text';el.textContent='🙈';}else{inp.type='password';el.textContent='👁';}}
@@ -5037,7 +5210,7 @@ function deleteUser(k){if(!confirm('حذف المستخدم: '+k+'?'))return;con
 
 // ===== النسخ الاحتياطي =====
 function exportBackup(){
-  const keys=['entries','sales','expenses','salaf','kroob','kroob_opening','rafid_accounts','rafid_opening','drivers','factories','users'];
+  const keys=['entries','sales','expenses','salaf','kroob','kroob_opening','rafid_accounts','rafid_opening','drivers','factories','users','factory_quotas','quota_history'];
   const backup={_version:44,_date:new Date().toISOString()};
   keys.forEach(k=>{backup[k]=DB.get(k,null);});
   const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
@@ -5058,7 +5231,7 @@ async function restoreFromBackup(input){
   try{
     const text=await file.text();
     const backup=JSON.parse(text);
-    const keys=['entries','sales','expenses','salaf','kroob','kroob_opening','rafid_accounts','rafid_opening','drivers','factories','users'];
+    const keys=['entries','sales','expenses','salaf','kroob','kroob_opening','rafid_accounts','rafid_opening','drivers','factories','users','factory_quotas','quota_history'];
     keys.forEach(k=>{if(backup[k]!==undefined&&backup[k]!==null)DB.set(k,backup[k]);});
     if(backup.factories)FACTORIES=backup.factories;
     showToast('تمت الاستعادة بنجاح ✅','success');

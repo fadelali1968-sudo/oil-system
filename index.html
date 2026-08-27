@@ -817,6 +817,37 @@ function unregisteredFactories(){
 }
 // كل المعامل التي يجب أن تظهر باللوحة/الموقف: المسجَّلة + الموجودة بالبيانات
 function allFactoryNames(){ return FACTORIES.concat(unregisteredFactories()); }
+
+// ===== حصص شراء المعامل (القطع) — الوحدة: لتر طبيعي =====
+// قطعة نشطة واحدة لكل معمل {name,quota,start,started_at,started_by}؛ المفتاح اسم المعمل مُطبَّعاً (normFactory)
+// عند بدء قطعة جديدة تُقفل الحالية بسجل quota_history ويُهمَل متبقيها (قرار المستخدم 2026-08-27)
+function quotaKey(f){ return normFactory(f); }
+function getQuotaMap(){ var m=DB.get('factory_quotas',{}); return (m&&typeof m==='object'&&!Array.isArray(m))?m:{}; }
+function saveQuotaMap(m){ DB.set('factory_quotas',m); FDB.save('settings','factory_quotas',{id:'factory_quotas',map:m}); }
+function getFactoryQuota(f){ return getQuotaMap()[quotaKey(f)]||null; }
+function quotaHistory(){ var l=DB.get('quota_history',[]); return Array.isArray(l)?l:[]; }
+function saveQuotaHistory(l){ DB.set('quota_history',l); FDB.save('settings','quota_history',{id:'quota_history',list:l}); }
+// المستهلك = مجموع اللترات الطبيعية بالمدى [from,to) — to حصري ليُحسب القطع المُقفَل بدقة
+function quotaUsedFor(f,from,to){
+  return loadEntries().reduce(function(s,e){
+    if(!sameFactory(e.factory,f))return s;
+    var d=e.date||'';
+    if(from&&d<from)return s;
+    if(to&&d>=to)return s;
+    return s+sc(e.natural_liters);
+  },0);
+}
+function getQuotaStatus(f){
+  var q=getFactoryQuota(f);
+  if(!q)return null;
+  var quota=parseFloat(q.quota)||0;
+  if(quota<=0)return null;
+  var used=quotaUsedFor(f,q.start||'',null);
+  var rem=quota-used;
+  return {quota:quota,used:used,remaining:rem,pct:used/quota*100,start:q.start||'',over:rem<0,name:q.name||f};
+}
+function overQuotaFactories(){ return allFactoryNames().filter(function(f){var q=getQuotaStatus(f);return q&&q.over;}); }
+
 function addMissingFactories(){
   const miss=unregisteredFactories();
   if(!miss.length){ showToast('لا توجد معامل غير مسجلة','info'); return; }

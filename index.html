@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام المشتريات النفطية v44.7</title>
+<title>نظام المشتريات النفطية v44.8</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='14' y='16' width='36' height='34' rx='5' fill='%231e3a5f'/><ellipse cx='32' cy='16' rx='18' ry='6' fill='%232563eb'/><ellipse cx='32' cy='50' rx='18' ry='6' fill='%231e293b'/><rect x='14' y='26' width='36' height='5' fill='%23f59e0b'/><rect x='14' y='37' width='36' height='5' fill='%23f59e0b'/><text x='32' y='35' text-anchor='middle' fill='%2334d399' font-size='10' font-weight='bold' font-family='Arial'>OIL</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -945,7 +945,7 @@ function render() {
       '<aside style="width:225px;background:#0f172a;display:flex;flex-direction:column;flex-shrink:0;z-index:50">' +
         '<div style="padding:10px;background:#020617;border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
           '<div style="width:34px;height:34px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:11px;margin:0 auto 5px">OIL</div>' +
-          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v44.7</p>' +
+          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v44.8</p>' +
           '<p style="font-size:10px;color:#94a3b8;margin-top:2px;font-weight:900;letter-spacing:0.5px">'+(isM?'المدققين':'محاسب: '+currentUser.factory)+'</p>' +
         '</div>' +
         '<nav id="sidebar-nav" style="flex:1;padding:8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
@@ -968,6 +968,8 @@ function render() {
     '</div>';
 
   setInterval(()=>{const c=el('clock');if(c){const n=new Date();c.textContent=[n.getHours(),n.getMinutes(),n.getSeconds()].map(v=>String(v).padStart(2,'0')).join(':');}},1000);
+  // نسخة احتياطية يومية تلقائية — بعد اكتمال المزامنة الأولى، وتحرس نفسها بتاريخ آخر نسخة
+  setTimeout(function(){ try{ autoBackupCheck(); }catch(e){ console.warn('autoBackup:',e); } },9000);
   setInterval(async()=>{
     if(!window._fbReady)return;
     const snap={
@@ -1220,7 +1222,7 @@ function copyWhatsapp(){
   for(const f of facts){const d=anOf(analysis,f).total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmt(d.kg)} كغم\n`;}
   txt+=`\n*📦 المبيعات:*\n`;
   for(const f of facts){const d=anOf(saleAn,f).total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
-  txt+=`\n✅ نظام المراقبة v44.7`;
+  txt+=`\n✅ نظام المراقبة v44.8`;
   navigator.clipboard?.writeText(txt).catch(()=>{});
   const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}
 }
@@ -4243,7 +4245,7 @@ function renderKroobDailySection(date){
   todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isInD2=kroobDir(e,'dinar')==='دائن',isInDol2=kroobDir(e,'dollar')==='دائن',badgeIn2=d2?isInD2:(dl2?isInDol2:isInD2);let r='\n'+(badgeIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+(isInD2?'+':'-')+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 '+(isInDol2?'+':'-')+'$'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
   waTextK+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextK+=' | $'+fmtM(balDollar);
-  waTextK+='\n✅ نظام المراقبة v44.7';
+  waTextK+='\n✅ نظام المراقبة v44.8';
   window._kroobWaText=waTextK;
 
   return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #34d399"><div style="padding:12px 16px;background:#ecfdf5;border-bottom:1px solid #6ee7b7;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#065f46">🏦 كشف الكروب اليومي — ${date}</span><span class="badge" style="background:#d1fae5;color:#059669;margin-right:8px">${todayList.length} حركة</span></div><button class="btn btn-green" style="font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._kroobWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._kroobWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
@@ -4280,7 +4282,7 @@ function renderRafidDailySection(date){
   todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(e2.type_dollar==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
   waTextR+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextR+=' | $'+fmtM(balDollar);
-  waTextR+='\n✅ نظام المراقبة v44.7';
+  waTextR+='\n✅ نظام المراقبة v44.8';
   window._rafidWaText=waTextR;
 
   return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #f59e0b"><div style="padding:12px 16px;background:#92400e;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#fff">💼 كشف حسابات سيد رافد — ${date}</span><span class="badge" style="background:rgba(255,255,255,0.2);color:#fff;margin-right:8px">${todayList.length} حركة</span></div><button class="btn" style="background:#f59e0b;color:#fff;font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._rafidWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._rafidWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
@@ -4778,7 +4780,7 @@ function sendRefineryWhatsapp(){
     lines.push((grandRemaining>0?'⚠️':'✅')+' المتبقي: '+fmtM(Math.abs(grandRemaining))+' د.ع '+(grandRemaining>0?'(غير مسوى)':'(مسوى)'));
     lines.push(sep);
   });
-  lines.push('✅ نظام المراقبة v44.7');
+  lines.push('✅ نظام المراقبة v44.8');
   var msg=lines.join(NL);
   if(navigator.clipboard){
     navigator.clipboard.writeText(msg).then(function(){showToast('تم نسخ نص الواتساب','success');}).catch(function(){});
@@ -4903,19 +4905,7 @@ function viewAdmin(){
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><div><label class="lbl">البريد الإلكتروني *</label><input class="inp" id="new_email" placeholder="user@example.com"></div><div><label class="lbl">كلمة السر *</label><input class="inp" id="new_pass" type="password" placeholder="Password123"></div><div><label class="lbl">الدور *</label><select class="inp" id="new_role"><option value="accountant">محاسب</option><option value="manager">مدير</option></select></div><div style="grid-column:span 3"><label class="lbl">المعمل المسؤول عنه *</label><select class="inp" id="new_factory_sel"><option value="الكل">الكل</option>${FACTORIES.map(f=>`<option value="${f}">${f}</option>`).join('')}</select></div></div><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-blue" onclick="addUser()">إضافة المستخدم</button></div><div id="user-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>
   </div>
   <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px"><div style="padding:12px 16px;background:#0f172a;font-weight:900;font-size:13px;color:#94a3b8">المستخدمون المسجلون</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">الـ ID</th><th class="th">البريد</th><th class="th">الدور</th><th class="th">المعمل</th><th class="th">حذف</th></tr></thead><tbody>${userRows}</tbody></table></div></div>
-  <div class="card" style="margin-bottom:14px;border:2px solid #2563eb">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <h3 style="font-size:14px;font-weight:900;color:#0f172a;display:flex;align-items:center;gap:8px">💾 النسخ الاحتياطي الكامل</h3>
-      <span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:11px">يشمل كل البيانات</span>
-    </div>
-    <p style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:12px">📌 يتضمن: المشتريات · المبيعات · الكروب · حسابات سيد رافد · المصاريف · السائقين · المعامل</p>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn btn-blue" onclick="exportBackup()">📋 تصدير نسخة احتياطية</button>
-      <button class="btn btn-green" onclick="importBackupFile()">📂 استعادة من نسخة احتياطية</button>
-      <button class="btn" style="background:#0f172a;color:#fff" onclick="uploadAllToFirebase()">☁️ رفع كل البيانات إلى Firebase</button>
-    </div>
-    <input type="file" id="backup-file-input" accept=".json" style="display:none" onchange="restoreFromBackup(this)">
-  </div>
+  ${renderBackupCard()}
   <div class="card" style="border:2px solid #dc2626">
     <h3 style="font-size:14px;font-weight:900;margin-bottom:10px;color:#dc2626">⚠️ خيارات إدارة البيانات</h3>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
@@ -5209,36 +5199,308 @@ async function addUser(){
 function deleteUser(k){if(!confirm('حذف المستخدم: '+k+'?'))return;const u=DB.get('users',{})[k];auditLog('حذف مستخدم',`${u?.email||k}`);let users=DB.get('users',{});delete users[k];DB.set('users',users);FDB.delete('users',k);renderContent();}
 
 // ===== النسخ الاحتياطي =====
-function exportBackup(){
-  const keys=['entries','sales','expenses','salaf','kroob','kroob_opening','rafid_accounts','rafid_opening','drivers','factories','users','factory_quotas','quota_history'];
-  const backup={_version:44,_date:new Date().toISOString()};
-  keys.forEach(k=>{backup[k]=DB.get(k,null);});
-  const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  const d=new Date().toLocaleDateString('ar-IQ').replace(/\//g,'-');
-  a.download='backup_oil_'+d+'.json';
+// ===== النسخ الاحتياطي: مجلّد ثابت + نسخة يومية تلقائية + الاحتفاظ بآخر 30 =====
+// كل مفاتيح البيانات (بلا صور البوجر — تعيش بمجموعة voucher_scans بـFirestore)
+const BACKUP_KEYS=['entries','sales','expenses','expense_entities','deleted_expense_ids',
+  'salaf','salaf_settlement_cfg','private_salaf','deleted_private_salaf_ids',
+  'kroob','kroob_opening','kroob_month_openings','kroob_op_types',
+  'rafid_accounts','rafid_opening','refinery_received',
+  'drivers','factories','factory_quotas','quota_history','users','audit_log','notifs',
+  'entries_cleaned','expenses_haidar_migrated','expenses_settlement_cleaned',
+  'haider_salaf_migrated','kroob_cleared','rafid_cleared','statement_perms_migrated'];
+const BACKUP_KEEP=30;                       // عدد النسخ المحفوظة بالمجلّد
+const BK_FILE_RE=/^backup_oil_\d{4}-\d{2}-\d{2}_\d{6}\.json$/;   // لا يُحذف إلا ما يطابقه حرفياً
+
+function bkSupported(){ return typeof window!=='undefined' && typeof window.showDirectoryPicker==='function'; }
+function bkDirName(){ return DB.get('backup_dirname',''); }
+function bkLastDate(){ return DB.get('backup_last_date',''); }
+function bkLastTime(){ return DB.get('backup_last_time',''); }
+
+// مقبض المجلّد لا يقبل JSON — يُخزَّن بـIndexedDB
+function bkIdb(){
+  return new Promise(function(res,rej){
+    var r=indexedDB.open('oil_backup_fs',1);
+    r.onupgradeneeded=function(){ r.result.createObjectStore('handles'); };
+    r.onsuccess=function(){ res(r.result); };
+    r.onerror=function(){ rej(r.error); };
+  });
+}
+async function bkGetHandle(){
+  try{
+    var db=await bkIdb();
+    return await new Promise(function(res,rej){
+      var q=db.transaction('handles','readonly').objectStore('handles').get('dir');
+      q.onsuccess=function(){ res(q.result||null); }; q.onerror=function(){ rej(q.error); };
+    });
+  }catch(e){ return null; }
+}
+async function bkSetHandle(h){
+  try{
+    var db=await bkIdb();
+    await new Promise(function(res,rej){
+      var q=db.transaction('handles','readwrite').objectStore('handles').put(h,'dir');
+      q.onsuccess=function(){ res(); }; q.onerror=function(){ rej(q.error); };
+    });
+  }catch(e){ console.warn('bkSetHandle:',e); }
+}
+// request=true يحتاج نقرة مستخدم — لا تستدعها من النسخة التلقائية
+async function bkPerm(h,request){
+  if(!h) return false;
+  try{
+    var o={mode:'readwrite'};
+    if(await h.queryPermission(o)==='granted') return true;
+    if(!request) return false;
+    return (await h.requestPermission(o))==='granted';
+  }catch(e){ return false; }
+}
+
+function bkPayload(){
+  var b={_version:44.8,_date:new Date().toISOString(),_by:(currentUser&&currentUser.email)||'',_counts:{}};
+  BACKUP_KEYS.forEach(function(k){
+    var v=DB.get(k,null);
+    b[k]=v;
+    if(Array.isArray(v)) b._counts[k]=v.length;
+    else if(v&&typeof v==='object') b._counts[k]=Object.keys(v).length;
+  });
+  return b;
+}
+function bkFileName(d){
+  d=d||new Date();
+  var z=function(n){ return String(n).padStart(2,'0'); };
+  return 'backup_oil_'+d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+'_'+z(d.getHours())+z(d.getMinutes())+z(d.getSeconds())+'.json';
+}
+function bkStamp(d){
+  d=d||new Date();
+  var z=function(n){ return String(n).padStart(2,'0'); };
+  return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+' '+z(d.getHours())+':'+z(d.getMinutes());
+}
+
+// اختيار المجلّد (نقرة مستخدم إلزامية)
+async function chooseBackupFolder(){
+  if(!bkSupported()){ showToast('متصفحك لا يدعم اختيار مجلّد — استخدم Chrome أو Edge','warning',5000); return; }
+  try{
+    var h=await window.showDirectoryPicker({mode:'readwrite',startIn:'documents'});
+    if(!await bkPerm(h,true)){ showToast('لم يُمنح إذن الكتابة بالمجلّد','error'); return; }
+    await bkSetHandle(h);
+    DB.set('backup_dirname',h.name||'مجلّد النسخ');
+    auditLog('تحديد مجلّد النسخ الاحتياطية','المجلّد: '+(h.name||''));
+    showToast('تم تحديد مجلّد النسخ: '+(h.name||''),'success');
+    renderContent();
+  }catch(e){ if(e&&e.name!=='AbortError') showToast('تعذّر اختيار المجلّد','error'); }
+}
+async function clearBackupFolder(){
+  if(!confirm('إلغاء ربط مجلّد النسخ؟ (لن تُحذف أي نسخة موجودة)'))return;
+  await bkSetHandle(null); DB.set('backup_dirname','');
+  showToast('أُلغي ربط المجلّد','info'); renderContent();
+}
+
+// حذف الأقدم مع الإبقاء على آخر BACKUP_KEEP — لا يمسّ إلا ملفات تطابق BK_FILE_RE
+async function bkRotate(dir){
+  try{
+    var names=[];
+    for await (var ent of dir.values()){ if(ent.kind==='file'&&BK_FILE_RE.test(ent.name)) names.push(ent.name); }
+    names.sort();                                  // الاسم بصيغة تاريخ قابلة للفرز نصياً
+    var extra=names.length-BACKUP_KEEP;
+    if(extra<=0) return 0;
+    var del=names.slice(0,extra);
+    for(var i=0;i<del.length;i++){ try{ await dir.removeEntry(del[i]); }catch(e){} }
+    return del.length;
+  }catch(e){ return 0; }
+}
+
+// النسخة الفعلية. interactive=true مسموح لها طلب الإذن (نقرة مستخدم)
+async function runBackup(interactive){
+  var dir=await bkGetHandle();
+  if(!dir){ if(interactive) return downloadBackupFallback(); return {ok:false,reason:'no-dir'}; }
+  if(!await bkPerm(dir,!!interactive)){
+    if(interactive) showToast('لم يُمنح إذن الكتابة بالمجلّد','error');
+    return {ok:false,reason:'no-perm'};
+  }
+  try{
+    var now=new Date(), name=bkFileName(now);
+    var txt=JSON.stringify(bkPayload(),null,2);
+    var fh=await dir.getFileHandle(name,{create:true});
+    var w=await fh.createWritable();
+    await w.write(new Blob([txt],{type:'application/json'}));
+    await w.close();
+    var removed=await bkRotate(dir);
+    DB.set('backup_last_date',now.toISOString().split('T')[0]);
+    DB.set('backup_last_time',bkStamp(now));
+    DB.set('backup_last_size',txt.length);
+    if(interactive){
+      showToast('✅ حُفظت النسخة: '+name+(removed?(' (حُذفت '+removed+' نسخة قديمة)'):''),'success',4500);
+      auditLog('نسخة احتياطية يدوية',name+' | '+Math.round(txt.length/1024)+' كيلوبايت');
+      renderContent();
+    }else{
+      showToast('💾 حُفظت النسخة اليومية تلقائياً','info',3000);
+      auditLog('نسخة احتياطية تلقائية',name+' | '+Math.round(txt.length/1024)+' كيلوبايت');
+    }
+    return {ok:true,name:name,removed:removed};
+  }catch(e){
+    console.warn('runBackup:',e);
+    if(interactive) showToast('فشل حفظ النسخة: '+(e.message||e),'error',5000);
+    return {ok:false,reason:'write-error'};
+  }
+}
+function backupNow(){ runBackup(true); }
+
+// المتصفحات بلا دعم المجلّد: تنزيل عادي بنفس التسمية
+function downloadBackupFallback(){
+  var txt=JSON.stringify(bkPayload(),null,2);
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));
+  a.download=bkFileName();
   a.click();
-  showToast('تم تصدير النسخة الاحتياطية بنجاح','success');
+  DB.set('backup_last_date',new Date().toISOString().split('T')[0]);
+  DB.set('backup_last_time',bkStamp());
+  DB.set('backup_last_size',txt.length);
+  showToast('تم تنزيل النسخة (بلا مجلّد ثابت)','success');
+  auditLog('نسخة احتياطية (تنزيل)',bkFileName());
+  return {ok:true,fallback:true};
 }
-function importBackupFile(){
-  document.getElementById('backup-file-input').click();
+function exportBackup(){ if(bkDirName()&&bkSupported()) return runBackup(true); return downloadBackupFallback(); }
+
+// نسخة يومية: أول فتح بكل يوم. لا تطلب إذناً (لا نقرة) — تعرض لافتة إن لزم الإذن
+let _bkNeedsPerm=false;
+async function autoBackupCheck(){
+  try{
+    if(!bkSupported()) return;
+    var dir=await bkGetHandle(); if(!dir) return;
+    if(bkLastDate()===today()) return;
+    if(!await bkPerm(dir,false)){ _bkNeedsPerm=true; if(S.view==='admin')renderContent(); return; }
+    _bkNeedsPerm=false;
+    await runBackup(false);
+    if(S.view==='admin') renderContent();
+  }catch(e){ console.warn('autoBackupCheck:',e); }
 }
+async function grantAndBackup(){ _bkNeedsPerm=false; var r=await runBackup(true); renderContent(); return r; }
+
+// ===== الاستعادة =====
+function bkApplyPayload(backup){
+  var applied=[];
+  BACKUP_KEYS.forEach(function(k){
+    if(backup[k]!==undefined&&backup[k]!==null){ DB.set(k,backup[k]); applied.push(k); }
+  });
+  if(backup.factories&&backup.factories.length)FACTORIES=backup.factories;
+  return applied;
+}
+function bkDiffWarning(backup){
+  var warn=[];
+  ['entries','sales','expenses','private_salaf','kroob','rafid_accounts','salaf'].forEach(function(k){
+    var cur=DB.get(k,[]), inc=backup[k];
+    var c=Array.isArray(cur)?cur.length:0, n=Array.isArray(inc)?inc.length:(inc===undefined||inc===null?-1:0);
+    if(n>=0&&n<c) warn.push(k+': '+c+' → '+n);
+  });
+  return warn;
+}
+function importBackupFile(){ document.getElementById('backup-file-input').click(); }
 async function restoreFromBackup(input){
   const file=input.files[0];
   if(!file)return;
-  if(!confirm('استعادة النسخة الاحتياطية؟\nسيتم استبدال البيانات الحالية!'))return input.value='';
   try{
-    const text=await file.text();
-    const backup=JSON.parse(text);
-    const keys=['entries','sales','expenses','salaf','kroob','kroob_opening','rafid_accounts','rafid_opening','drivers','factories','users','factory_quotas','quota_history'];
-    keys.forEach(k=>{if(backup[k]!==undefined&&backup[k]!==null)DB.set(k,backup[k]);});
-    if(backup.factories)FACTORIES=backup.factories;
-    showToast('تمت الاستعادة بنجاح ✅','success');
-    setTimeout(()=>render(),800);
-  }catch(e){showToast('خطأ في قراءة الملف','error');}
+    const backup=JSON.parse(await file.text());
+    await applyRestore(backup,file.name);
+  }catch(e){ showToast('خطأ في قراءة الملف','error'); }
   input.value='';
 }
+async function applyRestore(backup,label){
+  var warn=bkDiffWarning(backup);
+  var msg='استعادة النسخة'+(label?(' «'+label+'»'):'')+'؟\nسيتم استبدال البيانات الحالية!';
+  if(backup._date) msg+='\nتاريخ النسخة: '+new Date(backup._date).toLocaleString('ar-IQ');
+  if(warn.length) msg+='\n\n⚠️ النسخة أقل سجلات من الموجود حالياً:\n'+warn.join('\n');
+  if(!confirm(msg)) return false;
+  var applied=bkApplyPayload(backup);
+  auditLog('استعادة نسخة احتياطية',(label||'')+' | '+applied.length+' مجموعة');
+  showToast('تمت الاستعادة بنجاح ✅ ('+applied.length+' مجموعة)','success');
+  setTimeout(function(){ render(); },800);
+  return true;
+}
+// قائمة النسخ داخل المجلّد
+async function listBackupFiles(){
+  var dir=await bkGetHandle(); if(!dir) return [];
+  if(!await bkPerm(dir,false)) return [];
+  var out=[];
+  try{ for await (var ent of dir.values()){ if(ent.kind==='file'&&BK_FILE_RE.test(ent.name)) out.push(ent.name); } }catch(e){}
+  return out.sort().reverse();
+}
+async function refreshBackupList(){
+  var l=await listBackupFiles();
+  if(!l.length){ var d=await bkGetHandle(); if(d&&!await bkPerm(d,true)){ showToast('لم يُمنح الإذن','error'); return; } l=await listBackupFiles(); }
+  window._bkFiles=l; renderContent();
+  showToast(l.length?('وُجدت '+l.length+' نسخة بالمجلّد'):'لا توجد نسخ بالمجلّد','info');
+}
+async function restoreFromFolder(){
+  var name=gv('bk_file_sel'); if(!name){ showToast('اختر نسخة من القائمة','warning'); return; }
+  var dir=await bkGetHandle(); if(!dir) return;
+  if(!await bkPerm(dir,true)){ showToast('لم يُمنح الإذن','error'); return; }
+  try{
+    var fh=await dir.getFileHandle(name);
+    var txt=await (await fh.getFile()).text();
+    await applyRestore(JSON.parse(txt),name);
+  }catch(e){ showToast('تعذّرت قراءة الملف: '+(e.message||e),'error'); }
+}
+
+// ===== بطاقة النسخ بصفحة الإدارة =====
+function renderBackupCard(){
+  var dn=bkDirName(), sup=bkSupported(), files=window._bkFiles||null;
+  var sizeKB=DB.get('backup_last_size',0)?Math.round(DB.get('backup_last_size',0)/1024):0;
+  var statusRow=dn
+    ?('<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:10px 12px;margin-bottom:10px">'+
+        '<span style="font-size:12px;font-weight:900;color:#065f46">📁 مجلّد النسخ: '+esc(dn)+'</span>'+
+        '<button class="btn btn-gray" style="font-size:11px;padding:4px 10px" onclick="chooseBackupFolder()">تغيير</button>'+
+        '<button class="btn btn-gray" style="font-size:11px;padding:4px 10px" onclick="clearBackupFolder()">إلغاء الربط</button>'+
+      '</div>')
+    :('<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:10px 12px;margin-bottom:10px">'+
+        '<div style="font-size:12px;font-weight:900;color:#92400e;margin-bottom:8px">'+(sup
+          ?'⚠️ لم يُحدَّد مجلّد للنسخ — النسخة تُنزَّل لمجلد التنزيلات ولا توجد نسخة يومية تلقائية'
+          :'⚠️ متصفحك لا يدعم المجلّد الثابت (استخدم Chrome أو Edge) — النسخ تُنزَّل لمجلد التنزيلات')+'</div>'+
+        (sup?'<button class="btn btn-amber" style="font-size:12px" onclick="chooseBackupFolder()">📁 اختر مجلّد النسخ (مرة واحدة)</button>':'')+
+      '</div>');
+
+  var permRow=(typeof _bkNeedsPerm!=='undefined'&&_bkNeedsPerm)
+    ?('<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+        '<span style="font-size:12px;font-weight:900;color:#991b1b">🔒 نسخة اليوم بانتظار إذن المتصفح للكتابة بالمجلّد</span>'+
+        '<button class="btn btn-red" style="font-size:11px;padding:5px 12px" onclick="grantAndBackup()">منح الإذن وأخذ النسخة الآن</button>'+
+      '</div>'):'';
+
+  var lastRow='<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;font-weight:800;color:#475569;margin-bottom:12px">'+
+      '<span>🕐 آخر نسخة: <b style="color:'+(bkLastDate()===today()?'#059669':'#b45309')+'">'+(bkLastTime()||'لا توجد')+'</b></span>'+
+      (sizeKB?('<span>📦 الحجم: <b style="color:#0f172a">'+sizeKB+' كيلوبايت</b></span>'):'')+
+      '<span>🔄 النسخة اليومية: <b style="color:'+(dn?'#059669':'#94a3b8')+'">'+(dn?'مُفعَّلة':'معطَّلة (لا مجلّد)')+'</b></span>'+
+      '<span>🗂️ يُحتفظ بآخر <b style="color:#0f172a">'+BACKUP_KEEP+'</b> نسخة</span>'+
+    '</div>';
+
+  var folderRestore=dn
+    ?('<div style="margin-top:12px;padding-top:12px;border-top:1px dashed #e2e8f0">'+
+        '<div style="font-size:12px;font-weight:900;color:#334155;margin-bottom:8px">📂 استعادة من مجلّد النسخ</div>'+
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'+
+          '<button class="btn btn-gray" style="font-size:11px" onclick="refreshBackupList()">🔄 تحديث القائمة</button>'+
+          (files
+            ?('<select class="inp" id="bk_file_sel" style="flex:1;min-width:230px;font-size:12px">'+
+                (files.length?files.map(function(f){return '<option value="'+esc(f)+'">'+esc(f)+'</option>';}).join(''):'<option value="">لا توجد نسخ</option>')+
+              '</select>'+
+              (files.length?'<button class="btn btn-green" style="font-size:11px" onclick="restoreFromFolder()">📂 استعادة المحدّدة</button>':''))
+            :'<span style="font-size:11px;color:#64748b;font-weight:700">اضغط «تحديث القائمة» لعرض النسخ الموجودة بالمجلّد</span>')+
+        '</div></div>')
+    :'';
+
+  return '<div class="card" style="margin-bottom:14px;border:2px solid #2563eb">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">'+
+      '<h3 style="font-size:14px;font-weight:900;color:#0f172a;display:flex;align-items:center;gap:8px">💾 النسخ الاحتياطي الكامل</h3>'+
+      '<span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:11px">'+BACKUP_KEYS.length+' مجموعة بيانات</span>'+
+    '</div>'+
+    '<p style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:12px">📌 يشمل: المشتريات · المبيعات · المصاريف وجهاتها · الكروب وأرصدته · حسابات سيد رافد · السلف · السلف الخاصة · حصص القطع · السائقين · المعامل · المستخدمين · سجل التدقيق. <b>صور البوجر غير مشمولة</b> (محفوظة بالسحابة).</p>'+
+    statusRow+permRow+lastRow+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap">'+
+      '<button class="btn btn-blue" onclick="backupNow()">💾 أخذ نسخة الآن</button>'+
+      '<button class="btn btn-green" onclick="importBackupFile()">📂 استعادة من ملف</button>'+
+      '<button class="btn" style="background:#0f172a;color:#fff" onclick="uploadAllToFirebase()">☁️ رفع كل البيانات إلى Firebase</button>'+
+    '</div>'+
+    folderRestore+
+    '<input type="file" id="backup-file-input" accept=".json" style="display:none" onchange="restoreFromBackup(this)">'+
+  '</div>';
+}
+
 async function uploadAllToFirebase(){
   if(!window._fbReady){showToast('Firebase غير جاهز','error');return;}
   if(!confirm('رفع كل البيانات المحلية إلى Firebase؟\nسيتم استبدال ما في Firebase!'))return;

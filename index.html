@@ -146,6 +146,25 @@
   @media (max-width:768px) { .ovhero { padding:14px 16px !important; border-radius:14px !important; } .ovhero-t { font-size:16px !important; }
     .ovchips { margin-right:0; } .ovfield { min-width:130px; flex:1; } .ovtd { padding:7px 4px !important; font-size:11.5px !important; } }
 
+  /* ===== كشف حساب الكروب / سيد رافد ===== */
+  .ksmonths { display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:12px; }
+  .ksmonth { padding:14px; border:1px solid #e2e8f0; position:relative; overflow:hidden;
+             transition:transform .18s ease, box-shadow .18s ease; }
+  .ksmonth::before { content:''; position:absolute; top:0; right:0; left:0; height:4px;
+                     background:linear-gradient(90deg,#0f766e,#2dd4bf); }
+  .ksmonth:hover { transform:translateY(-3px); box-shadow:0 16px 32px -14px rgba(15,23,42,.34); }
+  .ksmonth-h { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;
+               margin-bottom:10px; padding-bottom:9px; border-bottom:1px solid #f1f5f9; }
+  .ksbtn { border:none; border-radius:7px; padding:5px 11px; font-size:11px; font-weight:800; color:#fff;
+           cursor:pointer; font-family:'Cairo',sans-serif; transition:opacity .15s; }
+  .ksbtn:hover { opacity:.86; }
+  .kscarry { background:#e0f2fe; border:1px solid #bae6fd; border-radius:10px; padding:8px 12px; margin-bottom:10px;
+             display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  .ksgrid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .ksbox { border:1px solid #e2e8f0; border-radius:10px; padding:9px 10px; text-align:center; font-size:10px; font-weight:800; }
+  .ksbox b { display:block; font-size:13px; margin-top:4px; }
+  @media (max-width:768px) { .ksmonths { grid-template-columns:1fr; } }
+
   /* ===== Toast Notifications ===== */
   #toast-container{position:fixed;bottom:24px;left:24px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
   .toast{display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:12px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;color:#fff;min-width:260px;max-width:380px;box-shadow:0 8px 24px rgba(0,0,0,.2);animation:toastIn .3s ease;pointer-events:all;}
@@ -3787,54 +3806,147 @@ function viewKroobStatement(){
     else if(idx===0){carryMap[m]={dinar:parseFloat(opening.dinar||0),dollar:parseFloat(opening.dollar||0)};}
     else{const prev=months[sortedMonths[idx-1]],prevLast=prev.filter(e=>e.date).slice(-1)[0]||prev[prev.length-1];carryMap[m]={dinar:prevLast.bal_dinar,dollar:prevLast.bal_dollar};}
   });
-  // حساب الإجماليات: إما للفترة أو الكلية
-  const baseList=hasFilter?allList.filter(e=>{const d=e.date||'';return(!ksFrom||d>=ksFrom)&&(!ksTo||d<=ksTo);}):allList;
-  const filtWithBal=hasFilter?listWithBal.filter(e=>{const d=e.date||'';return(!ksFrom||d>=ksFrom)&&(!ksTo||d<=ksTo);}):listWithBal;
+
+  // ——— حركات الفترة ———
+  const inRange=e=>{const d=e.date||'';return(!ksFrom||d>=ksFrom)&&(!ksTo||d<=ksTo);};
+  const filtWithBal=hasFilter?listWithBal.filter(inRange):listWithBal;
+  const periodLabel=ovPeriodLabel(ksFrom,ksTo);
+
+  // الرصيد الافتتاحي للفترة
   const prevFilt=ksFrom?listWithBal.filter(e=>e.date&&e.date<ksFrom):[];
   let filtOp;
   if(prevFilt.length){filtOp={dinar:prevFilt[prevFilt.length-1].bal_dinar,dollar:prevFilt[prevFilt.length-1].bal_dollar};}
-  else if(ksFrom){const _mo=DB.get('kroob_month_openings',{})[ksFrom.slice(0,7)];filtOp=_mo?{dinar:safeNum(_mo.dinar),dollar:safeNum(_mo.dollar)}:{dinar:parseFloat(opening.dinar||0),dollar:parseFloat(opening.dollar||0)};}
+  else if(ksFrom){const _mo=monthOpeningsMap[ksFrom.slice(0,7)];filtOp=_mo?{dinar:safeNum(_mo.dinar),dollar:safeNum(_mo.dollar)}:{dinar:parseFloat(opening.dinar||0),dollar:parseFloat(opening.dollar||0)};}
   else{filtOp={dinar:parseFloat(opening.dinar||0),dollar:parseFloat(opening.dollar||0)};}
   const dispOpDinar=hasFilter?filtOp.dinar:parseFloat(opening.dinar||0);
   const dispOpDollar=hasFilter?filtOp.dollar:parseFloat(opening.dollar||0);
-  const dispIn=baseList.filter(e=>e.operation_type==='إيداع'||e.operation_type==='ايداع'||e.operation_type==='استلام').reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);
-  const dispOut=baseList.filter(e=>e.operation_type!=='إيداع'&&e.operation_type!=='ايداع'&&e.operation_type!=='استلام').reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);
-  const dispComm=baseList.reduce((s,e)=>s+parseFloat(e.commission||0),0);
-  const dispCommDollar=baseList.reduce((s,e)=>s+parseFloat(e.commission_dollar||0),0);
+
+  // الاتجاه يُقرأ بـ kroobDir (يقدّم type_dinar/type_dollar على operation_type) ليطابق حساب الرصيد تماماً
+  const sumIf=(list,cur,dir,field)=>list.reduce((s,e)=>(kroobDir(e,cur)===dir?s+safeNum(e[field]):s),0);
+  const dispIn=sumIf(filtWithBal,'dinar','دائن','amount_dinar');
+  const dispOut=filtWithBal.reduce((s,e)=>(kroobDir(e,'dinar')!=='دائن'?s+safeNum(e.amount_dinar):s),0);
+  const dispInDol=sumIf(filtWithBal,'dollar','دائن','amount_dollar');
+  const dispOutDol=filtWithBal.reduce((s,e)=>(kroobDir(e,'dollar')!=='دائن'?s+safeNum(e.amount_dollar):s),0);
+  const dispComm=filtWithBal.reduce((s,e)=>s+safeNum(e.commission),0);
+  const dispCommDollar=filtWithBal.reduce((s,e)=>s+safeNum(e.commission_dollar),0);
   const lastFilt=filtWithBal[filtWithBal.length-1];
   const dispBalD=lastFilt?lastFilt.bal_dinar:dispOpDinar;
   const dispBalDol=lastFilt?lastFilt.bal_dollar:dispOpDollar;
-  const dispCount=baseList.length;
-  const summaryTitle=hasFilter?'📊 ملخص الفترة — كروب رافد فيصل':'📊 ملخص إجمالي — كروب رافد فيصل';
-  // بطاقات الأشهر تظهر فقط بدون فلتر
-  const monthCards=hasFilter?'':sortedMonths.filter(m=>m).slice().reverse().map(m=>{
-    const mList=months[m],carry=carryMap[m];
-    const totalIn=mList.reduce((s,e)=>s+(e.operation_type==='إيداع'||e.operation_type==='ايداع'||e.operation_type==='استلام'?parseFloat(e.amount_dinar||0):0),0);
-    const totalOut=mList.reduce((s,e)=>s+(e.operation_type!=='إيداع'&&e.operation_type!=='ايداع'&&e.operation_type!=='استلام'?parseFloat(e.amount_dinar||0):0),0);
-    const lastBal=mList[mList.length-1];
-    return`<div class="card" style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-weight:900;font-size:14px;color:#065f46">📅 ${m}</span>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button onclick="S.kroobMonth='${m}';S.view='kroob';renderContent()" style="background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700">📂 فتح</button>
-          <button onclick="generateKroobPDF('${m}','print')" style="background:#065f46;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700">🖨️ طباعة</button>
-          <button onclick="generateKroobPDF('${m}','save')" style="background:#1d4ed8;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700">💾 PDF</button>
-          <span class="badge" style="background:#ecfdf5;color:#059669">${mList.length} حركة</span>
+  const dispCount=filtWithBal.length;
+
+  // ——— الترويسة ———
+  const hero=`<div class="ovhero no-print" style="background:linear-gradient(115deg,#052e26 0%,#065f46 52%,#10b981 100%);box-shadow:0 16px 38px -16px rgba(6,95,70,.75)">
+    <div class="ovhero-in">
+      <div>
+        <div class="ovhero-t">📜 كشف الحساب — كروب رافد فيصل</div>
+        <div class="ovhero-tags">
+          <span class="ovtag">📅 ${periodLabel}</span>
+          <span class="ovtag">🧾 ${fmtM(dispCount)} حركة</span>
+          <span class="ovtag">💛 الرصيد: ${fmtM(dispBalD)} د.ع</span>
+          <span class="ovtag">💵 ${fmtM(dispBalDol)} $</span>
         </div>
       </div>
-      <div style="background:#e0f2fe;border-radius:8px;padding:7px 12px;margin-bottom:8px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:11px;font-weight:900;color:#0369a1">🔄 رصيد مرحّل:</span>
-        <span style="font-size:12px;font-weight:900;color:${carry.dinar>=0?'#0c4a6e':'#dc2626'}">${fmtM(carry.dinar)} د.ع</span>
-        <span style="font-size:12px;font-weight:900;color:${carry.dollar>=0?'#0c4a6e':'#dc2626'}">${fmtM(carry.dollar)} $</span>
+      <div class="ovhero-b">
+        <button class="btn" style="background:#ca8a04;color:#fff" onclick="generateKroobRangePDF('dinar')">📄 PDF الدينار</button>
+        <button class="btn" style="background:#1d4ed8;color:#fff" onclick="generateKroobRangePDF('dollar')">💵 PDF الدولار</button>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:12px">
-        <div style="background:#ecfdf5;border-radius:8px;padding:8px;text-align:center"><div style="color:#065f46;font-weight:700;margin-bottom:3px;font-size:10px">إجمالي الإيداع</div><div style="font-weight:900;color:#059669">${fmtM(totalIn)} د.ع</div></div>
-        <div style="background:#fef2f2;border-radius:8px;padding:8px;text-align:center"><div style="color:#7f1d1d;font-weight:700;margin-bottom:3px;font-size:10px">إجمالي الصرف</div><div style="font-weight:900;color:#dc2626">${fmtM(totalOut)} د.ع</div></div>
-        <div style="background:#fffbeb;border-radius:8px;padding:8px;text-align:center"><div style="color:#92400e;font-weight:700;margin-bottom:3px;font-size:10px">💛 رصيد الدينار</div><div style="font-weight:900;color:${lastBal?lastBal.bal_dinar>=0?'#ca8a04':'#dc2626':'#64748b'}">${fmtM(lastBal?lastBal.bal_dinar:0)} د.ع</div></div>
-        <div style="background:#f8fafc;border-radius:8px;padding:8px;text-align:center"><div style="color:#0f172a;font-weight:700;margin-bottom:3px;font-size:10px">🖤 رصيد الدولار</div><div style="font-weight:900;color:${lastBal?lastBal.bal_dollar>=0?'#0f172a':'#dc2626':'#64748b'}">${fmtM(lastBal?lastBal.bal_dollar:0)} $</div></div>
+    </div>
+  </div>`;
+
+  // ——— شريط الفلترة ———
+  const filters=`<div class="card no-print ovfilter">
+    <div class="ovfilter-row">
+      <div class="ovfield"><label class="lbl" for="ks_from">📅 من تاريخ</label><input class="inp" type="date" id="ks_from" value="${ksFrom}" onchange="S.ksFrom=this.value;renderContent()"></div>
+      <div class="ovfield"><label class="lbl" for="ks_to">📅 إلى تاريخ</label><input class="inp" type="date" id="ks_to" value="${ksTo}" onchange="S.ksTo=this.value;renderContent()"></div>
+      <div class="ovchips">
+        ${hasFilter?'<button class="ovchip" onclick="clearKsFilter()">✕ إلغاء الفلتر (عرض الكل)</button>':'<span style="font-size:11.5px;font-weight:800;color:#64748b;padding-bottom:9px">لا يوجد فلتر — معروض كامل السجل</span>'}
+      </div>
+    </div>
+  </div>`;
+
+  // ——— بطاقات الملخص ———
+  const kpi=(g,glow,ic,title,val,unit,foot)=>`<div class="kpi" style="background:linear-gradient(135deg,${g});--kg:${glow}">
+      <span class="kpi-ic">${ic}</span>
+      <div class="kpi-t">${ic} ${title}</div>
+      <div class="kpi-v">${val}</div>
+      ${unit?`<div class="kpi-u">${unit}</div>`:''}
+      ${foot?`<div class="kpi-f">${foot}</div>`:''}
+    </div>`;
+  const balLabel=hasFilter?'الرصيد الختامي':'الرصيد الحالي';
+  const kpiCards=`<div class="ovkpis">
+    ${kpi(dispBalD>=0?'#fbbf24,#b45309':'#f87171,#991b1b',dispBalD>=0?'rgba(217,119,6,.55)':'rgba(153,27,27,.55)','💛',balLabel+' (دينار)',fmtM(dispBalD),'د.ع',`الافتتاحي: ${fmtM(dispOpDinar)}`)}
+    ${kpi(dispBalDol>=0?'#64748b,#0f172a':'#f87171,#991b1b','rgba(15,23,42,.55)','💵',balLabel+' (دولار)',fmtM(dispBalDol),'$',`الافتتاحي: ${fmtM(dispOpDollar)}`)}
+    ${kpi('#34d399,#047857','rgba(5,150,105,.55)','🟢','إجمالي الدائن',fmtM(dispIn),'د.ع',dispInDol?`دولار: ${fmtM(dispInDol)} $`:'')}
+    ${kpi('#f87171,#b91c1c','rgba(185,28,28,.55)','🔴','إجمالي المدين',fmtM(dispOut),'د.ع',dispOutDol?`دولار: ${fmtM(dispOutDol)} $`:'')}
+    ${kpi('#fb923c,#c2410c','rgba(194,65,12,.55)','💠','العمولات',fmtM(dispComm),'د.ع',dispCommDollar?`دولار: ${fmtM(dispCommDollar)} $`:'')}
+    ${kpi('#3b82f6,#1d4ed8','rgba(37,99,235,.55)','🧾','عدد الحركات',fmtM(dispCount),'حركة',`الأشهر: ${sortedMonths.filter(m=>m).length}`)}
+  </div>`;
+
+  // ——— جدول حركات الفترة ———
+  const trxRows=filtWithBal.map((e,i)=>{
+    const d=safeNum(e.amount_dinar),dl=safeNum(e.amount_dollar),com=safeNum(e.commission),commD=safeNum(e.commission_dollar);
+    const isInD=kroobDir(e,'dinar')==='دائن',isInDol=kroobDir(e,'dollar')==='دائن';
+    const op=(e.operation_type||'صرف').trim(),badgeIn=d?isInD:(dl?isInDol:isInD);
+    return`<tr><td class="ovtd" style="color:#94a3b8">${i+1}</td><td class="ovtd" style="font-size:11px;color:#475569;white-space:nowrap">${esc(e.date||'—')}</td><td class="ovtd" style="font-size:11px;text-align:right;max-width:200px">${esc(e.description||'')}</td><td class="ovtd" style="font-size:11px">${esc(e.beneficiary||'')}</td><td class="ovtd" style="font-size:11px">${esc(e.receiver||'')}</td><td class="ovtd" style="background:#f0fdf4;color:#059669">${isInD&&d?fmtM(d):'—'}</td><td class="ovtd" style="background:#fef2f2;color:#dc2626">${!isInD&&d?fmtM(d):'—'}</td><td class="ovtd" style="background:#f0fdf4;color:#059669">${isInDol&&dl?fmtM(dl):'—'}</td><td class="ovtd" style="background:#fef2f2;color:#dc2626">${!isInDol&&dl?fmtM(dl):'—'}</td><td class="ovtd"><span class="badge" style="background:${badgeIn?'#ecfdf5':'#fef2f2'};color:${badgeIn?'#059669':'#dc2626'}">${esc(op)}</span></td><td class="ovtd" style="color:#d97706;font-size:11px">${com?fmtM(com):'—'}</td><td class="ovtd" style="color:#d97706;font-size:11px">${commD?'$'+fmtM(commD):'—'}</td><td class="ovtd" style="background:#fffbeb;color:${e.bal_dinar>=0?'#0f172a':'#dc2626'};font-weight:900">${fmtM(e.bal_dinar)}</td><td class="ovtd" style="background:#eff6ff;color:${e.bal_dollar>=0?'#1d4ed8':'#dc2626'};font-weight:900">${fmtM(e.bal_dollar)}</td></tr>`;
+  }).join('');
+  const trxTable=`<div class="card ovtable">
+    <div class="ovsec" style="--sc:#065f46;--sc2:#10b981">
+      <span class="ovsec-t">🧾 حركات الفترة — ${periodLabel}</span>
+      <span class="ovsec-b">${fmtM(dispCount)} حركة</span>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:1020px">
+      <thead><tr><th class="ovth">ت</th><th class="ovth">التاريخ</th><th class="ovth">البيان</th><th class="ovth">الجهة المستفيدة</th><th class="ovth">المستلم / المسلم</th><th class="ovth" style="color:#047857">دائن دينار</th><th class="ovth" style="color:#b91c1c">مدين دينار</th><th class="ovth" style="color:#047857">دائن دولار</th><th class="ovth" style="color:#b91c1c">مدين دولار</th><th class="ovth">نوع العملية</th><th class="ovth" style="color:#b45309">عمولة د.ع</th><th class="ovth" style="color:#b45309">عمولة $</th><th class="ovth">رصيد الدينار</th><th class="ovth">رصيد الدولار</th></tr></thead>
+      <tbody><tr class="ovopen"><td class="ovtd" colspan="5" style="text-align:right">◀ الرصيد الافتتاحي للفترة</td><td class="ovtd" colspan="7"></td><td class="ovtd">${fmtM(dispOpDinar)}</td><td class="ovtd">${fmtM(dispOpDollar)}</td></tr>
+      ${trxRows||'<tr><td class="ovtd" colspan="14" style="padding:26px;color:#94a3b8">لا توجد حركات ضمن هذه الفترة</td></tr>'}</tbody>
+      <tfoot><tr class="ovtot"><td class="ovtd" colspan="5" style="text-align:right">الإجماليات / الرصيد الختامي</td>
+        <td class="ovtd" style="color:#6ee7b7">${fmtM(dispIn)}</td><td class="ovtd" style="color:#fca5a5">${fmtM(dispOut)}</td>
+        <td class="ovtd" style="color:#6ee7b7">${fmtM(dispInDol)}</td><td class="ovtd" style="color:#fca5a5">${fmtM(dispOutDol)}</td>
+        <td class="ovtd"></td><td class="ovtd" style="color:#fcd34d">${fmtM(dispComm)}</td><td class="ovtd" style="color:#fcd34d">${fmtM(dispCommDollar)}</td>
+        <td class="ovtd" style="color:#fcd34d">${fmtM(dispBalD)}</td><td class="ovtd" style="color:#93c5fd">${fmtM(dispBalDol)}</td></tr></tfoot>
+    </table></div></div>`;
+
+  // ——— بطاقات الأشهر (تُفلتر بالفترة، وأرقامها دائماً لكامل الشهر) ———
+  const fromM=ksFrom?ksFrom.slice(0,7):'',toM=ksTo?ksTo.slice(0,7):'';
+  const shownMonths=sortedMonths.filter(m=>m&&(!fromM||m>=fromM)&&(!toM||m<=toM));
+  const monthCards=shownMonths.slice().reverse().map(m=>{
+    const mList=months[m],carry=carryMap[m];
+    const totalIn=mList.reduce((s,e)=>(kroobDir(e,'dinar')==='دائن'?s+safeNum(e.amount_dinar):s),0);
+    const totalOut=mList.reduce((s,e)=>(kroobDir(e,'dinar')!=='دائن'?s+safeNum(e.amount_dinar):s),0);
+    const lastBal=mList[mList.length-1];
+    return`<div class="card ksmonth">
+      <div class="ksmonth-h">
+        <span style="font-weight:900;font-size:14px;color:#065f46">📅 ${m}</span>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span class="badge" style="background:#ecfdf5;color:#059669">${mList.length} حركة</span>
+          <button class="ksbtn" style="background:#1e3a5f" onclick="S.kroobMonth='${m}';S.view='kroob';renderContent()">📂 فتح</button>
+          <button class="ksbtn" style="background:#065f46" onclick="generateKroobPDF('${m}','print')">🖨️ طباعة</button>
+          <button class="ksbtn" style="background:#1d4ed8" onclick="generateKroobPDF('${m}','save')">💾 PDF</button>
+        </div>
+      </div>
+      <div class="kscarry">
+        <span style="font-size:11px;font-weight:900;color:#0369a1">🔄 رصيد مرحّل</span>
+        <span style="font-size:12.5px;font-weight:900;color:${carry.dinar>=0?'#0c4a6e':'#dc2626'}">${fmtM(carry.dinar)} د.ع</span>
+        <span style="font-size:12.5px;font-weight:900;color:${carry.dollar>=0?'#0c4a6e':'#dc2626'}">${fmtM(carry.dollar)} $</span>
+      </div>
+      <div class="ksgrid">
+        <div class="ksbox" style="background:#f0fdf4;border-color:#a7f3d0"><div style="color:#047857">🟢 إجمالي الدائن</div><b style="color:#059669">${fmtM(totalIn)} د.ع</b></div>
+        <div class="ksbox" style="background:#fef2f2;border-color:#fecaca"><div style="color:#b91c1c">🔴 إجمالي المدين</div><b style="color:#dc2626">${fmtM(totalOut)} د.ع</b></div>
+        <div class="ksbox" style="background:#fffbeb;border-color:#fde68a"><div style="color:#b45309">💛 رصيد الدينار</div><b style="color:${lastBal&&lastBal.bal_dinar>=0?'#ca8a04':'#dc2626'}">${fmtM(lastBal?lastBal.bal_dinar:0)} د.ع</b></div>
+        <div class="ksbox" style="background:#f8fafc;border-color:#e2e8f0"><div style="color:#334155">🖤 رصيد الدولار</div><b style="color:${lastBal&&lastBal.bal_dollar>=0?'#0f172a':'#dc2626'}">${fmtM(lastBal?lastBal.bal_dollar:0)} $</b></div>
       </div>
     </div>`;}).join('');
-  // قسم مطابقة PDF
+  const monthSection=`<div class="card ovtable">
+    <div class="ovsec" style="--sc:#0f766e;--sc2:#2dd4bf">
+      <span class="ovsec-t">📅 الكشف الشهري</span>
+      <span class="ovsec-b">${shownMonths.length} شهر${hasFilter?' · ضمن الفترة':''}</span>
+    </div>
+    <div style="padding:14px;background:#f8fafc">
+      <div style="font-size:11px;font-weight:800;color:#64748b;margin-bottom:10px">أرقام كل بطاقة تخصّ الشهر كاملاً (غير مقصوصة بالفترة) — الفلتر يحدّد الأشهر المعروضة فقط</div>
+      <div class="ksmonths">${monthCards||'<div style="text-align:center;color:#94a3b8;padding:26px;font-weight:800">لا توجد أشهر ضمن هذه الفترة</div>'}</div>
+    </div>
+  </div>`;
+
+  // ——— مطابقة كشف الصيرفة (PDF) ———
   const _kCur=S.kroobPdfData?S.kroobPdfData.currency:'dinar';
   const _kAF=_kCur==='dinar'?'amount_dinar':'amount_dollar';
   const _kDir=e=>kroobDir(e,_kCur);
@@ -3846,39 +3958,30 @@ function viewKroobStatement(){
     if(_kpTo&&e.date>_kpTo)return false;
     return true;
   });
-  const kroobPdfSection='<div class="card" style="margin-bottom:14px;background:#f0fdf4;border:2px solid #34d399">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-    +'<h3 style="font-size:13px;font-weight:900;color:#065f46;margin:0">🔄 مطابقة كشف الصيرفة</h3>'
-    +(S.kroobPdfData?'<button onclick="S.kroobPdfData=null;renderContent()" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:700">✕ مسح</button>':'')
-    +'</div>'
-    +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-    +'<div><label style="font-size:11px;font-weight:700;color:#065f46;display:block;margin-bottom:2px">من تاريخ</label>'
-    +'<input type="date" value="'+_kpFrom+'" onchange="S.kroobPdfFrom=this.value;renderContent()" style="border:1px solid #6ee7b7;border-radius:6px;padding:4px 8px;font-size:12px;color:#0f172a"></div>'
-    +'<div><label style="font-size:11px;font-weight:700;color:#065f46;display:block;margin-bottom:2px">إلى تاريخ</label>'
-    +'<input type="date" value="'+_kpTo+'" onchange="S.kroobPdfTo=this.value;renderContent()" style="border:1px solid #6ee7b7;border-radius:6px;padding:4px 8px;font-size:12px;color:#0f172a"></div>'
-    +(_kpFrom||_kpTo?'<span style="font-size:11px;color:#059669;font-weight:700;margin-top:16px">✔ '+pdfFilteredList.length+' حركة في الفترة</span>':'<span style="font-size:11px;color:#64748b;margin-top:16px">حدد الفترة لتصفية الحركات قبل المطابقة</span>')
-    +'</div>'
-    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
-    +'<input type="file" accept=".pdf" id="kpdf_d" style="display:none" onchange="importKroobPDF(this,\'dinar\')">'
-    +'<input type="file" accept=".pdf" id="kpdf_dl" style="display:none" onchange="importKroobPDF(this,\'dollar\')">'
-    +'<button onclick="document.getElementById(\'kpdf_d\').click()" style="background:#ca8a04;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:700">📂 PDF دينار</button>'
-    +'<button onclick="document.getElementById(\'kpdf_dl\').click()" style="background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:700">📂 PDF دولار</button>'
-    +(S.kroobPdfData?'<span style="font-size:11px;color:#065f46;font-weight:700">📄 '+S.kroobPdfData.fileName+' | '+(S.kroobPdfData.currency==='dinar'?'دينار':'دولار')+' | '+S.kroobPdfData.rows.length+' حركة</span>':'<span style="font-size:11px;color:#64748b">اختر ملف PDF من كشف الصيرفة</span>')
-    +'</div>'
-    +(S.kroobPdfData?renderPDFMatchResult(S.kroobPdfData,pdfFilteredList,_kAF,_kDir,'description',_kCur):'')
-    +'</div>';
-  const monthSection=hasFilter?'':('<h3 style="font-size:13px;font-weight:900;margin-bottom:12px;color:#065f46">📅 الكشف الشهري</h3>'+(monthCards||'<div class="card" style="text-align:center;color:#64748b;padding:30px">لا توجد حركات</div>'));
-return`${kroobPdfSection}<div class="card" style="margin-bottom:14px;background:#f0fdf4;border:2px solid #34d399">
-  <h3 style="font-size:13px;font-weight:900;color:#065f46;margin-bottom:10px">📄 طباعة كشف الحساب بفترة محددة</h3>
-  <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
-    <div><label class="lbl">من تاريخ</label><input class="inp" type="date" id="ks_from" value="${ksFrom}" onchange="S.ksFrom=this.value;renderContent()" style="width:155px"></div>
-    <div><label class="lbl">إلى تاريخ</label><input class="inp" type="date" id="ks_to" value="${ksTo}" onchange="S.ksTo=this.value;renderContent()" style="width:155px"></div>
-    <button class="btn" style="background:#ca8a04;color:#fff;padding:9px 18px" onclick="generateKroobRangePDF('dinar')">📄 PDF الدينار</button>
-    <button class="btn" style="background:#1d4ed8;color:#fff;padding:9px 18px" onclick="generateKroobRangePDF('dollar')">💵 PDF الدولار</button>
-    ${hasFilter?'<button class="btn" style="background:#dc2626;color:#fff;padding:9px 14px" onclick="clearKsFilter()">✕ إلغاء الفلتر</button>':''}
-  </div>
-</div>
-<h2 style="font-size:15px;font-weight:900;margin-bottom:16px;color:#065f46">📜 كشف الحساب — كروب رافد فيصل</h2><div class="card" style="margin-bottom:18px;border:2px solid #34d399;background:#f0fdf4"><h3 style="font-size:14px;font-weight:900;color:#065f46;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #6ee7b7">${summaryTitle}</h3><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px"><div style="background:#ecfdf5;border-radius:12px;padding:14px;text-align:center;border:2px solid #6ee7b7"><div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">🟢 إجمالي الإيداع</div><div style="font-size:20px;font-weight:900;color:#059669">${fmtM(dispIn)}</div><div style="font-size:10px;color:#065f46;margin-top:3px">د.ع</div></div><div style="background:#fef2f2;border-radius:12px;padding:14px;text-align:center;border:2px solid #fca5a5"><div style="font-size:11px;color:#7f1d1d;font-weight:700;margin-bottom:6px">🔴 إجمالي الصرف</div><div style="font-size:20px;font-weight:900;color:#dc2626">${fmtM(dispOut)}</div><div style="font-size:10px;color:#7f1d1d;margin-top:3px">د.ع</div></div><div style="background:${dispBalD>=0?'#fffbeb':'#fef2f2'};border-radius:12px;padding:14px;text-align:center;border:2px solid ${dispBalD>=0?'#fde68a':'#fca5a5'}"><div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">💛 ${hasFilter?'الرصيد الختامي':'الرصيد الحالي'}</div><div style="font-size:22px;font-weight:900;color:${dispBalD>=0?'#ca8a04':'#dc2626'}">${fmtM(dispBalD)}</div><div style="font-size:10px;margin-top:3px">${dispBalD>=0?'✅':'⚠️'}</div></div></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px">عدد الحركات</div><div style="font-size:22px;font-weight:900;color:#0f172a">${dispCount}</div></div><div style="background:#fffbeb;border-radius:10px;padding:12px;text-align:center;border:1px solid #fde68a"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">🟡 الرصيد الافتتاحي دينار</div><div style="font-size:14px;font-weight:900;color:#ca8a04">${fmtM(dispOpDinar)} د.ع</div></div><div style="background:#fffbeb;border-radius:10px;padding:12px;text-align:center;border:1px solid #fde68a"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">🟡 الرصيد الافتتاحي دولار</div><div style="font-size:14px;font-weight:900;color:${dispOpDollar>=0?'#ca8a04':'#dc2626'}">${fmtM(dispOpDollar)} $</div></div><div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px">🖤 رصيد الدولار ${hasFilter?'الختامي':'الحالي'}</div><div style="font-size:14px;font-weight:900;color:${dispBalDol>=0?'#0f172a':'#dc2626'}">${fmtM(dispBalDol)} $</div></div><div style="background:#fef3c7;border-radius:10px;padding:12px;text-align:center;border:1px solid #fde68a"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">عمولات الدينار</div><div style="font-size:14px;font-weight:900;color:#f59e0b">${fmtM(dispComm)} د.ع</div></div><div style="background:#fef3c7;border-radius:10px;padding:12px;text-align:center;border:1px solid #fde68a"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">💚 عمولات الدولار</div><div style="font-size:14px;font-weight:900;color:#f59e0b">${fmtM(dispCommDollar)} $</div></div></div></div>${monthSection}`;
+  const kroobPdfSection=`<div class="card ovtable no-print">
+    <div class="ovsec" style="--sc:#0e7490;--sc2:#22d3ee">
+      <span class="ovsec-t">🔄 مطابقة كشف الصيرفة</span>
+      <span style="display:flex;align-items:center;gap:8px">
+        ${S.kroobPdfData?`<span class="ovsec-b">📄 ${esc(S.kroobPdfData.fileName)} · ${S.kroobPdfData.currency==='dinar'?'دينار':'دولار'} · ${S.kroobPdfData.rows.length} حركة</span><button class="btn" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.32);font-size:11px;padding:6px 12px" onclick="S.kroobPdfData=null;renderContent()">✕ مسح</button>`:'<span class="ovsec-b">لم يُرفَع ملف بعد</span>'}
+      </span>
+    </div>
+    <div style="padding:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0">
+      <div class="ovfilter-row">
+        <div class="ovfield"><label class="lbl">📅 من تاريخ</label><input class="inp" type="date" value="${_kpFrom}" onchange="S.kroobPdfFrom=this.value;renderContent()"></div>
+        <div class="ovfield"><label class="lbl">📅 إلى تاريخ</label><input class="inp" type="date" value="${_kpTo}" onchange="S.kroobPdfTo=this.value;renderContent()"></div>
+        <div class="ovchips">
+          <input type="file" accept=".pdf" id="kpdf_d" style="display:none" onchange="importKroobPDF(this,'dinar')">
+          <input type="file" accept=".pdf" id="kpdf_dl" style="display:none" onchange="importKroobPDF(this,'dollar')">
+          <button class="btn" style="background:#ca8a04;color:#fff;font-size:12px" onclick="document.getElementById('kpdf_d').click()">📂 PDF دينار</button>
+          <button class="btn" style="background:#1d4ed8;color:#fff;font-size:12px" onclick="document.getElementById('kpdf_dl').click()">📂 PDF دولار</button>
+        </div>
+      </div>
+      <div style="margin-top:10px;font-size:11.5px;font-weight:800;color:${_kpFrom||_kpTo?'#047857':'#64748b'}">${_kpFrom||_kpTo?`✔ ${pdfFilteredList.length} حركة ضمن فترة المطابقة`:'حدد فترة المطابقة قبل رفع ملف الصيرفة (اختياري)'}</div>
+    </div>
+    ${S.kroobPdfData?`<div style="padding:14px">${renderPDFMatchResult(S.kroobPdfData,pdfFilteredList,_kAF,_kDir,'description',_kCur)}</div>`:''}
+  </div>`;
+
+  return hero+filters+kpiCards+kroobPdfSection+trxTable+monthSection;
 }
 
 function suggestKroobDirection(text){

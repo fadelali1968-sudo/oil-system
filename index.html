@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام المشتريات النفطية v44.8</title>
+<title>نظام المشتريات النفطية v44.9</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='14' y='16' width='36' height='34' rx='5' fill='%231e3a5f'/><ellipse cx='32' cy='16' rx='18' ry='6' fill='%232563eb'/><ellipse cx='32' cy='50' rx='18' ry='6' fill='%231e293b'/><rect x='14' y='26' width='36' height='5' fill='%23f59e0b'/><rect x='14' y='37' width='36' height='5' fill='%23f59e0b'/><text x='32' y='35' text-anchor='middle' fill='%2334d399' font-size='10' font-weight='bold' font-family='Arial'>OIL</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -103,6 +103,48 @@
   .qbar { height:10px; border-radius:99px; background:#e2e8f0; overflow:hidden; box-shadow:inset 0 1px 2px rgba(15,23,42,.12); }
   .qfill { height:100%; border-radius:99px; transition:width .45s ease; }
   @media (max-width:768px) { .kpi { padding:12px !important; border-radius:12px !important; } .kpi-v { font-size:24px !important; } .kpi-ic { font-size:48px !important; } }
+
+  /* ===== الموقف الإجمالي ===== */
+  .ovhero { position:relative; overflow:hidden; border-radius:20px; padding:20px 24px; margin-bottom:16px; color:#fff;
+            background:linear-gradient(115deg,#0f172a 0%,#1e3a8a 52%,#2563eb 100%); box-shadow:0 16px 38px -16px rgba(30,58,138,.75); }
+  .ovhero::after { content:'📊'; position:absolute; left:-14px; top:-26px; font-size:120px; line-height:1; opacity:.055;
+                   filter:grayscale(1) contrast(0) brightness(2.6); pointer-events:none; }
+  .ovhero-in { position:relative; z-index:1; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; }
+  .ovhero-t { font-size:20px; font-weight:900; letter-spacing:-.4px; text-shadow:0 2px 10px rgba(0,0,0,.25); }
+  .ovhero-tags { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .ovtag { font-size:11.5px; font-weight:800; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.26);
+           border-radius:9px; padding:5px 11px; white-space:nowrap; }
+  .ovhero-b { display:flex; gap:8px; flex-wrap:wrap; }
+  .ovbtn-ghost { background:rgba(255,255,255,.16); color:#fff; border:1px solid rgba(255,255,255,.32); }
+  .ovfilter { margin-bottom:18px; padding:14px 16px; background:linear-gradient(180deg,#f8fafc,#fff); }
+  .ovfilter-row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+  .ovfield { min-width:150px; }
+  .ovchips { display:flex; gap:7px; flex-wrap:wrap; margin-right:auto; padding-bottom:1px; }
+  .ovchip { padding:8px 16px; border-radius:99px; border:1px solid #e2e8f0; background:#fff; color:#475569;
+            font-family:'Cairo',sans-serif; font-size:12px; font-weight:800; cursor:pointer; transition:all .15s; }
+  .ovchip:hover { border-color:#93c5fd; color:#1d4ed8; }
+  .ovchip.on { background:#1d4ed8; border-color:#1d4ed8; color:#fff; box-shadow:0 8px 18px -8px rgba(29,78,216,.85); }
+  .ovkpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:14px; margin-bottom:20px; }
+  .ovtable { overflow:hidden; padding:0; margin-bottom:18px; }
+  .ovsec { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:13px 18px;
+           background:linear-gradient(115deg,var(--sc,#1e3a8a),var(--sc2,#3b82f6)); color:#fff; }
+  .ovsec-t { font-size:14px; font-weight:900; letter-spacing:-.2px; }
+  .ovsec-b { font-size:11px; font-weight:900; background:rgba(255,255,255,.20); border:1px solid rgba(255,255,255,.30);
+             border-radius:20px; padding:4px 12px; white-space:nowrap; }
+  .ovth { background:#f8fafc; color:#475569; padding:11px 8px; font-size:11px; font-weight:900; text-align:center;
+          white-space:nowrap; border-bottom:2px solid #e2e8f0; }
+  .ovtd { padding:11px 8px; font-size:12.5px; font-weight:800; text-align:center; border-bottom:1px solid #f1f5f9; color:#0f172a; }
+  tbody tr:hover .ovtd { background:#f8fafc; }
+  .ovdim .ovtd { opacity:.42; }
+  .ovopen .ovtd { background:#eff6ff; color:#1e40af; font-size:11.5px; font-weight:900; }
+  .ovtot .ovtd { background:#0f172a; color:#fff; border-bottom:none; font-weight:900; font-size:13px; }
+  .ovdot { width:9px; height:9px; border-radius:50%; display:inline-block; margin-left:7px; vertical-align:middle; }
+  .ovempty { display:flex; align-items:center; gap:14px; margin-bottom:18px; border-right:5px solid var(--ec,#64748b); }
+  .ovempty-ic { font-size:30px; opacity:.5; }
+  .ovempty-t { font-size:13.5px; font-weight:900; color:#0f172a; }
+  .ovempty-s { font-size:12px; font-weight:700; color:#64748b; margin-top:4px; }
+  @media (max-width:768px) { .ovhero { padding:14px 16px !important; border-radius:14px !important; } .ovhero-t { font-size:16px !important; }
+    .ovchips { margin-right:0; } .ovfield { min-width:130px; flex:1; } .ovtd { padding:7px 4px !important; font-size:11.5px !important; } }
 
   /* ===== Toast Notifications ===== */
   #toast-container{position:fixed;bottom:24px;left:24px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
@@ -945,7 +987,7 @@ function render() {
       '<aside style="width:225px;background:#0f172a;display:flex;flex-direction:column;flex-shrink:0;z-index:50">' +
         '<div style="padding:10px;background:#020617;border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
           '<div style="width:34px;height:34px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:11px;margin:0 auto 5px">OIL</div>' +
-          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v44.8</p>' +
+          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v44.9</p>' +
           '<p style="font-size:10px;color:#94a3b8;margin-top:2px;font-weight:900;letter-spacing:0.5px">'+(isM?'المدققين':'محاسب: '+currentUser.factory)+'</p>' +
         '</div>' +
         '<nav id="sidebar-nav" style="flex:1;padding:8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
@@ -1163,67 +1205,223 @@ function viewPorts(){
 }
 
 // ===== الموقف الإجمالي =====
+// تاريخ محلي (بغداد) — toISOString يُرجع تاريخ UTC فيُزيح المدى يوماً كاملاً
+function ymd(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function ovNow(){const d=new Date(),h=d.getHours(),ap=h<12?'ص':'م',hh=(h%12)||12,p=n=>String(n).padStart(2,'0');return ymd(d)+' · '+hh+':'+p(d.getMinutes())+' '+ap;}
+function ovPeriodLabel(wf,wt){return wf&&wt?(wf===wt?wf:wf+' → '+wt):wf?'من '+wf:wt?'إلى '+wt:'كل الفترات';}
+function ovWeekRange(){const now=new Date(),day=now.getDay();const mon=new Date(now);mon.setDate(now.getDate()-(day===0?6:day-1));const sun=new Date(mon);sun.setDate(mon.getDate()+6);return[ymd(mon),ymd(sun)];}
+function ovMonthRange(){const now=new Date();return[ymd(new Date(now.getFullYear(),now.getMonth(),1)),ymd(new Date(now.getFullYear(),now.getMonth()+1,0))];}
+function ovCopy(txt){
+  txt=txt||'';
+  if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>showToast('تم النسخ!','success')).catch(()=>showToast('تعذّر النسخ','warning'));return;}
+  const t=document.createElement('textarea');t.value=txt;document.body.appendChild(t);t.select();
+  try{document.execCommand('copy');showToast('تم النسخ!','success');}catch(e){showToast('تعذّر النسخ','warning');}
+  document.body.removeChild(t);
+}
+
 function viewWhatsapp() {
   const wf=S.wFrom,wt=S.wTo;
   const analysis=getAnalysis(wf,wt),saleAn=getSaleAnalysis(wf,wt),sf=S.selectedFactory;
   const facts=sf==='الكل'?allFactoryNames():[sf];
-  const periodLabel=wf&&wt?wf+' → '+wt:wf?'من '+wf:wt?'إلى '+wt:'الكلي';
-  const targetDate=wf&&wt&&wf===wt?wf:(wf||today());
+  const periodLabel=ovPeriodLabel(wf,wt);
+  const FC=['#2563eb','#7c3aed','#059669','#d97706','#0891b2','#db2777','#4f46e5','#b45309'];
 
-  const pRows=facts.map((f,i)=>{const d=anOf(analysis,f).total;return`<tr><td class="td" style="color:#64748b">${i+1}</td><td class="td" style="font-weight:900">${f}</td><td class="td">${d.cars}</td><td class="td" style="color:#2563eb;font-weight:900">${fmt(d.tons)}</td><td class="td" style="color:#059669;font-weight:900">${fmt(d.liters)}</td><td class="td" style="color:#d97706;font-weight:900">${fmt(d.kg)}</td></tr>`;}).join('');
-  const sRows=facts.map((f,i)=>{const d=anOf(saleAn,f).total;return`<tr><td class="td-p" style="color:#64748b">${i+1}</td><td class="td-p" style="font-weight:900">${f}</td><td class="td-p">${d.cars}</td><td class="td-p" style="color:#7c3aed;font-weight:900">${fmtKaban(d.kaban)}</td><td class="td-p" style="color:#1e3a8a;font-weight:900">${fmtM(d.money)}</td></tr>`;}).join('');
+  // ——— إجماليات الفترة ———
+  const P={cars:0,tons:0,liters:0,kg:0,money:0},SL={cars:0,kaban:0,money:0};
+  facts.forEach(f=>{
+    const d=anOf(analysis,f).total,s=anOf(saleAn,f).total;
+    P.cars+=d.cars;P.tons+=d.tons;P.liters+=d.liters;P.kg+=d.kg;P.money+=d.money;
+    SL.cars+=s.cars;SL.kaban+=s.kaban;SL.money+=s.money;
+  });
+  const activeP=facts.filter(f=>anOf(analysis,f).total.cars>0).length;
+  const activeS=facts.filter(f=>anOf(saleAn,f).total.cars>0).length;
 
-  let html = `
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px" class="no-print">
-    <h2 style="font-size:15px;font-weight:900">📊 الموقف الإجمالي</h2>
-    <button class="btn btn-green" onclick="copyWhatsapp()">📱 نسخ للواتساب</button>
-  </div>
-  <div class="card no-print" style="margin-bottom:14px;background:#f8fafc;padding:14px">
-    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-      <div><label class="lbl">📅 من التاريخ</label><input class="inp" type="date" id="w_from" value="${wf}" style="width:160px" onchange="S.wFrom=this.value;renderContent()"></div>
-      <div><label class="lbl">📅 إلى التاريخ</label><input class="inp" type="date" id="w_to" value="${wt}" style="width:160px" onchange="S.wTo=this.value;renderContent()"></div>
-      <button class="btn btn-blue" style="font-size:12px" onclick="S.wFrom=today();S.wTo=today();renderContent()">اليوم فقط</button>
-      <button class="btn btn-gray" style="font-size:12px" onclick="setThisWeek()">هذا الأسبوع</button>
-      <button class="btn btn-gray" style="font-size:12px" onclick="setThisMonth()">هذا الشهر</button>
-      <button class="btn btn-red" style="font-size:12px" onclick="S.wFrom='';S.wTo='';renderContent()">الكل</button>
+  // ——— الترويسة ———
+  const hero=`<div class="ovhero no-print">
+    <div class="ovhero-in">
+      <div>
+        <div class="ovhero-t">📊 الموقف الإجمالي</div>
+        <div class="ovhero-tags">
+          <span class="ovtag">🏭 ${esc(sf)}</span>
+          <span class="ovtag">📅 ${periodLabel}</span>
+          <span class="ovtag">🕓 ${ovNow()}</span>
+        </div>
+      </div>
+      <div class="ovhero-b">
+        <button class="btn btn-green" onclick="copyWhatsapp()">📱 نسخ للواتساب</button>
+        <button class="btn ovbtn-ghost" onclick="printOverall()">🖨️ طباعة الموقف</button>
+      </div>
     </div>
-    <div style="margin-top:8px;font-size:12px;color:#2563eb;font-weight:700">📊 الفترة: <span style="background:#eff6ff;padding:2px 10px;border-radius:6px">${periodLabel}</span></div>
-  </div>
-  <h3 style="font-size:13px;font-weight:900;margin-bottom:8px;color:#1e40af">🛢️ المشتريات</h3>
-  <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:500px">
-    <thead><tr><th class="th">ت</th><th class="th">المعمل</th><th class="th">السيارات</th><th class="th">طن</th><th class="th">لتر</th><th class="th">كغم</th></tr></thead>
-    <tbody>${pRows}</tbody></table></div></div>
-  <h3 style="font-size:13px;font-weight:900;margin-bottom:8px;color:#6d28d9">📦 المبيعات</h3>
-  <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:400px">
-    <thead><tr><th class="th-p">ت</th><th class="th-p">المعمل</th><th class="th-p">السيارات</th><th class="th-p">كبان</th><th class="th-p">إجمالي المبلغ</th></tr></thead>
-    <tbody>${sRows}</tbody></table></div></div>`;
+  </div>`;
 
-  // كشف الكروب اليومي
-  html += '<h3 style="font-size:13px;font-weight:900;margin-bottom:8px;margin-top:16px;color:#065f46">🏦 الكشف اليومي للكروب</h3>';
-  html += renderKroobDailySection(targetDate);
+  // ——— شريط الفلترة ———
+  const t=today(),wk=ovWeekRange(),mo=ovMonthRange();
+  const chip=(lbl,act,fn)=>`<button class="ovchip${act?' on':''}" onclick="${fn}">${lbl}</button>`;
+  const filters=`<div class="card no-print ovfilter">
+    <div class="ovfilter-row">
+      <div class="ovfield"><label class="lbl" for="w_from">📅 من التاريخ</label><input class="inp" type="date" id="w_from" value="${wf}" onchange="S.wFrom=this.value;renderContent()"></div>
+      <div class="ovfield"><label class="lbl" for="w_to">📅 إلى التاريخ</label><input class="inp" type="date" id="w_to" value="${wt}" onchange="S.wTo=this.value;renderContent()"></div>
+      <div class="ovchips">
+        ${chip('اليوم',wf===t&&wt===t,"S.wFrom=today();S.wTo=today();renderContent()")}
+        ${chip('هذا الأسبوع',wf===wk[0]&&wt===wk[1],'setThisWeek()')}
+        ${chip('هذا الشهر',wf===mo[0]&&wt===mo[1],'setThisMonth()')}
+        ${chip('كل الفترات',!wf&&!wt,"S.wFrom='';S.wTo='';renderContent()")}
+      </div>
+    </div>
+  </div>`;
 
-  // كشف سيد رافد اليومي
-  html += '<h3 style="font-size:13px;font-weight:900;margin-bottom:8px;margin-top:16px;color:#92400e">💼 كشف حسابات سيد رافد اليومي</h3>';
-  html += renderRafidDailySection(targetDate);
+  // ——— بطاقات الملخص ———
+  const kpi=(g,glow,ic,title,val,unit,foot)=>`<div class="kpi" style="background:linear-gradient(135deg,${g});--kg:${glow}">
+      <span class="kpi-ic">${ic}</span>
+      <div class="kpi-t">${ic} ${title}</div>
+      <div class="kpi-v">${val}</div>
+      ${unit?`<div class="kpi-u">${unit}</div>`:''}
+      ${foot?`<div class="kpi-f">${foot}</div>`:''}
+    </div>`;
+  const kpiCards=`<div class="ovkpis">
+    ${kpi('#3b82f6,#1d4ed8','rgba(37,99,235,.55)','🚛','سيارات المشتريات',fmtM(P.cars),'سيارة',`معامل نشطة: ${activeP}`)}
+    ${kpi('#22d3ee,#0e7490','rgba(8,145,178,.55)','⚖️','إجمالي الطن',fmt(P.tons),'طن','')}
+    ${kpi('#34d399,#047857','rgba(5,150,105,.55)','💧','إجمالي اللترات',fmt(P.liters),'لتر طبيعي','')}
+    ${kpi('#fbbf24,#b45309','rgba(217,119,6,.55)','⚡','إجمالي الكغم',fmt(P.kg),'كيلوغرام','')}
+    ${kpi('#a78bfa,#5b21b6','rgba(124,58,237,.55)','📦','سيارات المبيعات',fmtM(SL.cars),'سيارة',`الكبان: ${fmtKaban(SL.kaban)}`)}
+    ${kpi('#64748b,#0f172a','rgba(15,23,42,.55)','💰','مبالغ المشتريات',fmtM(P.money),'دينار',`المبيعات: ${fmtM(SL.money)}`)}
+  </div>`;
 
-  return html;
+  // ——— جدول المشتريات ———
+  const pRows=facts.map((f,i)=>{
+    const d=anOf(analysis,f).total,ac=FC[i%FC.length],dim=d.cars?'':' ovdim';
+    return`<tr class="${dim.trim()}"><td class="ovtd" style="color:#94a3b8">${i+1}</td>
+      <td class="ovtd" style="text-align:right;font-weight:900"><span class="ovdot" style="background:${ac}"></span>${esc(f)}</td>
+      <td class="ovtd">${fmtM(d.cars)}</td>
+      <td class="ovtd" style="color:#0891b2">${fmt(d.tons)}</td>
+      <td class="ovtd" style="color:#059669">${fmt(d.liters)}</td>
+      <td class="ovtd" style="color:#d97706">${fmt(d.kg)}</td>
+      <td class="ovtd" style="color:#1e3a8a">${fmtM(d.money)}</td></tr>`;
+  }).join('');
+  const purchTable=`<div class="card ovtable">
+    <div class="ovsec" style="--sc:#1e3a8a;--sc2:#3b82f6">
+      <span class="ovsec-t">🛢️ المشتريات</span>
+      <span class="ovsec-b">${facts.length} معمل · ${fmtM(P.cars)} سيارة</span>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:640px">
+      <thead><tr><th class="ovth">ت</th><th class="ovth" style="text-align:right">المعمل</th><th class="ovth">السيارات</th><th class="ovth">الطن</th><th class="ovth">اللتر الطبيعي</th><th class="ovth">الوزن كغم</th><th class="ovth">سعر المصفى</th></tr></thead>
+      <tbody>${pRows||'<tr><td class="ovtd" colspan="7" style="padding:22px;color:#94a3b8">لا توجد بيانات</td></tr>'}</tbody>
+      <tfoot><tr class="ovtot"><td class="ovtd" colspan="2" style="text-align:right">الإجمالي العام</td>
+        <td class="ovtd">${fmtM(P.cars)}</td><td class="ovtd" style="color:#67e8f9">${fmt(P.tons)}</td>
+        <td class="ovtd" style="color:#6ee7b7">${fmt(P.liters)}</td><td class="ovtd" style="color:#fcd34d">${fmt(P.kg)}</td>
+        <td class="ovtd" style="color:#93c5fd">${fmtM(P.money)}</td></tr></tfoot>
+    </table></div></div>`;
+
+  // ——— جدول المبيعات ———
+  const sRows=facts.map((f,i)=>{
+    const d=anOf(saleAn,f).total,ac=FC[i%FC.length],dim=d.cars?'':' ovdim';
+    return`<tr class="${dim.trim()}"><td class="ovtd" style="color:#94a3b8">${i+1}</td>
+      <td class="ovtd" style="text-align:right;font-weight:900"><span class="ovdot" style="background:${ac}"></span>${esc(f)}</td>
+      <td class="ovtd">${fmtM(d.cars)}</td>
+      <td class="ovtd" style="color:#7c3aed">${fmtKaban(d.kaban)}</td>
+      <td class="ovtd" style="color:#1e3a8a">${fmtM(d.money)}</td></tr>`;
+  }).join('');
+  const salesTable=`<div class="card ovtable">
+    <div class="ovsec" style="--sc:#4c1d95;--sc2:#8b5cf6">
+      <span class="ovsec-t">📦 المبيعات</span>
+      <span class="ovsec-b">${activeS} معمل نشط · ${fmtM(SL.cars)} سيارة</span>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:520px">
+      <thead><tr><th class="ovth">ت</th><th class="ovth" style="text-align:right">المعمل</th><th class="ovth">السيارات</th><th class="ovth">الكبان</th><th class="ovth">إجمالي المبلغ</th></tr></thead>
+      <tbody>${sRows||'<tr><td class="ovtd" colspan="5" style="padding:22px;color:#94a3b8">لا توجد بيانات</td></tr>'}</tbody>
+      <tfoot><tr class="ovtot"><td class="ovtd" colspan="2" style="text-align:right">الإجمالي العام</td>
+        <td class="ovtd">${fmtM(SL.cars)}</td><td class="ovtd" style="color:#c4b5fd">${fmtKaban(SL.kaban)}</td>
+        <td class="ovtd" style="color:#93c5fd">${fmtM(SL.money)}</td></tr></tfoot>
+    </table></div></div>`;
+
+  // كشفا الكروب وسيد رافد — يتبعان نفس فترة الصفحة
+  const kroob=renderKroobDailySection(wf,wt);
+  const rafid=renderRafidDailySection(wf,wt);
+
+  window._ovPrint={periodLabel:periodLabel,factory:sf,P:P,SL:SL,
+    pRows:facts.map(f=>({f:f,d:anOf(analysis,f).total})),
+    sRows:facts.map(f=>({f:f,d:anOf(saleAn,f).total}))};
+
+  return hero+filters+kpiCards+purchTable+salesTable+kroob+rafid;
 }
 
-function setThisWeek(){const now=new Date(),day=now.getDay();const mon=new Date(now);mon.setDate(now.getDate()-(day===0?6:day-1));const sun=new Date(mon);sun.setDate(mon.getDate()+6);S.wFrom=mon.toISOString().split('T')[0];S.wTo=sun.toISOString().split('T')[0];renderContent();}
-function setThisMonth(){const now=new Date();S.wFrom=new Date(now.getFullYear(),now.getMonth(),1).toISOString().split('T')[0];S.wTo=new Date(now.getFullYear(),now.getMonth()+1,0).toISOString().split('T')[0];renderContent();}
+function setThisWeek(){const r=ovWeekRange();S.wFrom=r[0];S.wTo=r[1];renderContent();}
+function setThisMonth(){const r=ovMonthRange();S.wFrom=r[0];S.wTo=r[1];renderContent();}
+
+// ===== طباعة الموقف الإجمالي (A4 عمودي) =====
+function printOverall(){
+  const d=window._ovPrint;
+  if(!d){showToast('افتح صفحة الموقف الإجمالي أولاً','warning');return;}
+  const K=window._ovKroobSum,R=window._ovRafidSum;
+  const pr=d.pRows.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmt(r.d.tons)}</td><td>${fmt(r.d.liters)}</td><td>${fmt(r.d.kg)}</td><td>${fmtM(r.d.money)}</td></tr>`).join('');
+  const sr2=d.sRows.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmtKaban(r.d.kaban)}</td><td>${fmtM(r.d.money)}</td></tr>`).join('');
+  const box=(t,v,c)=>`<div class="box"><div class="bt">${t}</div><div class="bv" style="color:${c}">${v}</div></div>`;
+  const acct=(title,s)=>s?`<table class="acct"><thead><tr><th colspan="5">${title} — ${esc(s.label)} (${s.count} حركة)</th></tr>
+    <tr><th>الرصيد السابق د.ع</th><th>إجمالي الدائن</th><th>إجمالي المدين</th><th>الرصيد الختامي د.ع</th><th>الرصيد الختامي $</th></tr></thead>
+    <tbody><tr><td>${fmtM(s.openD)}</td><td>${fmtM(s.tIn)}</td><td>${fmtM(s.tOut)}</td><td><b>${fmtM(s.balD)}</b></td><td><b>${fmtM(s.balDol)}</b></td></tr></tbody></table>`:'';
+  const styles=`@page{size:A4 portrait;margin:12mm 10mm}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Cairo',sans-serif;direction:rtl;color:#000;font-size:11px}
+.hd{text-align:center;border-bottom:3px solid #1e3a8a;padding-bottom:10px;margin-bottom:12px}
+.hd h1{font-size:19px;font-weight:900;color:#1e3a8a}
+.hd p{font-size:11px;font-weight:700;color:#333;margin-top:5px}
+.boxes{display:flex;gap:6px;margin-bottom:12px}
+.box{flex:1;border:2px solid #000;border-radius:6px;padding:6px 4px;text-align:center}
+.bt{font-size:9px;font-weight:700;color:#333}
+.bv{font-size:13px;font-weight:900;margin-top:3px}
+h2{font-size:13px;font-weight:900;margin:12px 0 6px;color:#1e3a8a;border-right:5px solid #1e3a8a;padding-right:8px}
+table{width:100%;border-collapse:collapse;font-size:10.5px;border:2px solid #000}
+th{background:#fff;color:#000;font-weight:900;border:2px solid #000;padding:5px 3px;text-align:center}
+td{border:2px solid #000;padding:5px 3px;text-align:center;font-weight:700}
+td.rt{text-align:right}
+tfoot td{font-weight:900;background:#f0f0f0}
+.acct{margin-top:8px}
+.foot{margin-top:14px;text-align:center;font-size:9.5px;color:#444;font-weight:700;border-top:1px solid #999;padding-top:6px}
+@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+  const html=`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>الموقف الإجمالي</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>${styles}</style></head><body>
+<div class="hd"><h1>📊 الموقف الإجمالي</h1><p>المعمل: ${esc(d.factory)} &nbsp;|&nbsp; الفترة: ${esc(d.periodLabel)} &nbsp;|&nbsp; تاريخ الطباعة: ${ovNow()}</p></div>
+<div class="boxes">
+  ${box('سيارات المشتريات',fmtM(d.P.cars),'#1e3a8a')}
+  ${box('الطن',fmt(d.P.tons),'#0e7490')}
+  ${box('اللتر الطبيعي',fmt(d.P.liters),'#047857')}
+  ${box('الوزن كغم',fmt(d.P.kg),'#b45309')}
+  ${box('سيارات المبيعات',fmtM(d.SL.cars),'#5b21b6')}
+  ${box('الكبان',fmtKaban(d.SL.kaban),'#5b21b6')}
+</div>
+<h2>🛢️ المشتريات</h2>
+<table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الطن</th><th>اللتر الطبيعي</th><th>الوزن كغم</th><th>سعر المصفى</th></tr></thead>
+<tbody>${pr}</tbody>
+<tfoot><tr><td colspan="2">الإجمالي العام</td><td>${fmtM(d.P.cars)}</td><td>${fmt(d.P.tons)}</td><td>${fmt(d.P.liters)}</td><td>${fmt(d.P.kg)}</td><td>${fmtM(d.P.money)}</td></tr></tfoot></table>
+<h2>📦 المبيعات</h2>
+<table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الكبان</th><th>إجمالي المبلغ</th></tr></thead>
+<tbody>${sr2}</tbody>
+<tfoot><tr><td colspan="2">الإجمالي العام</td><td>${fmtM(d.SL.cars)}</td><td>${fmtKaban(d.SL.kaban)}</td><td>${fmtM(d.SL.money)}</td></tr></tfoot></table>
+${K||R?'<h2>🏦 ملخص الحسابات</h2>':''}
+${acct('كشف الكروب',K)}
+${acct('كشف حسابات سيد رافد',R)}
+<div class="foot">نظام مراقبة المشتريات النفطية v44.9 — طُبع بواسطة: ${esc((currentUser&&currentUser.name)||'')}</div>
+<script>window.onload=()=>{window.print();};<\/script></body></html>`;
+  const w=window.open('','_blank');
+  if(!w){showToast('المتصفح منع فتح نافذة الطباعة','warning');return;}
+  w.document.write(html);w.document.close();
+}
 
 function copyWhatsapp(){
   const wf=S.wFrom,wt=S.wTo;
   const analysis=getAnalysis(wf,wt),saleAn=getSaleAnalysis(wf,wt),sf=S.selectedFactory;
   const facts=sf==='الكل'?allFactoryNames():[sf];
-  const periodLabel=wf&&wt?wf+' → '+wt:wf?'من '+wf:wt?'إلى '+wt:'الكلي';
-  let txt=`*📊 الموقف الإجمالي*\n📅 ${periodLabel}\n`;
+  const periodLabel=ovPeriodLabel(wf,wt);
+  let tc=0,tt=0,tl=0,tk=0,sc2=0,sk=0;
+  let txt=`*📊 الموقف الإجمالي*\n🏭 ${sf}\n📅 ${periodLabel}\n`;
   txt+=`\n*🛢️ المشتريات:*\n`;
-  for(const f of facts){const d=anOf(analysis,f).total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmt(d.kg)} كغم\n`;}
+  for(const f of facts){const d=anOf(analysis,f).total;if(!d.cars)continue;tc+=d.cars;tt+=d.tons;tl+=d.liters;tk+=d.kg;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmt(d.kg)} كغم\n`;}
+  txt+=`━━━━━━━━━━━━━\n*الإجمالي:* ${tc} سيارة | ${fmt(tt)} طن | ${fmt(tl)} لتر | ${fmt(tk)} كغم\n`;
   txt+=`\n*📦 المبيعات:*\n`;
-  for(const f of facts){const d=anOf(saleAn,f).total;if(!d.cars)continue;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
-  txt+=`\n✅ نظام المراقبة v44.8`;
-  navigator.clipboard?.writeText(txt).catch(()=>{});
+  for(const f of facts){const d=anOf(saleAn,f).total;if(!d.cars)continue;sc2+=d.cars;sk+=d.kaban;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
+  txt+=`━━━━━━━━━━━━━\n*الإجمالي:* ${sc2} سيارة | ${fmtKaban(sk)} كبان\n`;
+  txt+=`\n✅ نظام المراقبة v44.9`;
+  ovCopy(txt);
   const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}
 }
 
@@ -4215,7 +4413,12 @@ function exportRafidXLSX(){
 // ===== الكشف اليومي لسيد رافد =====
 
 // ===== الكشف اليومي للكروب =====
+// ===== الكشف الدوري للكروب (يتبع فترة الموقف الإجمالي من/إلى) =====
 function getKroobByDate(date){return DB.get('kroob',[]).filter(e=>(e.date||'')===date);}
+function getKroobInRange(from,to){
+  return DB.get('kroob',[]).filter(e=>{const d=e.date||'';if(from&&d<from)return false;if(to&&d>to)return false;return true;})
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
+}
 function getKroobBalanceBefore(date){
   let list=DB.get('kroob',[]);
   list.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
@@ -4225,35 +4428,59 @@ function getKroobBalanceBefore(date){
   return{dinar:balDinar,dollar:balDollar};
 }
 
-function renderKroobDailySection(date){
-  const todayList=getKroobByDate(date),openBal=getKroobBalanceBefore(date);
+function renderKroobDailySection(from,to){
+  const label=ovPeriodLabel(from,to);
+  const todayList=getKroobInRange(from,to),openBal=getKroobBalanceBefore(from||'');
   let balDinar=openBal.dinar,balDollar=openBal.dollar;
-  if(!todayList.length)return`<div class="card" style="margin-bottom:14px;padding:16px;background:#f0fdf4"><h3 style="font-size:13px;font-weight:900;color:#065f46;margin-bottom:6px">🏦 كشف الكروب اليومي — ${date}</h3><p style="color:#64748b;font-size:12px">لا توجد حركات اليوم</p></div>`;
+  if(!todayList.length){
+    window._ovKroobSum={label:label,openD:openBal.dinar,openDol:openBal.dollar,tIn:0,tOut:0,balD:openBal.dinar,balDol:openBal.dollar,count:0};
+    return`<div class="card ovempty" style="--ec:#059669"><div class="ovempty-ic">🏦</div><div><div class="ovempty-t">كشف الكروب — ${label}</div><div class="ovempty-s">لا توجد حركات ضمن هذه الفترة · الرصيد المُرحَّل: <b style="color:#047857">${fmtM(openBal.dinar)}</b> د.ع${openBal.dollar?` · <b style="color:#047857">$${fmtM(openBal.dollar)}</b>`:''}</div></div></div>`;
+  }
   let rows='';
   todayList.forEach((e,i)=>{const d=parseFloat(e.amount_dinar||0),dl=parseFloat(e.amount_dollar||0),op=(e.operation_type||'صرف').trim(),com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0),isInD=kroobDir(e,'dinar')==='دائن',isInDol=kroobDir(e,'dollar')==='دائن';
     if(isInD)balDinar+=d;else balDinar-=d;if(isInDol)balDollar+=dl;else balDollar-=dl;balDinar-=com;balDollar-=commD;
     const badgeIn=d?isInD:(dl?isInDol:isInD);
-    rows+=`<tr><td class="td" style="color:#64748b">${i+1}</td><td class="td" style="font-size:11px;text-align:right;max-width:180px">${esc(e.description||'')}</td><td class="td" style="font-size:11px">${esc(e.beneficiary||'')}</td><td class="td" style="font-size:11px">${esc(e.receiver||'')}</td><td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">${isInD&&d?fmtM(d):''}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${!isInD&&d?fmtM(d):''}</td><td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">${isInDol&&dl?fmtM(dl):''}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${!isInDol&&dl?fmtM(dl):''}</td><td class="td"><span class="badge" style="background:${badgeIn?'#ecfdf5':'#fef2f2'};color:${badgeIn?'#059669':'#dc2626'}">${op}</span></td><td class="td" style="color:#f59e0b;font-size:11px;font-weight:900">${com?fmtM(com)+' د.ع':'—'}</td><td class="td" style="color:#f59e0b;font-size:11px;font-weight:900">${commD?'$'+fmtM(commD):'—'}</td><td class="td" style="color:${balDinar>=0?'#ca8a04':'#dc2626'};font-weight:900">${fmtM(balDinar)}</td><td class="td" style="color:${balDollar>=0?'#2563eb':'#dc2626'};font-weight:900">${fmtM(balDollar)}</td></tr>`;
+    rows+=`<tr><td class="ovtd" style="color:#94a3b8">${i+1}</td><td class="ovtd" style="font-size:11px;color:#475569;white-space:nowrap">${esc(e.date||'')}</td><td class="ovtd" style="font-size:11px;text-align:right;max-width:180px">${esc(e.description||'')}</td><td class="ovtd" style="font-size:11px">${esc(e.beneficiary||'')}</td><td class="ovtd" style="font-size:11px">${esc(e.receiver||'')}</td><td class="ovtd" style="background:#f0fdf4;color:#059669">${isInD&&d?fmtM(d):'—'}</td><td class="ovtd" style="background:#fef2f2;color:#dc2626">${!isInD&&d?fmtM(d):'—'}</td><td class="ovtd" style="background:#f0fdf4;color:#059669">${isInDol&&dl?fmtM(dl):'—'}</td><td class="ovtd" style="background:#fef2f2;color:#dc2626">${!isInDol&&dl?fmtM(dl):'—'}</td><td class="ovtd"><span class="badge" style="background:${badgeIn?'#ecfdf5':'#fef2f2'};color:${badgeIn?'#059669':'#dc2626'}">${op}</span></td><td class="ovtd" style="color:#d97706;font-size:11px">${com?fmtM(com):'—'}</td><td class="ovtd" style="color:#d97706;font-size:11px">${commD?'$'+fmtM(commD):'—'}</td><td class="ovtd" style="color:${balDinar>=0?'#0f172a':'#dc2626'};background:#fffbeb;font-weight:900">${fmtM(balDinar)}</td><td class="ovtd" style="color:${balDollar>=0?'#1d4ed8':'#dc2626'};background:#eff6ff;font-weight:900">${fmtM(balDollar)}</td></tr>`;
   });
   const totalIn=todayList.reduce((s,e)=>kroobDir(e,'dinar')==='دائن'?s+parseFloat(e.amount_dinar||0):s,0);
   const totalOut=todayList.reduce((s,e)=>kroobDir(e,'dinar')==='دائن'?s:s+parseFloat(e.amount_dinar||0),0);
+  window._ovKroobSum={label:label,openD:openBal.dinar,openDol:openBal.dollar,tIn:totalIn,tOut:totalOut,balD:balDinar,balDol:balDollar,count:todayList.length};
   // بناء نص الواتساب
-  let waTextK='🏦 *كشف يومي — كروب رافد فيصل*\n📅 *'+date+'*\n─────────────────\n';
+  let waTextK='🏦 *كشف الكروب — كروب رافد فيصل*\n📅 *'+label+'*\n─────────────────\n';
   waTextK+='📊 *الرصيد السابق:* '+fmtM(openBal.dinar)+' د.ع';
   if(openBal.dollar)waTextK+=' | $'+fmtM(openBal.dollar);
   waTextK+='\n─────────────────\n';
-  todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isInD2=kroobDir(e,'dinar')==='دائن',isInDol2=kroobDir(e,'dollar')==='دائن',badgeIn2=d2?isInD2:(dl2?isInDol2:isInD2);let r='\n'+(badgeIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+(isInD2?'+':'-')+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 '+(isInDol2?'+':'-')+'$'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
+  todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isInD2=kroobDir(e,'dinar')==='دائن',isInDol2=kroobDir(e,'dollar')==='دائن',badgeIn2=d2?isInD2:(dl2?isInDol2:isInD2);let r='\n'+(badgeIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.date||'')+' | '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+(isInD2?'+':'-')+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 '+(isInDol2?'+':'-')+'$'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
   waTextK+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextK+=' | $'+fmtM(balDollar);
-  waTextK+='\n✅ نظام المراقبة v44.8';
+  waTextK+='\n✅ نظام المراقبة v44.9';
   window._kroobWaText=waTextK;
 
-  return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #34d399"><div style="padding:12px 16px;background:#ecfdf5;border-bottom:1px solid #6ee7b7;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#065f46">🏦 كشف الكروب اليومي — ${date}</span><span class="badge" style="background:#d1fae5;color:#059669;margin-right:8px">${todayList.length} حركة</span></div><button class="btn btn-green" style="font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._kroobWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._kroobWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px"><div style="background:#fffbeb;border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:#92400e;font-weight:700">الرصيد السابق</div><div style="font-size:13px;font-weight:900;color:#ca8a04">${fmtM(openBal.dinar)}</div></div><div style="background:#ecfdf5;border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:#065f46;font-weight:700">إجمالي الإيداع</div><div style="font-size:13px;font-weight:900;color:#059669">${fmtM(totalIn)}</div></div><div style="background:#fef2f2;border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:#7f1d1d;font-weight:700">إجمالي الصرف</div><div style="font-size:13px;font-weight:900;color:#dc2626">${fmtM(totalOut)}</div></div><div style="background:${balDinar>=0?'#fffbeb':'#fef2f2'};border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;font-weight:700">الرصيد الحالي</div><div style="font-size:13px;font-weight:900;color:${balDinar>=0?'#ca8a04':'#dc2626'}">${fmtM(balDinar)}</div></div></div>
-  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:900px"><thead><tr><th class="th" style="background:#065f46">ت</th><th class="th" style="background:#065f46">البيان</th><th class="th" style="background:#065f46">الجهة</th><th class="th" style="background:#065f46">المستلم</th><th class="th" style="background:#065f46">💛 دائن دينار</th><th class="th" style="background:#065f46">🔴 مدين دينار</th><th class="th" style="background:#065f46">💚 دائن دولار</th><th class="th" style="background:#065f46">🔴 مدين دولار</th><th class="th" style="background:#065f46">النوع</th><th class="th" style="background:#f59e0b;color:#0f172a">عمولة دينار</th><th class="th" style="background:#f59e0b;color:#0f172a">عمولة دولار</th><th class="th" style="background:#065f46">رصيد دينار</th><th class="th" style="background:#065f46">رصيد دولار</th></tr></thead><tbody><tr style="background:#1e3a5f"><td class="td" colspan="4" style="color:#fde68a;font-size:11px;font-weight:900;text-align:right">الرصيد السابق</td><td class="td" colspan="7"></td><td class="td" style="color:#ca8a04;font-weight:900">${fmtM(openBal.dinar)}</td><td class="td" style="color:#60a5fa;font-weight:900">${fmtM(openBal.dollar)}</td></tr>${rows}</tbody></table></div></div>`;
+  const stat=(bg,bd,c,t,v)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:11px 12px;text-align:center"><div style="font-size:10px;font-weight:800;color:${c};margin-bottom:4px">${t}</div><div style="font-size:15px;font-weight:900;color:${c}">${v}</div></div>`;
+  return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:18px;border:1px solid #a7f3d0">
+  <div class="ovsec" style="--sc:#065f46;--sc2:#10b981">
+    <span class="ovsec-t">🏦 كشف الكروب — ${label}</span>
+    <span style="display:flex;align-items:center;gap:8px"><span class="ovsec-b">${todayList.length} حركة</span><button class="btn no-print" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.32);font-size:11px;padding:6px 12px" onclick="ovCopy(window._kroobWaText)">📱 نسخ</button></span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding:14px;background:#f8fafc;border-bottom:1px solid #e2e8f0">
+    ${stat('#fffbeb','#fde68a','#b45309','الرصيد السابق',fmtM(openBal.dinar))}
+    ${stat('#f0fdf4','#a7f3d0','#047857','إجمالي الدائن',fmtM(totalIn))}
+    ${stat('#fef2f2','#fecaca','#b91c1c','إجمالي المدين',fmtM(totalOut))}
+    ${stat(balDinar>=0?'#eff6ff':'#fef2f2',balDinar>=0?'#bfdbfe':'#fecaca',balDinar>=0?'#1d4ed8':'#b91c1c','الرصيد الحالي (د.ع)',fmtM(balDinar))}
+    ${stat(balDollar>=0?'#f5f3ff':'#fef2f2',balDollar>=0?'#ddd6fe':'#fecaca',balDollar>=0?'#6d28d9':'#b91c1c','الرصيد الحالي ($)',fmtM(balDollar))}
+  </div>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:1000px">
+    <thead><tr><th class="ovth">ت</th><th class="ovth">التاريخ</th><th class="ovth">البيان</th><th class="ovth">الجهة</th><th class="ovth">المستلم</th><th class="ovth" style="color:#047857">دائن دينار</th><th class="ovth" style="color:#b91c1c">مدين دينار</th><th class="ovth" style="color:#047857">دائن دولار</th><th class="ovth" style="color:#b91c1c">مدين دولار</th><th class="ovth">النوع</th><th class="ovth" style="color:#b45309">عمولة د.ع</th><th class="ovth" style="color:#b45309">عمولة $</th><th class="ovth">رصيد دينار</th><th class="ovth">رصيد دولار</th></tr></thead>
+    <tbody><tr class="ovopen"><td class="ovtd" colspan="5" style="text-align:right">◀ الرصيد المُرحَّل قبل الفترة</td><td class="ovtd" colspan="7"></td><td class="ovtd">${fmtM(openBal.dinar)}</td><td class="ovtd">${fmtM(openBal.dollar)}</td></tr>${rows}</tbody>
+    <tfoot><tr class="ovtot"><td class="ovtd" colspan="5" style="text-align:right">الإجمالي / الرصيد الختامي</td><td class="ovtd" style="color:#6ee7b7">${fmtM(totalIn)}</td><td class="ovtd" style="color:#fca5a5">${fmtM(totalOut)}</td><td class="ovtd" colspan="5"></td><td class="ovtd" style="color:#fcd34d">${fmtM(balDinar)}</td><td class="ovtd" style="color:#93c5fd">${fmtM(balDollar)}</td></tr></tfoot>
+  </table></div></div>`;
 }
 
 function getRafidByDate(date){return DB.get('rafid_accounts',[]).filter(e=>(e.date||'')===date);}
+function getRafidInRange(from,to){
+  return DB.get('rafid_accounts',[]).filter(e=>{const d=e.date||'';if(from&&d<from)return false;if(to&&d>to)return false;return true;})
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
+}
 function getRafidBalanceBefore(date){
   let list=DB.get('rafid_accounts',[]);
   list.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
@@ -4263,31 +4490,51 @@ function getRafidBalanceBefore(date){
   return{dinar:balDinar,dollar:balDollar};
 }
 
-function renderRafidDailySection(date){
-  const todayList=getRafidByDate(date),openBal=getRafidBalanceBefore(date);
+function renderRafidDailySection(from,to){
+  const label=ovPeriodLabel(from,to);
+  const todayList=getRafidInRange(from,to),openBal=getRafidBalanceBefore(from||'');
   let balDinar=openBal.dinar,balDollar=openBal.dollar;
-  if(!todayList.length)return`<div class="card" style="margin-bottom:14px;padding:16px;background:#fffbeb"><h3 style="font-size:13px;font-weight:900;color:#92400e;margin-bottom:6px">💼 كشف حسابات سيد رافد — ${date}</h3><p style="color:#64748b;font-size:12px">لا توجد حركات اليوم</p></div>`;
+  if(!todayList.length){
+    window._ovRafidSum={label:label,openD:openBal.dinar,openDol:openBal.dollar,tIn:0,tOut:0,balD:openBal.dinar,balDol:openBal.dollar,count:0};
+    return`<div class="card ovempty" style="--ec:#d97706"><div class="ovempty-ic">💼</div><div><div class="ovempty-t">كشف حسابات سيد رافد — ${label}</div><div class="ovempty-s">لا توجد حركات ضمن هذه الفترة · الرصيد المُرحَّل: <b style="color:#b45309">${fmtM(openBal.dinar)}</b> د.ع${openBal.dollar?` · <b style="color:#b45309">$${fmtM(openBal.dollar)}</b>`:''}</div></div></div>`;
+  }
   let rows='';
   todayList.forEach((e,i)=>{const d=parseFloat(e.dinar||0),dl=parseFloat(e.dollar||0),tdD=(e.type_dinar||'مدين').trim(),tdDol=(e.type_dollar||'مدين').trim(),com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0),isDainD=tdD==='دائن',isDainDol=tdDol==='دائن';
     if(isDainD)balDinar+=d;else balDinar-=d;if(isDainDol)balDollar+=dl;else balDollar-=dl;balDinar-=com;balDollar-=commD;
-    rows+=`<tr><td class="td" style="color:#64748b">${i+1}</td><td class="td" style="font-size:11px;text-align:right;max-width:150px">${esc(e.description||'')}</td><td class="td" style="font-size:11px">${esc(e.receiver||'')}</td><td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">${isDainD&&d?fmtM(d):''}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${!isDainD&&d?fmtM(d):''}</td><td class="td" style="background:#eff6ff;color:#2563eb;font-weight:900">${isDainDol&&dl?fmtM(dl):''}</td><td class="td" style="background:#faf5ff;color:#7c3aed;font-weight:900">${!isDainDol&&dl?fmtM(dl):''}</td><td class="td" style="font-size:11px"><span class="badge" style="background:#f1f5f9;color:#334155">${e.op_type||''}</span></td><td class="td" style="color:#f59e0b;font-weight:900;font-size:11px">${com?fmtM(com)+' د.ع':'—'}</td><td class="td" style="color:#f59e0b;font-weight:900;font-size:11px">${commD?'$'+fmtM(commD):'—'}</td><td class="td" style="color:${balDinar>=0?'#ca8a04':'#dc2626'};font-weight:900">${fmtM(balDinar)}</td><td class="td" style="color:${balDollar>=0?'#2563eb':'#dc2626'};font-weight:900">${fmtM(balDollar)}</td></tr>`;
+    rows+=`<tr><td class="ovtd" style="color:#94a3b8">${i+1}</td><td class="ovtd" style="font-size:11px;color:#475569;white-space:nowrap">${esc(e.date||'')}</td><td class="ovtd" style="font-size:11px;text-align:right;max-width:170px">${esc(e.description||'')}</td><td class="ovtd" style="font-size:11px">${esc(e.receiver||'')}</td><td class="ovtd" style="background:#f0fdf4;color:#059669">${isDainD&&d?fmtM(d):'—'}</td><td class="ovtd" style="background:#fef2f2;color:#dc2626">${!isDainD&&d?fmtM(d):'—'}</td><td class="ovtd" style="background:#eff6ff;color:#2563eb">${isDainDol&&dl?fmtM(dl):'—'}</td><td class="ovtd" style="background:#faf5ff;color:#7c3aed">${!isDainDol&&dl?fmtM(dl):'—'}</td><td class="ovtd" style="font-size:11px"><span class="badge" style="background:#f1f5f9;color:#334155">${esc(e.op_type||'')}</span></td><td class="ovtd" style="color:#d97706;font-size:11px">${com?fmtM(com):'—'}</td><td class="ovtd" style="color:#d97706;font-size:11px">${commD?'$'+fmtM(commD):'—'}</td><td class="ovtd" style="color:${balDinar>=0?'#0f172a':'#dc2626'};background:#fffbeb;font-weight:900">${fmtM(balDinar)}</td><td class="ovtd" style="color:${balDollar>=0?'#1d4ed8':'#dc2626'};background:#eff6ff;font-weight:900">${fmtM(balDollar)}</td></tr>`;
   });
   const totalIn=todayList.filter(e=>e.type_dinar==='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
   const totalOut=todayList.filter(e=>e.type_dinar!=='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
+  window._ovRafidSum={label:label,openD:openBal.dinar,openDol:openBal.dollar,tIn:totalIn,tOut:totalOut,balD:balDinar,balDol:balDollar,count:todayList.length};
   // بناء نص واتساب رافد
-  let waTextR='💼 *كشف يومي — حسابات سيد رافد*\n📅 *'+date+'*\n─────────────────\n';
+  let waTextR='💼 *كشف حسابات سيد رافد*\n📅 *'+label+'*\n─────────────────\n';
   waTextR+='📊 *الرصيد السابق:* '+fmtM(openBal.dinar)+' د.ع';
   if(openBal.dollar)waTextR+=' | $'+fmtM(openBal.dollar);
   waTextR+='\n─────────────────\n';
-  todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(e2.type_dollar==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
+  todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.date||'')+' | '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(e2.type_dollar==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
   waTextR+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextR+=' | $'+fmtM(balDollar);
-  waTextR+='\n✅ نظام المراقبة v44.8';
+  waTextR+='\n✅ نظام المراقبة v44.9';
   window._rafidWaText=waTextR;
 
-  return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:14px;border:2px solid #f59e0b"><div style="padding:12px 16px;background:#92400e;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:900;font-size:14px;color:#fff">💼 كشف حسابات سيد رافد — ${date}</span><span class="badge" style="background:rgba(255,255,255,0.2);color:#fff;margin-right:8px">${todayList.length} حركة</span></div><button class="btn" style="background:#f59e0b;color:#fff;font-size:12px;padding:7px 14px" onclick="if(navigator.clipboard)navigator.clipboard.writeText(window._rafidWaText||'').then(()=>showToast('تم النسخ!','success'));else{var t=document.createElement('textarea');t.value=window._rafidWaText||'';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('تم النسخ!','success');}">📱 نسخ للواتساب</button></div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px"><div style="background:#fffbeb;border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:#92400e;font-weight:700">الرصيد السابق</div><div style="font-size:13px;font-weight:900;color:#ca8a04">${fmtM(openBal.dinar)}</div></div><div style="background:#ecfdf5;border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:#065f46;font-weight:700">🟢 الدائن</div><div style="font-size:13px;font-weight:900;color:#059669">${fmtM(totalIn)}</div></div><div style="background:#fef2f2;border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:#7f1d1d;font-weight:700">🔴 المدين</div><div style="font-size:13px;font-weight:900;color:#dc2626">${fmtM(totalOut)}</div></div><div style="background:${balDinar>=0?'#fffbeb':'#fef2f2'};border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;font-weight:700">الرصيد الحالي</div><div style="font-size:13px;font-weight:900;color:${balDinar>=0?'#ca8a04':'#dc2626'}">${fmtM(balDinar)}</div></div></div>
-  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:900px"><thead><tr><th class="th" style="background:#92400e">ت</th><th class="th" style="background:#92400e">البيان</th><th class="th" style="background:#92400e">المستلم</th><th class="th" style="background:#059669">🟢 دائن دينار</th><th class="th" style="background:#dc2626">🔴 مدين دينار</th><th class="th" style="background:#2563eb">🟢 دائن دولار</th><th class="th" style="background:#7c3aed">🔴 مدين دولار</th><th class="th" style="background:#92400e">النوع</th><th class="th" style="background:#f59e0b;color:#0f172a">عمولة دينار</th><th class="th" style="background:#f59e0b;color:#0f172a">عمولة دولار</th><th class="th" style="background:#92400e">رصيد دينار</th><th class="th" style="background:#92400e">رصيد دولار</th></tr></thead><tbody><tr style="background:#1e3a5f"><td class="td" colspan="3" style="color:#fde68a;font-size:11px;font-weight:900;text-align:right">الرصيد السابق</td><td class="td" colspan="7"></td><td class="td" style="color:#ca8a04;font-weight:900">${fmtM(openBal.dinar)}</td><td class="td" style="color:#60a5fa;font-weight:900">${fmtM(openBal.dollar)}</td></tr>${rows}</tbody></table></div></div>`;
+  const stat=(bg,bd,c,t,v)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:11px 12px;text-align:center"><div style="font-size:10px;font-weight:800;color:${c};margin-bottom:4px">${t}</div><div style="font-size:15px;font-weight:900;color:${c}">${v}</div></div>`;
+  return`<div class="card" style="overflow:hidden;padding:0;margin-bottom:18px;border:1px solid #fcd34d">
+  <div class="ovsec" style="--sc:#92400e;--sc2:#f59e0b">
+    <span class="ovsec-t">💼 كشف حسابات سيد رافد — ${label}</span>
+    <span style="display:flex;align-items:center;gap:8px"><span class="ovsec-b">${todayList.length} حركة</span><button class="btn no-print" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.32);font-size:11px;padding:6px 12px" onclick="ovCopy(window._rafidWaText)">📱 نسخ</button></span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding:14px;background:#f8fafc;border-bottom:1px solid #e2e8f0">
+    ${stat('#fffbeb','#fde68a','#b45309','الرصيد السابق',fmtM(openBal.dinar))}
+    ${stat('#f0fdf4','#a7f3d0','#047857','إجمالي الدائن',fmtM(totalIn))}
+    ${stat('#fef2f2','#fecaca','#b91c1c','إجمالي المدين',fmtM(totalOut))}
+    ${stat(balDinar>=0?'#eff6ff':'#fef2f2',balDinar>=0?'#bfdbfe':'#fecaca',balDinar>=0?'#1d4ed8':'#b91c1c','الرصيد الحالي (د.ع)',fmtM(balDinar))}
+    ${stat(balDollar>=0?'#f5f3ff':'#fef2f2',balDollar>=0?'#ddd6fe':'#fecaca',balDollar>=0?'#6d28d9':'#b91c1c','الرصيد الحالي ($)',fmtM(balDollar))}
+  </div>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:960px">
+    <thead><tr><th class="ovth">ت</th><th class="ovth">التاريخ</th><th class="ovth">البيان</th><th class="ovth">المستلم</th><th class="ovth" style="color:#047857">دائن دينار</th><th class="ovth" style="color:#b91c1c">مدين دينار</th><th class="ovth" style="color:#1d4ed8">دائن دولار</th><th class="ovth" style="color:#6d28d9">مدين دولار</th><th class="ovth">النوع</th><th class="ovth" style="color:#b45309">عمولة د.ع</th><th class="ovth" style="color:#b45309">عمولة $</th><th class="ovth">رصيد دينار</th><th class="ovth">رصيد دولار</th></tr></thead>
+    <tbody><tr class="ovopen"><td class="ovtd" colspan="4" style="text-align:right">◀ الرصيد المُرحَّل قبل الفترة</td><td class="ovtd" colspan="7"></td><td class="ovtd">${fmtM(openBal.dinar)}</td><td class="ovtd">${fmtM(openBal.dollar)}</td></tr>${rows}</tbody>
+    <tfoot><tr class="ovtot"><td class="ovtd" colspan="4" style="text-align:right">الإجمالي / الرصيد الختامي</td><td class="ovtd" style="color:#6ee7b7">${fmtM(totalIn)}</td><td class="ovtd" style="color:#fca5a5">${fmtM(totalOut)}</td><td class="ovtd" colspan="5"></td><td class="ovtd" style="color:#fcd34d">${fmtM(balDinar)}</td><td class="ovtd" style="color:#93c5fd">${fmtM(balDollar)}</td></tr></tfoot>
+  </table></div></div>`;
 }
 
 // ===== كشف حساب سيد رافد =====
@@ -4780,7 +5027,7 @@ function sendRefineryWhatsapp(){
     lines.push((grandRemaining>0?'⚠️':'✅')+' المتبقي: '+fmtM(Math.abs(grandRemaining))+' د.ع '+(grandRemaining>0?'(غير مسوى)':'(مسوى)'));
     lines.push(sep);
   });
-  lines.push('✅ نظام المراقبة v44.8');
+  lines.push('✅ نظام المراقبة v44.9');
   var msg=lines.join(NL);
   if(navigator.clipboard){
     navigator.clipboard.writeText(msg).then(function(){showToast('تم نسخ نص الواتساب','success');}).catch(function(){});

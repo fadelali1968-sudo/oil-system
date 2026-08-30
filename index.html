@@ -152,6 +152,7 @@
              transition:transform .18s ease, box-shadow .18s ease; }
   .ksmonth::before { content:''; position:absolute; top:0; right:0; left:0; height:4px;
                      background:linear-gradient(90deg,#0f766e,#2dd4bf); }
+  .ksmonth.rs::before { background:linear-gradient(90deg,#b45309,#f59e0b); }
   .ksmonth:hover { transform:translateY(-3px); box-shadow:0 16px 32px -14px rgba(15,23,42,.34); }
   .ksmonth-h { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;
                margin-bottom:10px; padding-bottom:9px; border-bottom:1px solid #f1f5f9; }
@@ -808,8 +809,9 @@ let S = {
   kroobPdfData:null, rafidPdfData:null,
   kroobPdfFrom:'', kroobPdfTo:'',
   rafidPdfFrom:'', rafidPdfTo:'',
-  kroobMonth: (new Date()).toISOString().slice(0,7),
-  rafidMonth: (new Date()).toISOString().slice(0,7),
+  rsFrom:'', rsTo:'',
+  kroobMonth: today().slice(0,7),
+  rafidMonth: today().slice(0,7),
   kroobSelected: new Set(),
   rafidSelected: new Set(),
   privSalafTab:'سيد رافد', privSalafEditId:'', privSalafMonth:'', privSalafSearch:''
@@ -841,7 +843,8 @@ function fmtTon(v){ return fmt(sc(v)); }
 function fmtLiter(v){ return fmt(sc(v)); }
 function fmtKg(v){ return fmt(sc(v)); }
 function fmtKaban(v){ const n=parseFloat(v); if(!n||isNaN(n))return'0'; return n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:3}); }
-function today(){ return new Date().toISOString().split('T')[0]; }
+// تاريخ اليوم بالتوقيت المحلي (بغداد UTC+3) — toISOString يُرجع تاريخ UTC فيعطي «الأمس» بين 00:00 و 03:00
+function today(){ const d=new Date(),p=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
 function uid(e){ return e.replace(/[\.\@\+]/g,'_'); }
 function el(id){ return document.getElementById(id); }
 function gv(id){ return el(id)?.value?.trim()||''; }
@@ -3216,8 +3219,9 @@ function calcKroobBalance(list){
   });
 }
 
-function prevMonth(m){const d=new Date(m+'-01');d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7);}
-function nextMonth(m){const d=new Date(m+'-01');d.setMonth(d.getMonth()+1);return d.toISOString().slice(0,7);}
+// شهر سابق/تالي بحساب محلي صِرف — new Date("YYYY-MM-01") يُفسَّر UTC وtoISOString يُعيده UTC فيزيح الشهر
+function prevMonth(m){const a=String(m||"").split("-"),d=new Date(+a[0],+a[1]-2,1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
+function nextMonth(m){const a=String(m||"").split("-"),d=new Date(+a[0],+a[1],1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
 
 function getKroobCarryForward(month){
   // أولاً: الرصيد الافتتاحي المخزن مباشرة من ملف الاستيراد لهذا الشهر
@@ -4323,17 +4327,17 @@ function viewRafidAccounts(){
   const lastRow=monthWithBal[monthWithBal.length-1];
   const curBalD=lastRow?lastRow.bal_dinar:carry.dinar;
   const curBalDol=lastRow?lastRow.bal_dollar:carry.dollar;
-  const totalIn=monthList.filter(e=>e.type_dinar==='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
-  const totalOut=monthList.filter(e=>e.type_dinar!=='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
+  const totalIn=monthList.reduce((s,e)=>rafidDir(e,'dinar')==='دائن'?s+safeNum(e.dinar):s,0);
+  const totalOut=monthList.reduce((s,e)=>rafidDir(e,'dinar')!=='دائن'?s+safeNum(e.dinar):s,0);
   const isCurrentMonth=month===today().slice(0,7);
-  const rows=monthWithBal.map((e,i)=>{const isDainD=(e.type_dinar||'مدين')==='دائن',isDainDol=(e.type_dollar||'مدين')==='دائن',com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0);
+  const rows=monthWithBal.map((e,i)=>{const isDainD=rafidDir(e,'dinar')==='دائن',isDainDol=rafidDir(e,'dollar')==='دائن',com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0);
     const isSel=(S.rafidSelected||new Set()).has(e.id);
     const chkTd=canEdit('rafid')?`<td class="td" style="text-align:center;padding:3px"><input type="checkbox" data-id="${e.id}" ${isSel?'checked':''} onchange="toggleRafidSelect('${e.id}',this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:#92400e"></td>`:'';
     return`<tr style="${isSel?'background:#fef3c7':''}">${chkTd}<td class="td" style="color:#64748b">${i+1}</td><td class="td" style="font-size:11px">${e.date||''}</td><td class="td" style="font-size:11px;text-align:right;max-width:160px">${esc(e.description||'')}</td><td class="td" style="font-size:11px">${esc(e.beneficiary||'')}</td><td class="td" style="font-size:11px">${esc(e.receiver||'')}</td><td class="td" style="background:#ecfdf5;color:#059669;font-weight:900">${isDainD&&e.dinar?fmtM(e.dinar):''}</td><td class="td" style="background:#fef2f2;color:#dc2626;font-weight:900">${!isDainD&&e.dinar?fmtM(e.dinar):''}</td><td class="td" style="background:#eff6ff;color:#2563eb;font-weight:900">${isDainDol&&e.dollar?fmtM(e.dollar):''}</td><td class="td" style="background:#faf5ff;color:#7c3aed;font-weight:900">${!isDainDol&&e.dollar?fmtM(e.dollar):''}</td><td class="td" style="font-size:11px"><span class="badge" style="background:#f1f5f9;color:#334155">${esc(e.op_type||'')}</span></td><td class="td" style="color:#f59e0b;font-weight:900;font-size:11px">${com?fmtM(com)+' د.ع':'—'}</td><td class="td" style="color:#f59e0b;font-weight:900;font-size:11px">${commD?'$'+fmtM(commD):'—'}</td><td class="td" style="color:${e.bal_dinar>=0?'#ca8a04':'#dc2626'};font-weight:900">${fmtM(e.bal_dinar)}</td><td class="td" style="color:${e.bal_dollar>=0?'#2563eb':'#dc2626'};font-weight:900">${fmtM(e.bal_dollar)}</td>${canEdit('rafid')?`<td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:3px 7px;font-size:10px;margin-left:3px" onclick="editRafid('${e.id}')">✏️</button><button class="btn btn-red" style="padding:3px 7px;font-size:10px" onclick="deleteRafid('${e.id}')">🗑️</button></td>`:''}</tr>`;}).join('');
-  const tRDainD=monthWithBal.reduce((s,e)=>(e.type_dinar||'مدين')==='دائن'?s+parseFloat(e.dinar||0):s,0);
-  const tRMadinD=monthWithBal.reduce((s,e)=>(e.type_dinar||'مدين')==='مدين'?s+parseFloat(e.dinar||0):s,0);
-  const tRDainDol=monthWithBal.reduce((s,e)=>(e.type_dollar||'مدين')==='دائن'?s+parseFloat(e.dollar||0):s,0);
-  const tRMadinDol=monthWithBal.reduce((s,e)=>(e.type_dollar||'مدين')==='مدين'?s+parseFloat(e.dollar||0):s,0);
+  const tRDainD=monthWithBal.reduce((s,e)=>rafidDir(e,'dinar')==='دائن'?s+safeNum(e.dinar):s,0);
+  const tRMadinD=monthWithBal.reduce((s,e)=>rafidDir(e,'dinar')==='مدين'?s+safeNum(e.dinar):s,0);
+  const tRDainDol=monthWithBal.reduce((s,e)=>rafidDir(e,'dollar')==='دائن'?s+safeNum(e.dollar):s,0);
+  const tRMadinDol=monthWithBal.reduce((s,e)=>rafidDir(e,'dollar')==='مدين'?s+safeNum(e.dollar):s,0);
   const rafidTotalRow=monthWithBal.length?`<tr style="background:#92400e;color:#fff;font-weight:900">${canEdit('rafid')?'<td class="td" style="background:#92400e"></td>':''}<td class="td" style="color:#fff" colspan="5">📊 الإجمالي — ${monthWithBal.length} حركة</td><td class="td" style="color:#6ee7b7;font-weight:900;font-size:12px">${fmtM(tRDainD)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tRMadinD)}</td><td class="td" style="color:#93c5fd;font-weight:900;font-size:12px">${fmtM(tRDainDol)}</td><td class="td" style="color:#fca5a5;font-weight:900;font-size:12px">${fmtM(tRMadinDol)}</td><td class="td" colspan="${canEdit('rafid')?6:5}"></td></tr>`:'';
   const opOpts=['تحويل ماستر','صرف','تسليم','استلام الصيرفة','حوالة','راتب خارجي','سلف','إيداع','أخرى'].map(t=>`<option value="${t}" ${editData&&editData.op_type===t?'selected':''}>${t}</option>`).join('');
   return`<div style="max-width:1200px">
@@ -4381,9 +4385,9 @@ function viewRafidAccounts(){
       <div><label class="lbl">الجهة المستفيدة</label><input class="inp" id="rf_benef" value="${editData?editData.beneficiary||'':''}"></div>
       <div><label class="lbl">المستلم / المسلم</label><input class="inp" id="rf_recv" value="${editData?editData.receiver||'':''}"></div>
       <div><label class="lbl">💛 مبلغ الدينار</label><input class="inp" id="rf_dinar" type="number" placeholder="0" value="${editData?editData.dinar||'':''}"></div>
-      <div><label class="lbl">اتجاه الدينار</label><select class="inp" id="rf_type_dinar"><option value="مدين" ${!editData||editData.type_dinar==='مدين'?'selected':''}>🔴 مدين (عليه)</option><option value="دائن" ${editData&&editData.type_dinar==='دائن'?'selected':''}>🟢 دائن (له)</option></select></div>
+      <div><label class="lbl">اتجاه الدينار</label><select class="inp" id="rf_type_dinar"><option value="مدين" ${!editData||rafidDir(editData,'dinar')==='مدين'?'selected':''}>🔴 مدين (عليه)</option><option value="دائن" ${editData&&rafidDir(editData,'dinar')==='دائن'?'selected':''}>🟢 دائن (له)</option></select></div>
       <div><label class="lbl">🖤 مبلغ الدولار</label><input class="inp" id="rf_dollar" type="number" placeholder="0" value="${editData?editData.dollar||'':''}" oninput="autoRafidCommissionDollar()"></div>
-      <div><label class="lbl">اتجاه الدولار</label><select class="inp" id="rf_type_dollar"><option value="مدين" ${!editData||editData.type_dollar==='مدين'?'selected':''}>🔴 مدين (عليه)</option><option value="دائن" ${editData&&editData.type_dollar==='دائن'?'selected':''}>🟢 دائن (له)</option></select></div>
+      <div><label class="lbl">اتجاه الدولار</label><select class="inp" id="rf_type_dollar"><option value="مدين" ${!editData||rafidDir(editData,'dollar')==='مدين'?'selected':''}>🔴 مدين (عليه)</option><option value="دائن" ${editData&&rafidDir(editData,'dollar')==='دائن'?'selected':''}>🟢 دائن (له)</option></select></div>
       <div><label class="lbl">عمولة دينار</label><input class="inp" id="rf_comm" type="number" placeholder="0" value="${editData?editData.commission||'':''}"></div>
       <div><label class="lbl">عمولة دولار&nbsp;<span id="rf_comm_dollar_rate_hint" style="color:#2563eb;font-size:10px;font-weight:700"></span>&nbsp;<span onclick="autoRafidCommissionDollar(true)" title="إعادة الاحتساب التلقائي" style="cursor:pointer;font-size:11px;vertical-align:middle">🔄</span></label><input class="inp" id="rf_comm_d" type="number" placeholder="0" value="${editData?editData.commission_dollar||'':''}"></div>
     </div>
@@ -4507,7 +4511,7 @@ function exportRafidXLSX(){
   if(typeof XLSX==='undefined')return;
   const list=getRafidList(),withBal=calcRafidBalance(list);
   const rows=[['ت','التاريخ','البيان','الجهة','المستلم','دائن دينار','مدين دينار','دائن دولار','مدين دولار','نوع العملية','عمولة دينار','عمولة دولار','رصيد دينار','رصيد دولار']];
-  withBal.forEach((e,i)=>{const isDainD=(e.type_dinar||'مدين')==='دائن',isDainDol=(e.type_dollar||'مدين')==='دائن';rows.push([i+1,e.date,e.description,e.beneficiary||'',e.receiver||'',isDainD?e.dinar:0,!isDainD?e.dinar:0,isDainDol?e.dollar:0,!isDainDol?e.dollar:0,e.op_type||'',e.commission||0,e.commission_dollar||0,e.bal_dinar,e.bal_dollar]);});
+  withBal.forEach((e,i)=>{const isDainD=rafidDir(e,'dinar')==='دائن',isDainDol=rafidDir(e,'dollar')==='دائن';rows.push([i+1,e.date,e.description,e.beneficiary||'',e.receiver||'',isDainD?e.dinar:0,!isDainD?e.dinar:0,isDainDol?e.dollar:0,!isDainDol?e.dollar:0,e.op_type||'',e.commission||0,e.commission_dollar||0,e.bal_dinar,e.bal_dollar]);});
   const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'حسابات سيد رافد');XLSX.writeFile(wb,'حسابات_سيد_رافد_'+today()+'.xlsx');
 }
 
@@ -4606,15 +4610,15 @@ function renderRafidDailySection(from,to){
     if(isDainD)balDinar+=d;else balDinar-=d;if(isDainDol)balDollar+=dl;else balDollar-=dl;balDinar-=com;balDollar-=commD;
     rows+=`<tr><td class="ovtd" style="color:#94a3b8">${i+1}</td><td class="ovtd" style="font-size:11px;color:#475569;white-space:nowrap">${esc(e.date||'')}</td><td class="ovtd" style="font-size:11px;text-align:right;max-width:170px">${esc(e.description||'')}</td><td class="ovtd" style="font-size:11px">${esc(e.receiver||'')}</td><td class="ovtd" style="background:#f0fdf4;color:#059669">${isDainD&&d?fmtM(d):'—'}</td><td class="ovtd" style="background:#fef2f2;color:#dc2626">${!isDainD&&d?fmtM(d):'—'}</td><td class="ovtd" style="background:#eff6ff;color:#2563eb">${isDainDol&&dl?fmtM(dl):'—'}</td><td class="ovtd" style="background:#faf5ff;color:#7c3aed">${!isDainDol&&dl?fmtM(dl):'—'}</td><td class="ovtd" style="font-size:11px"><span class="badge" style="background:#f1f5f9;color:#334155">${esc(e.op_type||'')}</span></td><td class="ovtd" style="color:#d97706;font-size:11px">${com?fmtM(com):'—'}</td><td class="ovtd" style="color:#d97706;font-size:11px">${commD?'$'+fmtM(commD):'—'}</td><td class="ovtd" style="color:${balDinar>=0?'#0f172a':'#dc2626'};background:#fffbeb;font-weight:900">${fmtM(balDinar)}</td><td class="ovtd" style="color:${balDollar>=0?'#1d4ed8':'#dc2626'};background:#eff6ff;font-weight:900">${fmtM(balDollar)}</td></tr>`;
   });
-  const totalIn=todayList.filter(e=>e.type_dinar==='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
-  const totalOut=todayList.filter(e=>e.type_dinar!=='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
+  const totalIn=todayList.reduce((s,e)=>rafidDir(e,'dinar')==='دائن'?s+safeNum(e.dinar):s,0);
+  const totalOut=todayList.reduce((s,e)=>rafidDir(e,'dinar')!=='دائن'?s+safeNum(e.dinar):s,0);
   window._ovRafidSum={label:label,openD:openBal.dinar,openDol:openBal.dollar,tIn:totalIn,tOut:totalOut,balD:balDinar,balDol:balDollar,count:todayList.length};
   // بناء نص واتساب رافد
   let waTextR='💼 *كشف حسابات سيد رافد*\n📅 *'+label+'*\n─────────────────\n';
   waTextR+='📊 *الرصيد السابق:* '+fmtM(openBal.dinar)+' د.ع';
   if(openBal.dollar)waTextR+=' | $'+fmtM(openBal.dollar);
   waTextR+='\n─────────────────\n';
-  todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.date||'')+' | '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(e2.type_dollar==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
+  todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.date||'')+' | '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(rafidDir(e2,'dollar')==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
   waTextR+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextR+=' | $'+fmtM(balDollar);
   waTextR+='\n✅ نظام المراقبة v44.9';
@@ -4641,9 +4645,9 @@ function renderRafidDailySection(from,to){
 }
 
 // ===== كشف حساب سيد رافد =====
-function generateRafidRangePDF(currency){
-  const fromDate=document.getElementById('rs_from')?.value;
-  const toDate=document.getElementById('rs_to')?.value;
+function generateRafidRangePDF(currency,fromArg,toArg){
+  const fromDate=fromArg!==undefined&&fromArg!==null&&fromArg!==''?fromArg:(document.getElementById('rs_from')?.value||'');
+  const toDate=toArg!==undefined&&toArg!==null&&toArg!==''?toArg:(document.getElementById('rs_to')?.value||'');
   if(!fromDate||!toDate){showToast('يرجى تحديد الفترة الزمنية (من/إلى)','warning');return;}
   if(fromDate>toDate){showToast('تاريخ البداية يجب أن يكون قبل تاريخ النهاية','warning');return;}
   const allList=getRafidList(),withBal=calcRafidBalance(allList),opening=DB.get('rafid_opening',{dinar:0,dollar:0});
@@ -4690,108 +4694,263 @@ function generateRafidRangePDF(currency){
   }
 }
 
+// اتجاه حركة سيد رافد — يطابق calcRafidBalance حرفياً (مع trim، وإلا تُصنَّف حركات Excel بخانة خاطئة)
+function rafidDir(e,cur){const t=((cur==='dollar'?e.type_dollar:e.type_dinar)||'مدين').trim();return t==='دائن'?'دائن':'مدين';}
+function clearRsFilter(){S.rsFrom='';S.rsTo='';renderContent();}
+
+function generateRafidPDF(month,mode){
+  const allList=getRafidList(),withBal=calcRafidBalance(allList);
+  const monthList=withBal.filter(e=>(e.date||'').startsWith(month));
+  if(!monthList.length){showToast('لا توجد حركات في هذا الشهر','warning');return;}
+  const fmt=v=>{const n=parseFloat(v||0);return n?Math.abs(n).toLocaleString('en-US'):'';};
+  const fmtS=v=>{const n=parseFloat(v||0);return n?n.toLocaleString('en-US'):'';};
+  const carry=getRafidCarryForward(month);
+  const lastEntry=monthList[monthList.length-1];
+  const mnNames={'01':'يناير','02':'فبراير','03':'مارس','04':'أبريل','05':'مايو','06':'يونيو','07':'يوليو','08':'أغسطس','09':'سبتمبر','10':'أكتوبر','11':'نوفمبر','12':'ديسمبر'};
+  const[yr,mn]=month.split('-');
+  const monthLabel=(mnNames[mn]||mn)+' '+yr;
+  const rows=monthList.map((e,i)=>{
+    const isDainD=rafidDir(e,'dinar')==='دائن',isDainDol=rafidDir(e,'dollar')==='دائن';
+    return`<tr>
+      <td style="text-align:center">${i+1}</td>
+      <td style="text-align:center">${e.date||''}</td>
+      <td style="text-align:right">${esc(e.description||'')}</td>
+      <td style="text-align:right">${esc(e.beneficiary||'')}</td>
+      <td style="text-align:right">${esc(e.receiver||'')}</td>
+      <td style="text-align:center;color:#059669">${isDainD?fmt(e.dinar):''}</td>
+      <td style="text-align:center;color:#c00">${!isDainD?fmt(e.dinar):''}</td>
+      <td style="text-align:center;color:#2563eb">${isDainDol?fmt(e.dollar):''}</td>
+      <td style="text-align:center;color:#c00">${!isDainDol?fmt(e.dollar):''}</td>
+      <td style="text-align:center">${esc(e.op_type||'')}</td>
+      <td style="text-align:center">${fmt(e.commission)}</td>
+      <td style="text-align:center">${fmt(e.commission_dollar)}</td>
+      <td style="text-align:center;color:${e.bal_dinar>=0?'#000':'#c00'};font-weight:900">${fmtS(e.bal_dinar)}</td>
+      <td style="text-align:center;color:${e.bal_dollar>=0?'#000':'#c00'};font-weight:900">${fmtS(e.bal_dollar)}</td>
+    </tr>`;
+  }).join('');
+  const styles=`@page{size:A4 landscape;margin:10mm 8mm}body{font-family:'Cairo',sans-serif;font-size:11px;direction:rtl;color:#000;margin:0}h2{text-align:center;color:#92400e;font-size:15px;margin:0 0 4px}.sub{text-align:center;color:#92400e;font-size:11px;margin:0 0 8px}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#fff;color:#000;font-weight:900;border:2px solid #000;padding:5px 3px;text-align:center}td{border:2px solid #000;padding:4px 3px;color:#000;font-weight:700}.op-row td{background:#fffbeb;color:#92400e;font-weight:900}.cl-row td{background:#92400e;color:#fff;font-weight:900;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+  const body=`<h2>كشف حركة حسابات سيد رافد</h2><div class="sub">شهر ${monthLabel} — عدد الحركات: ${monthList.length}</div><table><thead><tr><th style="width:25px">ت</th><th style="width:68px">التاريخ</th><th style="width:140px">البيان</th><th style="width:75px">الجهة المستفيدة</th><th style="width:75px">المستلم / المسلم</th><th style="width:65px">دائن دينار</th><th style="width:65px">مدين دينار</th><th style="width:55px">دائن دولار</th><th style="width:55px">مدين دولار</th><th style="width:55px">نوع العملية</th><th style="width:50px">عمولة دينار</th><th style="width:50px">عمولة دولار</th><th style="width:75px">رصيد الدينار</th><th style="width:60px">رصيد الدولار</th></tr></thead><tbody><tr class="op-row"><td colspan="12" style="text-align:right">الرصيد الافتتاحي للشهر</td><td style="text-align:center;color:${carry.dinar>=0?'#92400e':'#c00'}">${fmtS(carry.dinar)}</td><td style="text-align:center;color:${carry.dollar>=0?'#92400e':'#c00'}">${fmtS(carry.dollar)}</td></tr>${rows}<tr class="cl-row"><td colspan="12">الرصيد الختامي للشهر</td><td>${fmtS(lastEntry.bal_dinar)}</td><td>${fmtS(lastEntry.bal_dollar)}</td></tr></tbody></table>`;
+  if(mode==='save'){
+    if(typeof html2pdf==='undefined'){showToast('⚠️ مكتبة PDF غير محملة، أعد تحميل الصفحة','warning');return;}
+    const div=document.createElement('div');
+    div.style.cssText='direction:rtl;font-family:Cairo,sans-serif;font-size:11px;color:#000;width:277mm;padding:5mm';
+    div.innerHTML=`<style>${styles}</style>${body}`;
+    document.body.appendChild(div);
+    showToast('⏳ جاري إنشاء الملف...','info',3000);
+    html2pdf().set({
+      margin:0,
+      filename:'حسابات_سيد_رافد_'+monthLabel+'.pdf',
+      html2canvas:{scale:2,useCORS:true,letterRendering:true},
+      jsPDF:{unit:'mm',format:'a4',orientation:'landscape'}
+    }).from(div).save().then(()=>{document.body.removeChild(div);showToast('✅ تم حفظ الملف','success');}).catch(()=>{document.body.removeChild(div);showToast('⚠️ فشل الحفظ','error');});
+  } else {
+    const win=window.open('','_blank');
+    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>${styles}</style></head><body>${body}<script>window.onload=function(){window.print();};<\/script></body></html>`);
+    win.document.close();win.focus();
+  }
+}
+
 function viewRafidStatement(){
-  const allList=getRafidList(),withBal=calcRafidBalance(allList),opening=DB.get('rafid_opening',{dinar:0,dollar:0});
-  const lastRow=withBal[withBal.length-1];
-  const curBalD=lastRow?lastRow.bal_dinar:parseFloat(opening.dinar||0);
-  const curBalDol=lastRow?lastRow.bal_dollar:parseFloat(opening.dollar||0);
-  const grandDainD=allList.filter(e=>e.type_dinar==='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
-  const grandMadinD=allList.filter(e=>e.type_dinar!=='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
-  const grandComm=allList.reduce((s,e)=>s+parseFloat(e.commission||0),0);
-  const grandCommDol=allList.reduce((s,e)=>s+parseFloat(e.commission_dollar||0),0);
+  const allList=getRafidList(),listWithBal=calcRafidBalance(allList),opening=DB.get('rafid_opening',{dinar:0,dollar:0});
+  const rsFrom=S.rsFrom||'',rsTo=S.rsTo||'',hasFilter=!!(rsFrom||rsTo);
   const months={};
-  withBal.forEach(e=>{const m=(e.date||'').slice(0,7);if(!months[m])months[m]=[];months[m].push(e);});
-  const sortedMonthsR=Object.keys(months).sort();
-  // بناء خريطة الرصيد المرحّل لكل شهر بكفاءة
-  const carryMapR={};
-  sortedMonthsR.forEach((m,idx)=>{
-    if(idx===0){carryMapR[m]={dinar:parseFloat(opening.dinar||0),dollar:parseFloat(opening.dollar||0)};}
-    else{const prev=months[sortedMonthsR[idx-1]],prevLast=prev[prev.length-1];carryMapR[m]={dinar:prevLast.bal_dinar,dollar:prevLast.bal_dollar};}
+  listWithBal.forEach(e=>{const m=(e.date||'').slice(0,7);if(!months[m])months[m]=[];months[m].push(e);});
+  const sortedMonths=Object.keys(months).sort();
+  // خريطة الرصيد المرحّل لكل شهر
+  const carryMap={};
+  sortedMonths.forEach((m,idx)=>{
+    if(idx===0){carryMap[m]={dinar:parseFloat(opening.dinar||0),dollar:parseFloat(opening.dollar||0)};}
+    else{const prev=months[sortedMonths[idx-1]],prevLast=prev.filter(e=>e.date).slice(-1)[0]||prev[prev.length-1];carryMap[m]={dinar:prevLast.bal_dinar,dollar:prevLast.bal_dollar};}
   });
-  const monthCards=sortedMonthsR.slice().reverse().map(m=>{
-    const mList=months[m],carry=carryMapR[m];
-    const mDainD=mList.filter(e=>e.type_dinar==='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
-    const mMadinD=mList.filter(e=>e.type_dinar!=='دائن').reduce((s,e)=>s+parseFloat(e.dinar||0),0);
-    const lastBal=mList[mList.length-1];
-    return`<div class="card" style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-weight:900;font-size:14px;color:#92400e">📅 ${m}</span>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button onclick="S.rafidMonth='${m}';S.view='rafid_accounts';renderContent()" style="background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700">📂 فتح</button>
-          <span class="badge" style="background:#fef3c7;color:#b45309">${mList.length} حركة</span>
+
+  // ——— حركات الفترة ———
+  const inRange=e=>{const d=e.date||'';return(!rsFrom||d>=rsFrom)&&(!rsTo||d<=rsTo);};
+  const filtWithBal=hasFilter?listWithBal.filter(inRange):listWithBal;
+  const periodLabel=ovPeriodLabel(rsFrom,rsTo);
+
+  // الرصيد الافتتاحي للفترة
+  const prevFilt=rsFrom?listWithBal.filter(e=>e.date&&e.date<rsFrom):[];
+  let filtOp;
+  if(prevFilt.length){filtOp={dinar:prevFilt[prevFilt.length-1].bal_dinar,dollar:prevFilt[prevFilt.length-1].bal_dollar};}
+  else{filtOp={dinar:parseFloat(opening.dinar||0),dollar:parseFloat(opening.dollar||0)};}
+  const dispOpDinar=hasFilter?filtOp.dinar:parseFloat(opening.dinar||0);
+  const dispOpDollar=hasFilter?filtOp.dollar:parseFloat(opening.dollar||0);
+
+  // الاتجاه يُقرأ بـ rafidDir (مع trim) ليطابق حساب الرصيد تماماً
+  const sumDir=(list,cur,dir,field)=>list.reduce((s,e)=>(rafidDir(e,cur)===dir?s+safeNum(e[field]):s),0);
+  const dispIn=sumDir(filtWithBal,'dinar','دائن','dinar');
+  const dispOut=sumDir(filtWithBal,'dinar','مدين','dinar');
+  const dispInDol=sumDir(filtWithBal,'dollar','دائن','dollar');
+  const dispOutDol=sumDir(filtWithBal,'dollar','مدين','dollar');
+  const dispComm=filtWithBal.reduce((s,e)=>s+safeNum(e.commission),0);
+  const dispCommDollar=filtWithBal.reduce((s,e)=>s+safeNum(e.commission_dollar),0);
+  const lastFilt=filtWithBal[filtWithBal.length-1];
+  const dispBalD=lastFilt?lastFilt.bal_dinar:dispOpDinar;
+  const dispBalDol=lastFilt?lastFilt.bal_dollar:dispOpDollar;
+  const dispCount=filtWithBal.length;
+
+  // ——— الترويسة ———
+  const hero=`<div class="ovhero no-print" style="background:linear-gradient(115deg,#451a03 0%,#92400e 52%,#f59e0b 100%);box-shadow:0 16px 38px -16px rgba(146,64,14,.75)">
+    <div class="ovhero-in">
+      <div>
+        <div class="ovhero-t">📜 كشف الحساب — حسابات سيد رافد</div>
+        <div class="ovhero-tags">
+          <span class="ovtag">📅 ${periodLabel}</span>
+          <span class="ovtag">🧾 ${fmtM(dispCount)} حركة</span>
+          <span class="ovtag">💛 الرصيد: ${fmtM(dispBalD)} د.ع</span>
+          <span class="ovtag">💵 ${fmtM(dispBalDol)} $</span>
         </div>
       </div>
-      <div style="background:#fef3c7;border-radius:8px;padding:7px 12px;margin-bottom:8px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:11px;font-weight:900;color:#92400e">🔄 رصيد مرحّل:</span>
-        <span style="font-size:12px;font-weight:900;color:${carry.dinar>=0?'#92400e':'#dc2626'}">${fmtM(carry.dinar)} د.ع</span>
-        <span style="font-size:12px;font-weight:900;color:${carry.dollar>=0?'#1e3a8a':'#dc2626'}">${fmtM(carry.dollar)} $</span>
+      <div class="ovhero-b">
+        <button class="btn" style="background:#ca8a04;color:#fff" onclick="generateRafidRangePDF('dinar',S.rsFrom,S.rsTo)">📄 PDF الدينار (الفترة)</button>
+        <button class="btn" style="background:#1d4ed8;color:#fff" onclick="generateRafidRangePDF('dollar',S.rsFrom,S.rsTo)">💵 PDF الدولار (الفترة)</button>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:12px">
-        <div style="background:#ecfdf5;border-radius:8px;padding:10px;text-align:center"><div style="color:#065f46;font-weight:700;margin-bottom:3px;font-size:10px">🟢 دائن دينار</div><div style="font-weight:900;color:#059669">${fmtM(mDainD)}</div></div>
-        <div style="background:#fef2f2;border-radius:8px;padding:10px;text-align:center"><div style="color:#7f1d1d;font-weight:700;margin-bottom:3px;font-size:10px">🔴 مدين دينار</div><div style="font-weight:900;color:#dc2626">${fmtM(mMadinD)}</div></div>
-        <div style="background:#fffbeb;border-radius:8px;padding:10px;text-align:center"><div style="color:#92400e;font-weight:700;margin-bottom:3px;font-size:10px">💛 رصيد الدينار</div><div style="font-weight:900;color:${lastBal?lastBal.bal_dinar>=0?'#ca8a04':'#dc2626':'#64748b'}">${fmtM(lastBal?lastBal.bal_dinar:0)}</div></div>
-        <div style="background:#eff6ff;border-radius:8px;padding:10px;text-align:center"><div style="color:#1e3a8a;font-weight:700;margin-bottom:3px;font-size:10px">🖤 رصيد الدولار</div><div style="font-weight:900;color:${lastBal?lastBal.bal_dollar>=0?'#2563eb':'#dc2626':'#64748b'}">${fmtM(lastBal?lastBal.bal_dollar:0)}</div></div>
+    </div>
+  </div>`;
+
+  // ——— شريط الفلترة ———
+  const filters=`<div class="card no-print ovfilter">
+    <div class="ovfilter-row">
+      <div class="ovfield"><label class="lbl" for="rs_ffrom">📅 من تاريخ</label><input class="inp" type="date" id="rs_ffrom" value="${rsFrom}" onchange="S.rsFrom=this.value;renderContent()"></div>
+      <div class="ovfield"><label class="lbl" for="rs_fto">📅 إلى تاريخ</label><input class="inp" type="date" id="rs_fto" value="${rsTo}" onchange="S.rsTo=this.value;renderContent()"></div>
+      <div class="ovchips">
+        ${hasFilter?'<button class="ovchip" onclick="clearRsFilter()">✕ إلغاء الفلتر (عرض الكل)</button>':'<span style="font-size:11.5px;font-weight:800;color:#64748b;padding-bottom:9px">لا يوجد فلتر — معروض كامل السجل</span>'}
       </div>
+    </div>
+  </div>`;
+
+  // ——— بطاقات الملخص ———
+  const kpi=(g,glow,ic,title,val,unit,foot)=>`<div class="kpi" style="background:linear-gradient(135deg,${g});--kg:${glow}">
+      <span class="kpi-ic">${ic}</span>
+      <div class="kpi-t">${ic} ${title}</div>
+      <div class="kpi-v">${val}</div>
+      ${unit?`<div class="kpi-u">${unit}</div>`:''}
+      ${foot?`<div class="kpi-f">${foot}</div>`:''}
     </div>`;
-  }).join('');
+  const balLabel=hasFilter?'الرصيد الختامي':'الرصيد الحالي';
+  const kpiCards=`<div class="ovkpis">
+    ${kpi(dispBalD>=0?'#fbbf24,#b45309':'#f87171,#991b1b',dispBalD>=0?'rgba(217,119,6,.55)':'rgba(153,27,27,.55)','💛',balLabel+' (دينار)',fmtM(dispBalD),'د.ع',`الافتتاحي: ${fmtM(dispOpDinar)}`)}
+    ${kpi(dispBalDol>=0?'#60a5fa,#1d4ed8':'#f87171,#991b1b',dispBalDol>=0?'rgba(29,78,216,.55)':'rgba(153,27,27,.55)','💵',balLabel+' (دولار)',fmtM(dispBalDol),'$',`الافتتاحي: ${fmtM(dispOpDollar)}`)}
+    ${kpi('#34d399,#047857','rgba(5,150,105,.55)','🟢','إجمالي الدائن',fmtM(dispIn),'د.ع',dispInDol?`دولار: ${fmtM(dispInDol)} $`:'')}
+    ${kpi('#f87171,#b91c1c','rgba(185,28,28,.55)','🔴','إجمالي المدين',fmtM(dispOut),'د.ع',dispOutDol?`دولار: ${fmtM(dispOutDol)} $`:'')}
+    ${kpi('#fb923c,#c2410c','rgba(194,65,12,.55)','💠','العمولات',fmtM(dispComm),'د.ع',dispCommDollar?`دولار: ${fmtM(dispCommDollar)} $`:'')}
+    ${kpi('#3b82f6,#1d4ed8','rgba(37,99,235,.55)','🧾','عدد الحركات',fmtM(dispCount),'حركة',`الأشهر: ${sortedMonths.filter(m=>m).length}`)}
+  </div>`;
+
+  // ——— مطابقة كشف الصيرفة (PDF) ———
   const _rCur=S.rafidPdfData?S.rafidPdfData.currency:'dinar';
   const _rAF=_rCur==='dinar'?'dinar':'dollar';
-  const _rDir=e=>((_rCur==='dinar'?e.type_dinar:e.type_dollar)||'مدين').trim();
+  const _rDir=e=>rafidDir(e,_rCur);
   const _rpFrom=S.rafidPdfFrom||'';
   const _rpTo=S.rafidPdfTo||'';
-  const rafidPdfFilteredList=withBal.filter(e=>{
+  const rafidPdfFilteredList=listWithBal.filter(e=>{
     if(!e.date)return true;
     if(_rpFrom&&e.date<_rpFrom)return false;
     if(_rpTo&&e.date>_rpTo)return false;
     return true;
   });
-  const rafidPdfSection='<div class="card" style="margin-bottom:14px;background:#fffbeb;border:2px solid #f59e0b">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-    +'<h3 style="font-size:13px;font-weight:900;color:#92400e;margin:0">🔄 مطابقة كشف الصيرفة</h3>'
-    +(S.rafidPdfData?'<button onclick="S.rafidPdfData=null;renderContent()" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:700">✕ مسح</button>':'')
-    +'</div>'
-    +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-    +'<div><label style="font-size:11px;font-weight:700;color:#92400e;display:block;margin-bottom:2px">من تاريخ</label>'
-    +'<input type="date" value="'+_rpFrom+'" onchange="S.rafidPdfFrom=this.value;renderContent()" style="border:1px solid #fde68a;border-radius:6px;padding:4px 8px;font-size:12px;color:#0f172a"></div>'
-    +'<div><label style="font-size:11px;font-weight:700;color:#92400e;display:block;margin-bottom:2px">إلى تاريخ</label>'
-    +'<input type="date" value="'+_rpTo+'" onchange="S.rafidPdfTo=this.value;renderContent()" style="border:1px solid #fde68a;border-radius:6px;padding:4px 8px;font-size:12px;color:#0f172a"></div>'
-    +(_rpFrom||_rpTo?'<span style="font-size:11px;color:#92400e;font-weight:700;margin-top:16px">✔ '+rafidPdfFilteredList.length+' حركة في الفترة</span>':'<span style="font-size:11px;color:#64748b;margin-top:16px">حدد الفترة لتصفية الحركات قبل المطابقة</span>')
-    +'</div>'
-    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
-    +'<input type="file" accept=".pdf" id="rpdf_d" style="display:none" onchange="importRafidPDF(this,\'dinar\')">'
-    +'<input type="file" accept=".pdf" id="rpdf_dl" style="display:none" onchange="importRafidPDF(this,\'dollar\')">'
-    +'<button onclick="document.getElementById(\'rpdf_d\').click()" style="background:#ca8a04;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:700">📂 PDF دينار</button>'
-    +'<button onclick="document.getElementById(\'rpdf_dl\').click()" style="background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:700">📂 PDF دولار</button>'
-    +(S.rafidPdfData?'<span style="font-size:11px;color:#92400e;font-weight:700">📄 '+S.rafidPdfData.fileName+' | '+(S.rafidPdfData.currency==='dinar'?'دينار':'دولار')+' | '+S.rafidPdfData.rows.length+' حركة</span>':'<span style="font-size:11px;color:#64748b">اختر ملف PDF من كشف الصيرفة</span>')
-    +'</div>'
-    +(S.rafidPdfData?renderPDFMatchResult(S.rafidPdfData,rafidPdfFilteredList,_rAF,_rDir,'description',_rCur):'')
-    +'</div>';
-  return`${rafidPdfSection}<div class="card" style="margin-bottom:14px;background:#fffbeb;border:2px solid #f59e0b">
-  <h3 style="font-size:13px;font-weight:900;color:#92400e;margin-bottom:10px">📄 طباعة كشف الحساب بفترة محددة</h3>
-  <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
-    <div><label class="lbl">من تاريخ</label><input class="inp" type="date" id="rs_from" style="width:155px"></div>
-    <div><label class="lbl">إلى تاريخ</label><input class="inp" type="date" id="rs_to" style="width:155px"></div>
-    <button class="btn" style="background:#ca8a04;color:#fff;padding:9px 18px" onclick="generateRafidRangePDF('dinar')">📄 PDF الدينار</button>
-    <button class="btn" style="background:#1d4ed8;color:#fff;padding:9px 18px" onclick="generateRafidRangePDF('dollar')">💵 PDF الدولار</button>
-  </div>
-</div>
-<h2 style="font-size:15px;font-weight:900;margin-bottom:16px;color:#92400e">📜 كشف الحساب — حسابات سيد رافد</h2>
-  <div class="card" style="margin-bottom:18px;border:2px solid #f59e0b;background:#fffbeb">
-    <h3 style="font-size:14px;font-weight:900;color:#92400e;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #fde68a">📊 ملخص إجمالي</h3>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">
-      <div style="background:#ecfdf5;border-radius:12px;padding:14px;text-align:center;border:2px solid #6ee7b7"><div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">🟢 إجمالي الدائن</div><div style="font-size:20px;font-weight:900;color:#059669">${fmtM(grandDainD)}</div><div style="font-size:10px;color:#065f46;margin-top:3px">د.ع</div></div>
-      <div style="background:#fef2f2;border-radius:12px;padding:14px;text-align:center;border:2px solid #fca5a5"><div style="font-size:11px;color:#7f1d1d;font-weight:700;margin-bottom:6px">🔴 إجمالي المدين</div><div style="font-size:20px;font-weight:900;color:#dc2626">${fmtM(grandMadinD)}</div><div style="font-size:10px;color:#7f1d1d;margin-top:3px">د.ع</div></div>
-      <div style="background:${curBalD>=0?'#fffbeb':'#fef2f2'};border-radius:12px;padding:14px;text-align:center;border:2px solid ${curBalD>=0?'#fde68a':'#fca5a5'}"><div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:6px">💛 الرصيد الحالي</div><div style="font-size:22px;font-weight:900;color:${curBalD>=0?'#ca8a04':'#dc2626'}">${fmtM(curBalD)}</div><div style="font-size:10px;margin-top:3px">${curBalD>=0?'✅':'⚠️'}</div></div>
+  const rafidPdfSection=`<div class="card ovtable no-print">
+    <div class="ovsec" style="--sc:#b45309;--sc2:#fbbf24">
+      <span class="ovsec-t">🔄 مطابقة كشف الصيرفة</span>
+      <span style="display:flex;align-items:center;gap:8px">
+        ${S.rafidPdfData?`<span class="ovsec-b">📄 ${esc(S.rafidPdfData.fileName)} · ${S.rafidPdfData.currency==='dinar'?'دينار':'دولار'} · ${S.rafidPdfData.rows.length} حركة</span><button class="btn" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.32);font-size:11px;padding:6px 12px" onclick="S.rafidPdfData=null;renderContent()">✕ مسح</button>`:'<span class="ovsec-b">لم يُرفَع ملف بعد</span>'}
+      </span>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
-      <div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px">عدد الحركات</div><div style="font-size:22px;font-weight:900;color:#0f172a">${allList.length}</div></div>
-      <div style="background:#fffbeb;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">الرصيد الافتتاحي</div><div style="font-size:14px;font-weight:900;color:#ca8a04">${fmtM(opening.dinar)} د.ع</div></div>
-      <div style="background:#fef3c7;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">عمولات دينار</div><div style="font-size:14px;font-weight:900;color:#f59e0b">${fmtM(grandComm)} د.ع</div></div>
-      <div style="background:#fef3c7;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px">عمولات دولار</div><div style="font-size:14px;font-weight:900;color:#f59e0b">${fmtM(grandCommDol)} $</div></div>
+    <div style="padding:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0">
+      <div class="ovfilter-row">
+        <div class="ovfield"><label class="lbl">📅 من تاريخ</label><input class="inp" type="date" value="${_rpFrom}" onchange="S.rafidPdfFrom=this.value;renderContent()"></div>
+        <div class="ovfield"><label class="lbl">📅 إلى تاريخ</label><input class="inp" type="date" value="${_rpTo}" onchange="S.rafidPdfTo=this.value;renderContent()"></div>
+        <div class="ovchips">
+          <input type="file" accept=".pdf" id="rpdf_d" style="display:none" onchange="importRafidPDF(this,'dinar')">
+          <input type="file" accept=".pdf" id="rpdf_dl" style="display:none" onchange="importRafidPDF(this,'dollar')">
+          <button class="btn" style="background:#ca8a04;color:#fff;font-size:12px" onclick="document.getElementById('rpdf_d').click()">📂 PDF دينار</button>
+          <button class="btn" style="background:#1d4ed8;color:#fff;font-size:12px" onclick="document.getElementById('rpdf_dl').click()">📂 PDF دولار</button>
+        </div>
+      </div>
+      <div style="margin-top:10px;font-size:11.5px;font-weight:800;color:${_rpFrom||_rpTo?'#b45309':'#64748b'}">${_rpFrom||_rpTo?`✔ ${rafidPdfFilteredList.length} حركة ضمن فترة المطابقة`:'حدد فترة المطابقة قبل رفع ملف الصيرفة (اختياري)'}</div>
     </div>
-  </div>
-  <h3 style="font-size:13px;font-weight:900;margin-bottom:12px;color:#92400e">📅 الكشف الشهري</h3>
-  ${monthCards||'<div class="card" style="text-align:center;color:#64748b;padding:30px">لا توجد حركات</div>'}`;
+    ${S.rafidPdfData?`<div style="padding:14px">${renderPDFMatchResult(S.rafidPdfData,rafidPdfFilteredList,_rAF,_rDir,'description',_rCur)}</div>`:''}
+  </div>`;
+
+  // ——— بطاقة الطباعة بفترة مخصصة (مستقلة عن فلتر الصفحة) ———
+  const printCard=`<div class="card no-print" style="margin-bottom:18px;background:#fffbeb;border:2px solid #f59e0b">
+    <h3 style="font-size:13px;font-weight:900;color:#92400e;margin-bottom:10px">📄 طباعة كشف الحساب بفترة مخصصة <span style="font-size:11px;font-weight:700;color:#b45309">(مستقلة عن فلتر الصفحة أعلاه)</span></h3>
+    <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
+      <div><label class="lbl" for="rs_from">من تاريخ</label><input class="inp" type="date" id="rs_from" style="width:155px"></div>
+      <div><label class="lbl" for="rs_to">إلى تاريخ</label><input class="inp" type="date" id="rs_to" style="width:155px"></div>
+      <button class="btn" style="background:#ca8a04;color:#fff;padding:9px 18px" onclick="generateRafidRangePDF('dinar')">📄 PDF الدينار</button>
+      <button class="btn" style="background:#1d4ed8;color:#fff;padding:9px 18px" onclick="generateRafidRangePDF('dollar')">💵 PDF الدولار</button>
+    </div>
+  </div>`;
+
+  // ——— جدول حركات الفترة ———
+  const trxRows=filtWithBal.map((e,i)=>{
+    const d=safeNum(e.dinar),dl=safeNum(e.dollar),com=safeNum(e.commission),commD=safeNum(e.commission_dollar);
+    const isInD=rafidDir(e,'dinar')==='دائن',isInDol=rafidDir(e,'dollar')==='دائن';
+    return`<tr><td class="ovtd" style="color:#94a3b8">${i+1}</td><td class="ovtd" style="font-size:11px;color:#475569;white-space:nowrap">${esc(e.date||'—')}</td><td class="ovtd" style="font-size:11px;text-align:right;max-width:200px">${esc(e.description||'')}</td><td class="ovtd" style="font-size:11px">${esc(e.beneficiary||'')}</td><td class="ovtd" style="font-size:11px">${esc(e.receiver||'')}</td><td class="ovtd" style="background:#f0fdf4;color:#059669">${isInD&&d?fmtM(d):'—'}</td><td class="ovtd" style="background:#fef2f2;color:#dc2626">${!isInD&&d?fmtM(d):'—'}</td><td class="ovtd" style="background:#eff6ff;color:#2563eb">${isInDol&&dl?fmtM(dl):'—'}</td><td class="ovtd" style="background:#faf5ff;color:#7c3aed">${!isInDol&&dl?fmtM(dl):'—'}</td><td class="ovtd"><span class="badge" style="background:#f1f5f9;color:#334155">${esc(e.op_type||'—')}</span></td><td class="ovtd" style="color:#d97706;font-size:11px">${com?fmtM(com):'—'}</td><td class="ovtd" style="color:#d97706;font-size:11px">${commD?'$'+fmtM(commD):'—'}</td><td class="ovtd" style="background:#fffbeb;color:${e.bal_dinar>=0?'#0f172a':'#dc2626'};font-weight:900">${fmtM(e.bal_dinar)}</td><td class="ovtd" style="background:#eff6ff;color:${e.bal_dollar>=0?'#1d4ed8':'#dc2626'};font-weight:900">${fmtM(e.bal_dollar)}</td></tr>`;
+  }).join('');
+  const trxTable=`<div class="card ovtable">
+    <div class="ovsec" style="--sc:#92400e;--sc2:#f59e0b">
+      <span class="ovsec-t">🧾 حركات الفترة — ${periodLabel}</span>
+      <span class="ovsec-b">${fmtM(dispCount)} حركة</span>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:1020px">
+      <thead><tr><th class="ovth">ت</th><th class="ovth">التاريخ</th><th class="ovth">البيان</th><th class="ovth">الجهة المستفيدة</th><th class="ovth">المستلم / المسلم</th><th class="ovth" style="color:#047857">دائن دينار</th><th class="ovth" style="color:#b91c1c">مدين دينار</th><th class="ovth" style="color:#1d4ed8">دائن دولار</th><th class="ovth" style="color:#7c3aed">مدين دولار</th><th class="ovth">نوع العملية</th><th class="ovth" style="color:#b45309">عمولة د.ع</th><th class="ovth" style="color:#b45309">عمولة $</th><th class="ovth">رصيد الدينار</th><th class="ovth">رصيد الدولار</th></tr></thead>
+      <tbody><tr class="ovopen"><td class="ovtd" colspan="5" style="text-align:right">◀ الرصيد الافتتاحي للفترة</td><td class="ovtd" colspan="7"></td><td class="ovtd">${fmtM(dispOpDinar)}</td><td class="ovtd">${fmtM(dispOpDollar)}</td></tr>
+      ${trxRows||'<tr><td class="ovtd" colspan="14" style="padding:26px;color:#94a3b8">لا توجد حركات ضمن هذه الفترة</td></tr>'}</tbody>
+      <tfoot><tr class="ovtot"><td class="ovtd" colspan="5" style="text-align:right">الإجماليات / الرصيد الختامي</td>
+        <td class="ovtd" style="color:#6ee7b7">${fmtM(dispIn)}</td><td class="ovtd" style="color:#fca5a5">${fmtM(dispOut)}</td>
+        <td class="ovtd" style="color:#93c5fd">${fmtM(dispInDol)}</td><td class="ovtd" style="color:#c4b5fd">${fmtM(dispOutDol)}</td>
+        <td class="ovtd"></td><td class="ovtd" style="color:#fcd34d">${fmtM(dispComm)}</td><td class="ovtd" style="color:#fcd34d">${fmtM(dispCommDollar)}</td>
+        <td class="ovtd" style="color:#fcd34d">${fmtM(dispBalD)}</td><td class="ovtd" style="color:#93c5fd">${fmtM(dispBalDol)}</td></tr></tfoot>
+    </table></div></div>`;
+
+  // ——— بطاقات الأشهر (تُفلتر بالفترة، وأرقامها دائماً لكامل الشهر) ———
+  const fromM=rsFrom?rsFrom.slice(0,7):'',toM=rsTo?rsTo.slice(0,7):'';
+  const shownMonths=sortedMonths.filter(m=>m&&(!fromM||m>=fromM)&&(!toM||m<=toM));
+  const monthCards=shownMonths.slice().reverse().map(m=>{
+    const mList=months[m],carry=carryMap[m];
+    const mIn=sumDir(mList,'dinar','دائن','dinar');
+    const mOut=sumDir(mList,'dinar','مدين','dinar');
+    const mInDol=sumDir(mList,'dollar','دائن','dollar');
+    const mOutDol=sumDir(mList,'dollar','مدين','dollar');
+    const lastBal=mList[mList.length-1];
+    return`<div class="card ksmonth rs">
+      <div class="ksmonth-h">
+        <span style="font-weight:900;font-size:14px;color:#92400e">📅 ${m}</span>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span class="badge" style="background:#fef3c7;color:#b45309">${mList.length} حركة</span>
+          <button class="ksbtn" style="background:#1e3a5f" onclick="S.rafidMonth='${m}';S.view='rafid_accounts';renderContent()">📂 فتح</button>
+          <button class="ksbtn" style="background:#92400e" onclick="generateRafidPDF('${m}','print')">🖨️ طباعة</button>
+          <button class="ksbtn" style="background:#1d4ed8" onclick="generateRafidPDF('${m}','save')">💾 PDF</button>
+        </div>
+      </div>
+      <div class="kscarry" style="background:#fef3c7;border-color:#fde68a">
+        <span style="font-size:11px;font-weight:900;color:#92400e">🔄 رصيد مرحّل</span>
+        <span style="font-size:12.5px;font-weight:900;color:${carry.dinar>=0?'#b45309':'#dc2626'}">${fmtM(carry.dinar)} د.ع</span>
+        <span style="font-size:12.5px;font-weight:900;color:${carry.dollar>=0?'#1d4ed8':'#dc2626'}">${fmtM(carry.dollar)} $</span>
+      </div>
+      <div class="ksgrid">
+        <div class="ksbox" style="background:#f0fdf4;border-color:#a7f3d0"><div style="color:#047857">🟢 دائن دينار</div><b style="color:#059669">${fmtM(mIn)} د.ع</b></div>
+        <div class="ksbox" style="background:#fef2f2;border-color:#fecaca"><div style="color:#b91c1c">🔴 مدين دينار</div><b style="color:#dc2626">${fmtM(mOut)} د.ع</b></div>
+        <div class="ksbox" style="background:#eff6ff;border-color:#bfdbfe"><div style="color:#1d4ed8">💵 دائن دولار</div><b style="color:#2563eb">${fmtM(mInDol)} $</b></div>
+        <div class="ksbox" style="background:#faf5ff;border-color:#ddd6fe"><div style="color:#7c3aed">💸 مدين دولار</div><b style="color:#7c3aed">${fmtM(mOutDol)} $</b></div>
+        <div class="ksbox" style="background:#fffbeb;border-color:#fde68a"><div style="color:#b45309">💛 رصيد الدينار</div><b style="color:${lastBal&&lastBal.bal_dinar>=0?'#ca8a04':'#dc2626'}">${fmtM(lastBal?lastBal.bal_dinar:carry.dinar)} د.ع</b></div>
+        <div class="ksbox" style="background:#f8fafc;border-color:#e2e8f0"><div style="color:#334155">🖤 رصيد الدولار</div><b style="color:${lastBal&&lastBal.bal_dollar>=0?'#1d4ed8':'#dc2626'}">${fmtM(lastBal?lastBal.bal_dollar:carry.dollar)} $</b></div>
+      </div>
+    </div>`;}).join('');
+  const monthSection=`<div class="card ovtable">
+    <div class="ovsec" style="--sc:#b45309;--sc2:#fbbf24">
+      <span class="ovsec-t">📅 الكشف الشهري</span>
+      <span class="ovsec-b">${shownMonths.length} شهر${hasFilter?' · ضمن الفترة':''}</span>
+    </div>
+    <div style="padding:14px;background:#f8fafc">
+      <div style="font-size:11px;font-weight:800;color:#64748b;margin-bottom:10px">أرقام كل بطاقة تخصّ الشهر كاملاً (غير مقصوصة بالفترة) — الفلتر يحدّد الأشهر المعروضة فقط</div>
+      <div class="ksmonths">${monthCards||'<div style="text-align:center;color:#94a3b8;padding:26px;font-weight:800">لا توجد أشهر ضمن هذه الفترة</div>'}</div>
+    </div>
+  </div>`;
+
+  return hero+filters+kpiCards+rafidPdfSection+printCard+trxTable+monthSection;
 }
 
 function importRafidXLSX(input){
@@ -5674,7 +5833,7 @@ async function runBackup(interactive){
     await w.write(new Blob([txt],{type:'application/json'}));
     await w.close();
     var removed=await bkRotate(dir);
-    DB.set('backup_last_date',now.toISOString().split('T')[0]);
+    DB.set("backup_last_date",today());
     DB.set('backup_last_time',bkStamp(now));
     DB.set('backup_last_size',txt.length);
     if(interactive){
@@ -5701,7 +5860,7 @@ function downloadBackupFallback(){
   a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));
   a.download=bkFileName();
   a.click();
-  DB.set('backup_last_date',new Date().toISOString().split('T')[0]);
+  DB.set("backup_last_date",today());
   DB.set('backup_last_time',bkStamp());
   DB.set('backup_last_size',txt.length);
   showToast('تم تنزيل النسخة (بلا مجلّد ثابت)','success');

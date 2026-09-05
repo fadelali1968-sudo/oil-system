@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام المشتريات النفطية v44.9</title>
+<title>نظام المشتريات النفطية v46.0</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='14' y='16' width='36' height='34' rx='5' fill='%231e3a5f'/><ellipse cx='32' cy='16' rx='18' ry='6' fill='%232563eb'/><ellipse cx='32' cy='50' rx='18' ry='6' fill='%231e293b'/><rect x='14' y='26' width='36' height='5' fill='%23f59e0b'/><rect x='14' y='37' width='36' height='5' fill='%23f59e0b'/><text x='32' y='35' text-anchor='middle' fill='%2334d399' font-size='10' font-weight='bold' font-family='Arial'>OIL</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -13,7 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy, where, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, deleteUser as fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   const firebaseConfig = {
     apiKey: "AIzaSyAEQ4T5W2sddGkrVkbq2KroZPmFy6BPPgU",
@@ -26,7 +26,7 @@
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const auth = getAuth(app);
-  window._fb = { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy };
+  window._fb = { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy, where, limit };
   window._auth = { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider };
   window._fbReady = true;
   document.dispatchEvent(new Event('fb-ready'));
@@ -188,15 +188,73 @@
 // ===== قاعدة البيانات =====
 const DB = {
   get(key, def) { try { const v=localStorage.getItem('oil_'+key); return v?JSON.parse(v):(def!==undefined?def:[]); } catch { return (def!==undefined?def:[]); } },
-  set(key, val) { try { localStorage.setItem('oil_'+key, JSON.stringify(val)); } catch {} }
+  // تُرجع true/false — كان `catch {}` يبتلع امتلاء مساحة المتصفح فيكمل النظام كأن الحفظ نجح
+  set(key, val) { try { localStorage.setItem('oil_'+key, JSON.stringify(val)); return true; } catch(err) { _dbWriteFailed(key,err); return false; } },
+  // حجم البيانات المخزَّنة بالميغابايت (تقريبي)
+  usageMB() { try { let n=0; for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf('oil_')===0)n+=k.length+(localStorage.getItem(k)||'').length;} return n*2/1048576; } catch { return 0; } }
 };
+let _dbFailAt=0;
+function _dbWriteFailed(key,err){
+  console.error('فشل حفظ «'+key+'» على هذا الجهاز:',err);
+  const now=Date.now();
+  if(now-_dbFailAt<30000)return;   // لا تُغرق المستخدم برسائل متتالية أثناء إعادة الرسم
+  _dbFailAt=now;
+  try{ if(typeof showToast==='function') showToast('❌ تعذّر الحفظ على هذا الجهاز — مساحة المتصفح ممتلئة. صدّر نسخة احتياطية فوراً قبل إغلاق الصفحة.','error',20000); }catch(e){}
+}
 
+// ===== طابور الكتابات المعلَّقة إلى Firebase =====
+// كانت FDB.save تبتلع خطأها وتُرجع بنجاح دائماً، وsyncFromCloud تعتبر Firebase المصدر الوحيد
+// للقيود والمبيعات — فأي سجل لم يصل السحابة (انقطاع نت/رفض قواعد) كان يُمحى صامتاً عند أول تحميل.
+const FDB_QUEUE_KEY='fdb_pending';
+function _fdbQueueAll(){ const q=DB.get(FDB_QUEUE_KEY,{}); return (q&&typeof q==='object'&&!Array.isArray(q))?q:{}; }
+function _fdbQueue(col,id,data){ if(!col||!id||data===undefined)return; const q=_fdbQueueAll(); q[col+'/'+id]={col:col,id:id,data:data,at:Date.now()}; DB.set(FDB_QUEUE_KEY,q); _fdbBadge(); }
+function _fdbUnqueue(col,id){ const q=_fdbQueueAll(),k=col+'/'+id; if(q[k]){ delete q[k]; DB.set(FDB_QUEUE_KEY,q); _fdbBadge(); } }
+function fdbPendingCount(){ return Object.keys(_fdbQueueAll()).length; }
+// معرّفات مجموعة بعينها ما زالت معلَّقة — تحمي syncFromCloud من محوها
+function fdbPendingIds(col){ const out={}; const q=_fdbQueueAll(); Object.keys(q).forEach(function(k){ if(q[k].col===col) out[q[k].id]=1; }); return out; }
+async function flushFdbQueue(silent){
+  const q=_fdbQueueAll(),items=Object.keys(q).map(function(k){return q[k];});
+  if(!items.length){ if(!silent&&typeof showToast==='function')showToast('لا توجد سجلات معلَّقة — كل شيء مرفوع ☁️','success',3000); return {ok:0,fail:0}; }
+  if(!window._fbReady){ if(!silent&&typeof showToast==='function')showToast('لم يتصل Firebase بعد — حاول بعد قليل','warning',4000); return {ok:0,fail:items.length}; }
+  if(!silent&&typeof showToast==='function')showToast('⏳ جاري رفع '+items.length+' سجل معلَّق...','info',3000);
+  let ok=0,fail=0;
+  for(const it of items){
+    try{ const {db,doc,setDoc}=window._fb; await setDoc(doc(db,it.col,it.id),{...it.data,_updated:Date.now()}); _fdbUnqueue(it.col,it.id); ok++; }
+    catch(e){ fail++; }
+  }
+  if(!silent&&typeof showToast==='function'){
+    if(fail)showToast('☁️ رُفع '+ok+' | ⚠️ ما زال '+fail+' معلَّقاً — تحقّق من الاتصال','warning',7000);
+    else showToast('✅ رُفعت كل السجلات المعلَّقة ('+ok+') إلى السحابة ☁️','success',5000);
+  }
+  return {ok:ok,fail:fail};
+}
+// شارة ثابتة تُظهر وجود سجلات لم تصل السحابة — الضغط عليها يعيد المحاولة
+function _fdbBadge(){
+  try{
+    if(!document.body)return;
+    const n=fdbPendingCount(); let b=document.getElementById('_fdb_badge');
+    if(!n){ if(b)b.remove(); return; }
+    if(!b){
+      b=document.createElement('div'); b.id='_fdb_badge';
+      b.style.cssText='position:fixed;bottom:14px;left:14px;z-index:9998;background:#b45309;color:#fff;border-radius:10px;padding:9px 14px;font-family:Cairo,sans-serif;font-weight:900;font-size:12px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.35)';
+      b.title='سجلات محفوظة على هذا الجهاز فقط ولم تصل Firebase — اضغط لإعادة المحاولة';
+      b.onclick=function(){ flushFdbQueue(false); };
+      document.body.appendChild(b);
+    }
+    b.textContent='⚠️ '+n+' سجل لم يصل السحابة — اضغط للرفع';
+  }catch(e){}
+}
 const FDB = {
+  // تُرجع true عند النجاح الفعلي، وfalse مع وضع السجل بطابور إعادة المحاولة
   async save(col, id, data) {
-    try { if(!window._fbReady) return; const {db,doc,setDoc}=window._fb; await setDoc(doc(db,col,id),{...data,_updated:Date.now()}); } catch(e) { console.warn('FDB.save error:',e); }
+    if(!window._fbReady){ _fdbQueue(col,id,data); return false; }
+    try { const {db,doc,setDoc}=window._fb; await setDoc(doc(db,col,id),{...data,_updated:Date.now()}); _fdbUnqueue(col,id); return true; }
+    catch(e) { console.warn('FDB.save error:',e); _fdbQueue(col,id,data); return false; }
   },
   async delete(col, id) {
-    try { if(!window._fbReady) return; const {db,doc,deleteDoc}=window._fb; await deleteDoc(doc(db,col,id)); } catch(e) { console.warn('FDB.delete error:',e); }
+    _fdbUnqueue(col,id);   // حذف سجل معلَّق يُلغي رفعه
+    if(!window._fbReady) return false;
+    try { const {db,doc,deleteDoc}=window._fb; await deleteDoc(doc(db,col,id)); return true; } catch(e) { console.warn('FDB.delete error:',e); return false; }
   },
   async getAll(col) {
     try { if(!window._fbReady) return null; const {db,collection,getDocs}=window._fb; const snap=await getDocs(collection(db,col)); return snap.docs.map(d=>d.data()); } catch(e) { return null; }
@@ -659,10 +717,15 @@ async function syncFromCloud(silent=false) {
     // المزامنة: Firebase هو المصدر الوحيد للحقيقة - نستبدل localStorage كاملاً
     if(Array.isArray(entries)){
       const byId={};entries.forEach(e=>{byId[e.id]=e;});
+      // Firebase هو المصدر الوحيد — إلا سجلاً محلياً ما زال بطابور الرفع، وإلا مُحي صامتاً
+      const pendE=fdbPendingIds('entries');
+      DB.get('entries',[]).forEach(e=>{ if(e&&e.id&&pendE[e.id]&&!byId[e.id]) byId[e.id]=e; });
       DB.set('entries',Object.values(byId));
     }
     if(Array.isArray(sales)){
       const byId={};sales.forEach(s=>{byId[s.id]=s;});
+      const pendS=fdbPendingIds('sales');
+      DB.get('sales',[]).forEach(x=>{ if(x&&x.id&&pendS[x.id]&&!byId[x.id]) byId[x.id]=x; });
       DB.set('sales',Object.values(byId));
     }
     if(Array.isArray(salaf)) DB.set('salaf',salaf);
@@ -699,7 +762,7 @@ async function syncFromCloud(silent=false) {
       const rafidAccounts = await FDB.getAll('rafid_accounts'); if(rafidAccounts&&rafidAccounts.length) DB.set('rafid_accounts',rafidAccounts);
       const rafidOpArr = await FDB.getAll('rafid_opening'); if(rafidOpArr&&rafidOpArr.length){const op=rafidOpArr.find(x=>x.id==='opening')||rafidOpArr[0];if(op)DB.set('rafid_opening',{dinar:parseFloat(op.dinar||0),dollar:parseFloat(op.dollar||0)});}
     }
-    const settings=await FDB.getAll('settings');if(settings&&settings.length){const fd=settings.find(x=>x.id==='factories');if(fd&&fd.list&&fd.list.length){DB.set('factories',fd.list);}const kot=settings.find(x=>x.id==='kroob_op_types');if(kot&&kot.list&&kot.list.length)DB.set('kroob_op_types',kot.list);const fq=settings.find(x=>x.id==='factory_quotas');if(fq&&fq.map&&typeof fq.map==='object')DB.set('factory_quotas',fq.map);const qh=settings.find(x=>x.id==='quota_history');if(qh&&Array.isArray(qh.list))DB.set('quota_history',qh.list);}
+    const settings=await FDB.getAll('settings');if(settings&&settings.length){const fd=settings.find(x=>x.id==='factories');if(fd&&fd.list&&fd.list.length){DB.set('factories',fd.list);}const kot=settings.find(x=>x.id==='kroob_op_types');if(kot&&kot.list&&kot.list.length)DB.set('kroob_op_types',kot.list);const fq=settings.find(x=>x.id==='factory_quotas');if(fq&&fq.map&&typeof fq.map==='object')DB.set('factory_quotas',fq.map);const qh=settings.find(x=>x.id==='quota_history');if(qh&&Array.isArray(qh.list))DB.set('quota_history',qh.list);const ea=settings.find(x=>x.id==='expense_entity_aliases');if(ea&&ea.map&&typeof ea.map==='object')DB.set('expense_entity_aliases',ea.map);}
     const expEntArr=await FDB.getAll('expense_entities');if(expEntArr&&expEntArr.length)DB.set('expense_entities',expEntArr);
     if(!silent) showToast('تمت المزامنة مع Firebase','info',2000);
     return true;
@@ -837,6 +900,53 @@ function showToast(msg, type='success', duration=3000){
 
 function fmt(v,d=3){ const n=parseFloat(v); if(!n||isNaN(n))return'0'; const fixed=n.toFixed(d); const parts=fixed.split('.'); parts[0]=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,','); const dec=parts[1]?parts[1].replace(/0+$/,''):''; return dec?parts[0]+'.'+dec:parts[0]; }
 function safeNum(v){ const n=parseFloat(v); return isNaN(n)?0:n; }
+// ===== قراءة حقول المبالغ =====
+// لصق «1,500,000» من Excel بحقل type=number يجعل value="" وvalidity.badInput=true،
+// فكانت parseFloat تُرجع صفراً وتُحفَظ الحركة بصفر مع رسالة نجاح خضراء.
+function normalizeNumText(t){
+  let x=String(t==null?'':t)
+    .replace(/[\u0660-\u0669]/g,function(d){return String.fromCharCode(d.charCodeAt(0)-0x0660+48);})  // ٠-٩
+    .replace(/[\u06F0-\u06F9]/g,function(d){return String.fromCharCode(d.charCodeAt(0)-0x06F0+48);})  // ۰-۹
+    .replace(/\u066B/g,'.')                                   // الفاصلة العشرية العربية ٫
+    .replace(/[\u066C\u060C,\s\u00A0]/g,'')                   // فواصل الآلاف والمسافات
+    .replace(/[\u200B-\u200F\u202A-\u202E\uFEFF]/g,'')        // محارف الاتجاه غير المرئية
+    .replace(/[^\d.\-]/g,'');
+  const neg=x.charAt(0)==='-';
+  x=x.replace(/-/g,'');
+  const i=x.indexOf('.');
+  if(i>=0)x=x.slice(0,i+1)+x.slice(i+1).replace(/\./g,'');    // نقطة عشرية واحدة فقط
+  return (neg?'-':'')+x;
+}
+// تُرجع NaN إذا كان المكتوب بالحقل غير صالح رقمياً — لا تُعامَل كصفر أبداً
+function amtVal(id){
+  const e=document.getElementById(id);
+  if(!e)return 0;
+  if(e.validity&&e.validity.badInput)return NaN;
+  const v=normalizeNumText(e.value);
+  if(v===''||v==='-'||v==='.')return 0;
+  const n=parseFloat(v);
+  return isNaN(n)?NaN:n;
+}
+function amtVal0(id){ const n=amtVal(id); return isNaN(n)?0:n; }
+function badAmt(){ for(let i=0;i<arguments.length;i++) if(isNaN(arguments[i])) return true; return false; }
+function warnBadAmt(){ showToast('⚠️ مبلغ غير صالح بأحد الحقول — أزل الفواصل واكتب الرقم بأرقام إنكليزية','error',7000); }
+// تنظيف النص الملصوق بحقول الأرقام قبل أن يرفضه المتصفح ويجعله فارغاً
+document.addEventListener('paste',function(ev){
+  const t=ev.target;
+  if(!t||t.tagName!=='INPUT'||t.type!=='number')return;
+  const cd=ev.clipboardData||window.clipboardData; if(!cd)return;
+  let raw; try{ raw=cd.getData('text'); }catch(e){ return; }
+  if(raw==null)return;
+  const clean=normalizeNumText(raw);
+  if(clean===String(raw).trim())return;
+  ev.preventDefault();
+  t.value=clean;
+  t.dispatchEvent(new Event('input',{bubbles:true}));
+  t.dispatchEvent(new Event('change',{bubbles:true}));
+},true);
+// تهريب قيمة لتوضع داخل سلسلة JS بين علامتي اقتباس مفردتين داخل خاصية HTML
+// اسم جهة يحوي ' أو " كان يكسر أزرار الصفحة بالكامل
+function escJs(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/[\r\n]/g,' '); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtM(v){ var n=Math.round(safeNum(v)); return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g,','); }
 function fmtTon(v){ return fmt(sc(v)); }
@@ -870,6 +980,28 @@ function auditLog(action, details){
   if(logs.length > 500) logs.length = 500;
   DB.set('audit_log', logs);
   FDB.save('audit_log', entry.id, entry);
+}
+// ===== تقليم سجل التدقيق بالسحابة =====
+// محلياً السجل مقصوص على 500، لكن FDB.save كانت ترفع كل سجل بلا أي تنظيف فينمو بلا حد بـFirestore.
+// يعمل مرة واحدة يومياً للمدير فقط، بدفعة محدودة واستعلام مُقيَّد بالتاريخ (لا يقرأ المجموعة كاملة).
+const AUDIT_KEEP_DAYS=180;
+async function pruneCloudAuditLog(){
+  try{
+    if(!window._fbReady||!currentUser||!isManager())return 0;
+    const todayKey=today();
+    if(DB.get('audit_prune_date','')===todayKey)return 0;
+    DB.set('audit_prune_date',todayKey);
+    const {db,collection,getDocs,deleteDoc,doc,query,where,limit}=window._fb;
+    if(!where||!limit)return 0;
+    const cutoff=Date.now()-AUDIT_KEEP_DAYS*86400000;
+    const snap=await getDocs(query(collection(db,'audit_log'),where('time','<',cutoff),limit(300)));
+    if(snap.empty)return 0;
+    const ids=snap.docs.map(d=>d.id);
+    for(let i=0;i<ids.length;i+=20)
+      await Promise.all(ids.slice(i,i+20).map(id=>deleteDoc(doc(db,'audit_log',id))));
+    console.info('تم تقليم '+ids.length+' سجل تدقيق أقدم من '+AUDIT_KEEP_DAYS+' يوماً');
+    return ids.length;
+  }catch(e){ console.warn('audit prune:',e); return 0; }
 }
 function fixEntry(e){ return e; }
 function fixSale(s){ return s; }
@@ -1009,7 +1141,7 @@ function render() {
       '<aside style="width:225px;background:#0f172a;display:flex;flex-direction:column;flex-shrink:0;z-index:50">' +
         '<div style="padding:10px;background:#020617;border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
           '<div style="width:34px;height:34px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:11px;margin:0 auto 5px">OIL</div>' +
-          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v44.9</p>' +
+          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v46.0</p>' +
           '<p style="font-size:10px;color:#94a3b8;margin-top:2px;font-weight:900;letter-spacing:0.5px">'+(isM?'المدققين':'محاسب: '+currentUser.factory)+'</p>' +
         '</div>' +
         '<nav id="sidebar-nav" style="flex:1;padding:8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
@@ -1422,7 +1554,7 @@ tfoot td{font-weight:900;background:#f0f0f0}
 ${K||R?'<h2>🏦 ملخص الحسابات</h2>':''}
 ${acct('كشف الكروب',K)}
 ${acct('كشف حسابات سيد رافد',R)}
-<div class="foot">نظام مراقبة المشتريات النفطية v44.9 — طُبع بواسطة: ${esc((currentUser&&currentUser.name)||'')}</div>
+<div class="foot">نظام مراقبة المشتريات النفطية v46.0 — طُبع بواسطة: ${esc((currentUser&&currentUser.name)||'')}</div>
 <script>window.onload=()=>{window.print();};<\/script></body></html>`;
   const w=window.open('','_blank');
   if(!w){showToast('المتصفح منع فتح نافذة الطباعة','warning');return;}
@@ -1442,7 +1574,7 @@ function copyWhatsapp(){
   txt+=`\n*📦 المبيعات:*\n`;
   for(const f of facts){const d=anOf(saleAn,f).total;if(!d.cars)continue;sc2+=d.cars;sk+=d.kaban;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
   txt+=`━━━━━━━━━━━━━\n*الإجمالي:* ${sc2} سيارة | ${fmtKaban(sk)} كبان\n`;
-  txt+=`\n✅ نظام المراقبة v44.9`;
+  txt+=`\n✅ نظام المراقبة v46.0`;
   ovCopy(txt);
   const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}
 }
@@ -1521,7 +1653,7 @@ async function viewVoucherScan(entryId){
 }
 
 function updateProduct(){const r=gv('f_ref'),pt=el('f_pt');if(pt)pt.value=r==='مصفى كربلاء'?'HFO':r==='مصفى صلاح الدين'?'VR':'';}
-function calcTotal(){const l=parseFloat(el('f_liters')?.value||0),t=el('f_tot');if(t)t.textContent=fmtM(l*150)+' د.ع';}
+function calcTotal(){const l=amtVal0('f_liters'),t=el('f_tot');if(t)t.textContent=fmtM(l*150)+' د.ع';}
 function validateQty(inp){
   const raw=(inp.value||'').toString().trim();
   if(!raw)return;
@@ -1557,7 +1689,8 @@ async function saveEntry(){
   const sf=S.selectedFactory,e=S.editEntry||{};
   const v=gv('f_voucher'),date=gv('f_date'),ref=gv('f_ref'),pt=gv('f_pt');
   const driver=gv('f_driver'),car=gv('f_car'),loc=gv('f_loc'),po=gv('f_po');
-  const tons=parseFloat(el('f_tons')?.value||0),liters=parseFloat(el('f_liters')?.value||0),kg=parseFloat(el('f_kg')?.value||0);
+  const tons=amtVal('f_tons'),liters=amtVal('f_liters'),kg=amtVal('f_kg');
+  if(badAmt(tons,liters,kg)){warnBadAmt();return;}
   const allEntries=DB.get('entries',[]);
   const dupVoucher=allEntries.find(x=>x.voucher_no==v&&x.id!==(e.id||''));
   if(dupVoucher){showToast('رقم البوجر '+v+' موجود مسبقاً!','error');return;}
@@ -1578,7 +1711,9 @@ async function saveEntry(){
   const entry={id:entryId,voucher_no:v,refinery:ref,date,product_type:pt,driver_name:driver,car_no:car,location:loc,qty_tons:tons,natural_liters:liters,weight_kg:kg,po_no:po,price:150,transport_fee:42,refinery_price:150*liters,factory:fac,has_scan:hasScan,accountant:currentUser.email,time:Date.now()};
   let entries=DB.get('entries',[]);
   if(e.id){const idx=entries.findIndex(x=>x.id===e.id);if(idx>=0)entries[idx]=entry;else entries.push(entry);}else entries.push(entry);
-  DB.set('entries',entries);FDB.save('entries',entry.id,entry);
+  DB.set('entries',entries);
+  const _cloudOkE=await FDB.save('entries',entry.id,entry);
+  if(!_cloudOkE)showToast('⚠️ حُفظ على هذا الجهاز فقط — لم يصل السحابة. اضغط الشارة أسفل اليسار عند عودة الاتصال.','warning',9000);
   let drivers=DB.get('drivers',{});drivers[driver]={name:driver,car_no:car,location:loc};DB.set('drivers',drivers);
   FDB.save('drivers',driver.replace(/\s+/g,'_'),drivers[driver]);
   auditLog(e.id ? 'تعديل مشتريات' : 'إضافة مشتريات', `بوجر: ${entry.voucher_no} | سائق: ${entry.driver_name} | ${entry.factory}`);
@@ -1637,7 +1772,7 @@ function viewSaleForm(){
 }
 
 function updateSaleTotal(){
-  const kaban=parseFloat(el('s_kaban')?.value||0),price=parseFloat(el('s_price')?.value||0);
+  const kaban=amtVal0('s_kaban'),price=amtVal0('s_price');
   const t=el('s_total');if(t)t.value=fmtM(price*kaban);
 }
 let pendingLoadScanFile=null,pendingUnloadScanFile=null;
@@ -1651,10 +1786,12 @@ async function saveSale(){
   const sf=S.selectedFactory,e=S.editSale||{};
   const driver=gv('s_driver'),car=gv('s_car'),date=gv('s_date'),loc=gv('s_loc');
   const addr=gv('s_addr'),type=gv('s_type');
-  const kaban=parseFloat(el('s_kaban')?.value||0),liters=parseFloat(el('s_liters')?.value||0);
-  const advance=parseFloat(el('s_advance')?.value||0),received=parseFloat(el('s_received')?.value||0);
+  const kaban=amtVal('s_kaban'),liters=amtVal('s_liters');
+  const advance=amtVal('s_advance'),received=amtVal('s_received');
   const source=gv('s_source');
-  const salePrice=parseFloat(el('s_price')?.value||0),saleTotal=salePrice*kaban,driverBonus=parseFloat(el('s_bonus')?.value||0);
+  const salePrice=amtVal('s_price'),driverBonus=amtVal('s_bonus');
+  if(badAmt(kaban,liters,advance,received,salePrice,driverBonus)){warnBadAmt();return;}
+  const saleTotal=salePrice*kaban;
   if(!driver||!car||!date||!kaban){showToast('يرجى ملء الحقول الإلزامية (*)','warning');return;}
   const fac = sf==='الكل' ? gv('s_factory') : sf;
   if(!fac || sameFactory(fac,'الكل')){showToast('اختر المعمل الذي تخصّه هذه العملية من حقل «المعمل»','error',4000);return;}
@@ -1683,7 +1820,9 @@ async function saveSale(){
   let sales=DB.get('sales',[]);
   if(e.id){const idx=sales.findIndex(x=>x.id===e.id);if(idx>=0)sales[idx]=sale;else sales.push(sale);}else sales.push(sale);
   auditLog(e.id ? 'تعديل مبيعات' : 'إضافة مبيعات', `سائق: ${sale.driver_name} | ${sale.product_type} | ${sale.factory}`);
-  DB.set('sales',sales);FDB.save('sales',sale.id,sale);
+  DB.set('sales',sales);
+  const _cloudOkS=await FDB.save('sales',sale.id,sale);
+  if(!_cloudOkS)showToast('⚠️ حُفظ على هذا الجهاز فقط — لم يصل السحابة. اضغط الشارة أسفل اليسار عند عودة الاتصال.','warning',9000);
   let drivers=DB.get('drivers',{});drivers[driver]={name:driver,car_no:car,location:loc};DB.set('drivers',drivers);
   FDB.save('drivers',driver.replace(/\s+/g,'_'),drivers[driver]);
   S.editSale=null;S.view='sale_table';render();
@@ -2284,7 +2423,8 @@ function viewSalafForm(){
 
 function editSalaf(id){S.salafEditId=id;renderContent();setTimeout(()=>{const f=document.getElementById('sf_date');if(f)f.scrollIntoView({behavior:'smooth',block:'center'});},100);}
 function saveSalaf(){
-  const date=gv('sf_date'),person=gv('sf_person').trim(),dinar=parseFloat(document.getElementById('sf_dinar')?.value||0),dollar=parseFloat(document.getElementById('sf_dollar')?.value||0),note=gv('sf_note');
+  const date=gv('sf_date'),person=gv('sf_person').trim(),dinar=amtVal('sf_dinar'),dollar=amtVal('sf_dollar'),note=gv('sf_note');
+  if(badAmt(dinar,dollar)){warnBadAmt();return;}
   if(!person){showToast('يرجى كتابة اسم الشخص','error');return;}
   if(!note){showToast('يرجى كتابة البيان','error');return;}
   let salaf=DB.get('salaf',[]);const editId=S.salafEditId||'';let entry;
@@ -2389,9 +2529,8 @@ function savePrivateSalaf(){
   const cur=editId?all.find(e=>e.id===editId):null;
   const person=cur?cur.person:(PRIV_SALAF_PERSONS.indexOf(S.privSalafTab)>=0?S.privSalafTab:PRIV_SALAF_PERSONS[0]);
   const date=gv('ps_date'),receiver=gv('ps_receiver'),note=gv('ps_note');
-  const dinarEl=document.getElementById('ps_dinar'),dollarEl=document.getElementById('ps_dollar');
-  const dinar=safeNum(dinarEl?dinarEl.value:0);
-  const dollar=safeNum(dollarEl?dollarEl.value:0);
+  const dinar=amtVal('ps_dinar'),dollar=amtVal('ps_dollar');
+  if(badAmt(dinar,dollar)){warnBadAmt();return;}
   if(!date){showToast('يرجى تحديد التاريخ','error');return;}
   if(!receiver){showToast('يرجى كتابة اسم المستلم','error');return;}
   if(!dinar&&!dollar){showToast('يرجى إدخال مبلغ دينار أو دولار','error');return;}
@@ -2550,15 +2689,15 @@ async function confirmImportPrivSalafSheets(){
   if(!imported){showToast('لم يُستورد أي سجل'+(skippedDup?(' | تم تجاهل '+skippedDup+' مكرر'):''),'warning',5000);return;}
   auditLog('استيراد سلف خاصة','مستورد: '+imported+' | مكرر متجاهَل: '+skippedDup+' | صفوف متجاوَزة: '+skippedRows);
   showToast('⏳ جاري الحفظ في السحابة...','info',3000);
-  try{
-    const fresh=all.filter(function(e){return e.id.indexOf('psl_xl_'+ts+'_')===0;});
-    await Promise.all(fresh.map(function(e){return FDB.save('private_salaf',e.id,e);}));
-    showToast('✅ تم استيراد '+imported+' حركة'+(skippedDup?(' | ⏭️ تجاهل '+skippedDup+' مكرر'):'')+' وحفظها في السحابة ☁️','success',6000);
-  }catch(err){showToast('✅ تم الاستيراد محلياً | ⚠️ فشل الحفظ في السحابة','warning',5000);}
+  const fresh=all.filter(function(e){return e.id.indexOf('psl_xl_'+ts+'_')===0;});
+  const _res=await Promise.all(fresh.map(function(e){return FDB.save('private_salaf',e.id,e);}));
+  const _bad=_res.filter(function(r){return !r;}).length;
+  if(_bad)showToast('✅ تم استيراد '+imported+' حركة محلياً | ⚠️ '+_bad+' منها لم تصل السحابة — اضغط الشارة أسفل اليسار','warning',9000);
+  else showToast('✅ تم استيراد '+imported+' حركة'+(skippedDup?(' | ⏭️ تجاهل '+skippedDup+' مكرر'):'')+' وحفظها في السحابة ☁️','success',6000);
 }
 
 // ===== نظام المصاريف (مختصر) =====
-const EXPENSE_FACTORIES=['مصاريف الجوهرة','الوطنية','عطاء الذهب','ايجار كراج','الفهد','روعة المشرق','الذهب الأسود','ابرار شط العرب','الذهب الأصفر','نذره الذهب','إياد عودة','الكرستال','حميد جاسم','رافد خاص'];
+const EXPENSE_FACTORIES=['مصاريف الجوهرة','الوطنية','عطاء الذهب','ايجار كراج','الفهد','روعة المشرق','الذهب الأسود','ابراج شط العرب','الذهب الأصفر','نذره الذهب','إياد عودة','الكرستال','حميد جاسم','رافد خاص'];
 function getExpenseList(factory){
   const all=DB.get('expenses',[]).map(e=>{
     // normalize legacy field names (dinar→amount_dinar, dollar→amount_dollar)
@@ -2566,10 +2705,45 @@ function getExpenseList(factory){
     return e;
   });
   if(!factory)return all;
-  return all.filter(e=>e.factory===factory);
+  // مقارنة مُطبَّعة: فرق همزة أو مسافة كان يُظهر الجهة الواحدة كجهتين منفصلتين
+  return all.filter(e=>sameExpEntity(e.factory,factory));
 }
 const EXP_IRAQI_MONTHS={'01':'كانون الثاني','02':'شباط','03':'آذار','04':'نيسان','05':'أيار','06':'حزيران','07':'تموز','08':'آب','09':'أيلول','10':'تشرين الأول','11':'تشرين الثاني','12':'كانون الأول'};
 function expNormAr(s){return String(s||'').replace(/[أإآ]/g,'ا').trim();}
+// ===== مرادفات أسماء جهات الصرف =====
+// عند تعديل تسمية جهة من إدارة النظام يُسجَّل الاسم القديم هنا، فيحترم استيراد Excel
+// التسمية الجديدة بدل إعادة إنشاء الاسم القديم من جدول الربط المكتوب داخل الكود
+function expAliasKey(s){return String(s||'').replace(/\s+/g,' ').trim();}        // مفتاح حرفي
+function expAliasNorm(s){return expNormAr(String(s||'').replace(/\s+/g,' '));}  // مفتاح مُطبَّع (يتجاهل فرق الهمزة)
+function sameExpEntity(a,b){ return expAliasNorm(a)===expAliasNorm(b); }
+function getExpenseAliases(){const m=DB.get('expense_entity_aliases',{});return(m&&typeof m==='object'&&!Array.isArray(m))?m:{};}
+function saveExpenseAliases(m){DB.set('expense_entity_aliases',m);FDB.save('settings','expense_entity_aliases',{id:'expense_entity_aliases',map:m});}
+// يتبع سلسلة المرادفات (أ→ب→ج) بمطابقة حرفية أولاً ثم مُطبَّعة، بحدّ أقصى يمنع الدوران اللانهائي
+function resolveExpenseEntityName(name){
+  const map=getExpenseAliases(),normIdx={};
+  Object.keys(map).forEach(function(k){normIdx[expAliasNorm(k)]=map[k];});
+  let cur=expAliasKey(name);const seen={};
+  for(let i=0;i<12;i++){
+    const k=expAliasKey(cur);
+    if(seen[k])break;
+    const next=(map[k]!==undefined)?map[k]:normIdx[expAliasNorm(cur)];
+    if(next===undefined)break;
+    const nx=expAliasKey(next);
+    if(nx===cur)break;
+    seen[k]=1;cur=nx;
+  }
+  return cur;
+}
+function recordExpenseAlias(oldName,newName){
+  const o=expAliasKey(oldName),n=expAliasKey(newName);
+  if(!o||!n||o===n)return;
+  const map=getExpenseAliases();
+  // إعادة توجيه كل مرادف كان يشير للاسم القديم حتى لا تتكوّن سلاسل طويلة
+  Object.keys(map).forEach(function(k){if(expAliasKey(map[k])===o)map[k]=n;});
+  map[o]=n;
+  delete map[n];   // الاسم الجديد لا يكون مرادفاً لنفسه
+  saveExpenseAliases(map);
+}
 function expTextMonthToNum(text){const t=expNormAr(text);for(const mm in EXP_IRAQI_MONTHS){if(t.includes(expNormAr(EXP_IRAQI_MONTHS[mm])))return mm;}return null;}
 function expDateToYM(d){if(!d)return'';const iso=(d||'').slice(0,7);if(/^\d{4}-\d{2}$/.test(iso))return iso;const mm=expTextMonthToNum(d);if(!mm)return'';const ym=/(\d{4})/.exec(d);const yr=ym?ym[1]:today().slice(0,4);return yr+'-'+mm;}
 function expDateMatchesMonth(dateStr,month){
@@ -2759,7 +2933,7 @@ function viewExpenses(){
   const dynE=DB.get('expenses',[]).map(e=>e.factory||'').filter(f=>f);
   const allEntities=[...new Set([...predefE,...dynE])].sort();
   const entityOpts=allEntities.map(f=>`<option value="${esc(f)}" ${selF===f?'selected':''}>${esc(f)}</option>`).join('');
-  const rows=list.map((e,i)=>`<tr style="background:${e.id===editId?'#fef2f2':''}">${canEdit('expenses')?`<td class="td" style="width:32px;text-align:center"><input type="checkbox" class="exp-chk" data-id="${e.id}" style="width:15px;height:15px;cursor:pointer;accent-color:#dc2626"></td>`:''}<td class="td" style="color:#64748b">${i+1}</td><td class="td">${e.date||''}</td><td class="td" style="font-weight:900;color:#7f1d1d;font-size:11px">${esc(e.factory||'—')}</td><td class="td" style="font-size:10px">${e.person?`<span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:1px 6px;font-weight:700">${esc(e.person)}</span>`:''}</td><td class="td" style="color:#ca8a04;font-weight:900;background:#fffbeb">${fmtM(e.amount_dinar||0)} <span style="font-size:9px">د.ع</span></td><td class="td" style="color:#0f172a;font-weight:900;background:#f8fafc">${fmtM(e.amount_dollar||0)} <span style="font-size:9px">$</span></td><td class="td" style="font-size:11px;text-align:right">${esc(e.details||'')}</td>${canEdit('expenses')?`<td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:6px 10px;font-size:11px;margin-left:6px" onclick="editExpense('${e.id}','${e.factory||''}')">✏️</button><button class="btn btn-red" style="padding:6px 10px;font-size:11px" onclick="deleteExpense('${e.id}')">🗑️</button></td>`:''}</tr>`).join('');
+  const rows=list.map((e,i)=>`<tr style="background:${e.id===editId?'#fef2f2':''}">${canEdit('expenses')?`<td class="td" style="width:32px;text-align:center"><input type="checkbox" class="exp-chk" data-id="${e.id}" style="width:15px;height:15px;cursor:pointer;accent-color:#dc2626"></td>`:''}<td class="td" style="color:#64748b">${i+1}</td><td class="td">${e.date||''}</td><td class="td" style="font-weight:900;color:#7f1d1d;font-size:11px">${esc(e.factory||'—')}</td><td class="td" style="font-size:10px">${e.person?`<span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:1px 6px;font-weight:700">${esc(e.person)}</span>`:''}</td><td class="td" style="color:#ca8a04;font-weight:900;background:#fffbeb">${fmtM(e.amount_dinar||0)} <span style="font-size:9px">د.ع</span></td><td class="td" style="color:#0f172a;font-weight:900;background:#f8fafc">${fmtM(e.amount_dollar||0)} <span style="font-size:9px">$</span></td><td class="td" style="font-size:11px;text-align:right">${esc(e.details||'')}</td>${canEdit('expenses')?`<td class="td" style="white-space:nowrap"><button class="btn btn-gray" style="padding:6px 10px;font-size:11px;margin-left:6px" onclick="editExpense('${e.id}','${escJs(e.factory||'')}')">✏️</button><button class="btn btn-red" style="padding:6px 10px;font-size:11px" onclick="deleteExpense('${e.id}')">🗑️</button></td>`:''}</tr>`).join('');
   const totalRow=`<tr style="background:#7f1d1d;color:#fff;font-weight:900">${canEdit('expenses')?'<td class="td"></td>':''}<td class="td" style="color:#fff" colspan="4">الإجمالي</td><td class="td" style="color:#fde68a;font-size:13px">${fmtM(totalD)} د.ع</td><td class="td" style="color:#fff;font-size:13px">${fmtM(totalDol)} $</td><td class="td" style="color:#fff">${list.length} مصروف</td>${canEdit('expenses')?'<td class="td"></td>':''}</tr>`;
   const factoryDatalist=[...new Set([...predefE,...dynE])].sort().map(f=>`<option value="${esc(f)}">`).join('');
   const uniquePersons=[...new Set(DB.get('expenses',[]).map(e=>e.person||'').filter(p=>p))].sort();
@@ -2783,17 +2957,18 @@ function viewExpenses(){
   ${(()=>{if(!selMonth)return'';const outside=fullList.filter(e=>!expDateToYM(e.date));if(!outside.length)return'';const outD=outside.reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);return`<div style="background:#fff7ed;border:2px solid #f97316;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:20px">⚠️</span><div style="flex:1"><div style="font-size:13px;font-weight:900;color:#c2410c">يوجد ${outside.length} سجل بتاريخ غير صالح/غير مفهوم (${fmtM(outD)} د.ع)</div><div style="font-size:11px;color:#92400e;margin-top:2px">هذه السجلات لا تنتمي لأي شهر يمكن التعرف عليه فتُسبب ارتفاع المتبقي الكلي — ${hiddenOnly?'يمكنك الآن تحديدها وحذفها':'اضغط لعرضها وحذفها'}</div></div>${hiddenOnly?`<button onclick="S.expHiddenOnly=false;renderContent()" class="btn btn-gray" style="font-size:11px;padding:6px 14px">✕ إلغاء</button>`:`<button onclick="S.expHiddenOnly=true;renderContent()" class="btn" style="font-size:11px;padding:6px 14px;background:#f97316;color:#fff;font-weight:900">🔍 عرض الخفية فقط</button>`}</div>`;})()}
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px"><div class="card" style="text-align:center;border-top:4px solid #dc2626"><div style="font-size:10px;color:#64748b">عدد المصاريف</div><div style="font-size:22px;font-weight:900;color:#dc2626">${list.length}</div></div><div class="card" style="text-align:center;border-top:4px solid #ca8a04;background:#fffbeb"><div style="font-size:10px;color:#92400e;font-weight:700">💛 إجمالي الدينار</div><div style="font-size:16px;font-weight:900;color:#ca8a04">${fmtM(totalD)}</div></div><div class="card" style="text-align:center;border-top:4px solid #0f172a;background:#f8fafc"><div style="font-size:10px;color:#0f172a;font-weight:700">🖤 إجمالي الدولار</div><div style="font-size:16px;font-weight:900;color:#0f172a">${fmtM(totalDol)}</div></div></div>
   <div class="card" style="margin-bottom:14px;border-right:5px solid #dc2626"><h3 style="font-size:13px;font-weight:900;margin-bottom:14px;color:#7f1d1d">${editId?'✏️ تعديل':'➕ إضافة'} مصروف</h3><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px"><div><label class="lbl" for="exp_date">التاريخ *</label><input class="inp" id="exp_date" type="date" value="${editData?editData.date:today()}"></div>${factoryHtml}<div><label class="lbl" for="exp_dinar">💛 مبلغ دينار</label><input class="inp" id="exp_dinar" type="number" placeholder="0" value="${editData?editData.amount_dinar||'':''}"></div><div><label class="lbl" for="exp_dollar">🖤 مبلغ دولار</label><input class="inp" id="exp_dollar" type="number" placeholder="0" value="${editData?editData.amount_dollar||'':''}"></div><div style="grid-column:span 2"><label class="lbl" for="exp_details">التفاصيل *</label><input class="inp" id="exp_details" placeholder="تفاصيل المصروف..." value="${editData?editData.details||'':''}"></div><div style="grid-column:span 2"><label class="lbl" for="exp_person">👤 الشخص (اختياري — فارغ = مصروف عام)</label><input class="inp" id="exp_person" list="exp_person_list" placeholder="مثال: حيدر صبري" value="${editData?editData.person||'':''}"></div></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">${editId?`<button class="btn btn-gray" onclick="S.expEditId='';renderContent()">إلغاء</button>`:''}<button class="btn btn-red" style="padding:10px 28px" onclick="saveExpense()">💾 حفظ</button></div><div id="exp-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div></div>
-  <div class="card" style="margin-bottom:12px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><label style="font-size:12px;font-weight:900;color:#334155;white-space:nowrap">🔍 عرض مصاريف الجهة:</label><select class="inp" style="width:220px;font-size:12px" onchange="S.expFactory=this.value;S.expEditId='';renderContent()"><option value="" ${!selF?'selected':''}>الكل</option>${entityOpts}</select><span style="font-size:12px;font-weight:700;color:#64748b">${list.length} مصروف</span><input class="inp" id="exp_search_inp" placeholder="🔍 بحث في البيان، الشخص، المبلغ..." value="${esc(S.expSearch||'')}" oninput="setExpSearch(this.value,this.selectionStart)" style="min-width:180px;max-width:260px;font-size:12px">${expSearchTxt?`<button class="btn btn-gray" style="font-size:11px;padding:5px 10px" onclick="S.expSearch='';renderContent()">✕</button>`:''} ${selF?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="generateExpensesPDF('${selF}','${selMonth}')">📄 PDF الجهة</button>`:''}<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="generateExpensesPDF('','${selMonth}')">📄 PDF الكل</button><label class="btn btn-green" style="font-size:12px;padding:8px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-right:auto">📥 استيراد Excel (اختيار الشيتات)<input type="file" accept=".xlsx" style="display:none" onchange="importExpensesXLSX(this)"></label>${isManager()?`<button class="btn btn-gray" style="font-size:11px;padding:8px 14px" onclick="cleanupDuplicateExpenses()">🧹 تنظيف التكرارات</button>`:''}${isManager()?`<button class="btn btn-gray" style="font-size:11px;padding:8px 14px" onclick="openFixTextDatesReview()">📅 تحويل التواريخ النصية</button>`:''}</div></div>
+  <div class="card" style="margin-bottom:12px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><label style="font-size:12px;font-weight:900;color:#334155;white-space:nowrap">🔍 عرض مصاريف الجهة:</label><select class="inp" style="width:220px;font-size:12px" onchange="S.expFactory=this.value;S.expEditId='';renderContent()"><option value="" ${!selF?'selected':''}>الكل</option>${entityOpts}</select><span style="font-size:12px;font-weight:700;color:#64748b">${list.length} مصروف</span><input class="inp" id="exp_search_inp" placeholder="🔍 بحث في البيان، الشخص، المبلغ..." value="${esc(S.expSearch||'')}" oninput="setExpSearch(this.value,this.selectionStart)" style="min-width:180px;max-width:260px;font-size:12px">${expSearchTxt?`<button class="btn btn-gray" style="font-size:11px;padding:5px 10px" onclick="S.expSearch='';renderContent()">✕</button>`:''} ${selF?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="generateExpensesPDF('${escJs(selF)}','${selMonth}')">📄 PDF الجهة</button>`:''}<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="generateExpensesPDF('','${selMonth}')">📄 PDF الكل</button><label class="btn btn-green" style="font-size:12px;padding:8px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-right:auto">📥 استيراد Excel (اختيار الشيتات)<input type="file" accept=".xlsx" style="display:none" onchange="importExpensesXLSX(this)"></label>${isManager()?`<button class="btn btn-gray" style="font-size:11px;padding:8px 14px" onclick="cleanupDuplicateExpenses()">🧹 تنظيف التكرارات</button>`:''}${isManager()?`<button class="btn btn-gray" style="font-size:11px;padding:8px 14px" onclick="openFixTextDatesReview()">📅 تحويل التواريخ النصية</button>`:''}</div></div>
   <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">${_tabBtns}</div>
-  <div class="card" style="overflow:hidden;padding:0"><div style="padding:12px 16px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><span style="font-weight:900;font-size:13px;color:#7f1d1d">${selF||'الكل'} <span class="badge" style="background:#fee2e2;color:#dc2626">${list.length} مصروف</span></span><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:900;color:#92400e">💛 ${fmtM(totalD)} د.ع</span><span style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:900;color:#0f172a">🖤 ${fmtM(totalDol)} $</span></div><div style="display:flex;gap:6px;flex-wrap:wrap">${canEdit('expenses')?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="deleteSelectedExpenses()">🗑️ حذف المحدد</button>`:''}${isManager()&&selF?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px;background:#7f1d1d" onclick="clearFactoryExpenses('${selF}')">⛔ مسح كل مصاريف ${selF}</button>`:''}<button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="exportExpensesXLSX('${selF}','${selMonth}')">📊 Excel</button></div></div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:620px"><thead><tr>${canEdit('expenses')?'<th class="th" style="background:#7f1d1d;width:32px"><input type="checkbox" id="exp-chk-all" onchange="toggleSelectAllExp(this)" style="width:15px;height:15px;cursor:pointer;accent-color:#fca5a5" title="تحديد الكل"></th>':''}<th class="th" style="background:#7f1d1d">ت</th><th class="th" style="background:#7f1d1d">التاريخ</th><th class="th" style="background:#7f1d1d">الجهة</th><th class="th" style="background:#7f1d1d">الشخص</th><th class="th" style="background:#7f1d1d">💛 دينار</th><th class="th" style="background:#7f1d1d">🖤 دولار</th><th class="th" style="background:#7f1d1d">التفاصيل</th>${canEdit('expenses')?'<th class="th" style="background:#7f1d1d">الإجراء</th>':''}</tr></thead><tbody>${rows||`<tr><td colspan="${canEdit('expenses')?'8':'6'}" class="td" style="padding:24px;color:#64748b">لا توجد مصاريف</td></tr>`}${totalRow}</tbody></table></div></div></div>`;
+  <div class="card" style="overflow:hidden;padding:0"><div style="padding:12px 16px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><span style="font-weight:900;font-size:13px;color:#7f1d1d">${selF||'الكل'} <span class="badge" style="background:#fee2e2;color:#dc2626">${list.length} مصروف</span></span><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:900;color:#92400e">💛 ${fmtM(totalD)} د.ع</span><span style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:900;color:#0f172a">🖤 ${fmtM(totalDol)} $</span></div><div style="display:flex;gap:6px;flex-wrap:wrap">${canEdit('expenses')?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="deleteSelectedExpenses()">🗑️ حذف المحدد</button>`:''}${isManager()&&selF?`<button class="btn btn-red" style="font-size:11px;padding:6px 12px;background:#7f1d1d" onclick="clearFactoryExpenses('${escJs(selF)}')">⛔ مسح كل مصاريف ${selF}</button>`:''}<button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="exportExpensesXLSX('${escJs(selF)}','${selMonth}')">📊 Excel</button></div></div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:620px"><thead><tr>${canEdit('expenses')?'<th class="th" style="background:#7f1d1d;width:32px"><input type="checkbox" id="exp-chk-all" onchange="toggleSelectAllExp(this)" style="width:15px;height:15px;cursor:pointer;accent-color:#fca5a5" title="تحديد الكل"></th>':''}<th class="th" style="background:#7f1d1d">ت</th><th class="th" style="background:#7f1d1d">التاريخ</th><th class="th" style="background:#7f1d1d">الجهة</th><th class="th" style="background:#7f1d1d">الشخص</th><th class="th" style="background:#7f1d1d">💛 دينار</th><th class="th" style="background:#7f1d1d">🖤 دولار</th><th class="th" style="background:#7f1d1d">التفاصيل</th>${canEdit('expenses')?'<th class="th" style="background:#7f1d1d">الإجراء</th>':''}</tr></thead><tbody>${rows||`<tr><td colspan="${canEdit('expenses')?'8':'6'}" class="td" style="padding:24px;color:#64748b">لا توجد مصاريف</td></tr>`}${totalRow}</tbody></table></div></div></div>`;
 }
 
 function saveExpense(){
   const _eid0=S.expEditId||'';const _orig0=_eid0?(DB.get('expenses',[]).find(e=>e.id===_eid0)||null):null;const date=gv('exp_date')||(_orig0&&_orig0.date)||today();
-  const dinar=parseFloat(document.getElementById('exp_dinar')?.value||0);
-  const dollar=parseFloat(document.getElementById('exp_dollar')?.value||0);
+  const dinar=amtVal('exp_dinar'),dollar=amtVal('exp_dollar');
+  if(badAmt(dinar,dollar)){warnBadAmt();return;}
   const details=gv('exp_details');
   if(!details){showToast('يرجى كتابة التفاصيل','error');return;}
+  if(!dinar&&!dollar&&!confirm('لم تُدخل أي مبلغ (دينار/دولار). هل تحفظ المصروف بصفر؟'))return;
   const personVal=(document.getElementById('exp_person')?.value||'').trim();
   let factories;
   if(S.expSplitFactories&&S.expSplitFactories.length>0){
@@ -2909,7 +3084,7 @@ async function confirmImportExpensesSheets(){
     'الفهد':'الفهد','مصارف الفهد':'الفهد','مصاريف الفهد':'الفهد',
     'روعة المشرق':'الروعة المشرق','الروعة المشرق':'الروعة المشرق','الروعه':'الروعة المشرق',
     'الذهب الاسود':'الذهب الأسود','الذهب الأسود':'الذهب الأسود',
-    'ابراج شط العرب':'ابرار شط العرب','ابرار شط العرب':'ابرار شط العرب',
+    'ابراج شط العرب':'ابراج شط العرب','ابرار شط العرب':'ابراج شط العرب',
     'الذهب الاصفر':'الذهب الأصفر','الذهب الأصفر':'الذهب الأصفر',
     'ندرة الذهب':'نذره الذهب','نذره الذهب':'نذره الذهب',
     'اياد عودة':'اياد عودة','الكرستال':'الكرستال','حميد جاسم':'حميد جاسم'
@@ -2930,8 +3105,13 @@ async function confirmImportExpensesSheets(){
   const existingCounts={};
   expenses.forEach(function(e){const k=expDupKey(e);existingCounts[k]=(existingCounts[k]||0)+1;});
   const importedCounts={};
+  // بحث مُطبَّع احتياطي: يلتقط فروق الهمزة/المسافات بأسماء الشيتات
+  const sheetMapNorm={};
+  Object.keys(sheetMap).forEach(function(k){sheetMapNorm[expAliasNorm(k)]=sheetMap[k];});
   selectedSheets.forEach(function(sheetName){
-    const factory=sheetMap[sheetName.trim()]||sheetName.trim();
+    const rawName=sheetName.trim();
+    // المرادفات آخر خطوة: تعديل التسمية من إدارة النظام يتغلّب على جدول الربط
+    const factory=resolveExpenseEntityName(sheetMap[rawName]||sheetMapNorm[expAliasNorm(rawName)]||rawName);
     const ws=wb.Sheets[sheetName];
     const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
     var lastDate='';
@@ -2990,11 +3170,11 @@ async function confirmImportExpensesSheets(){
   DB.set('expenses',expenses);
   renderContent();
   showToast('⏳ جاري الحفظ في السحابة...','info',3000);
-  try{
-    const newExp=expenses.filter(function(e){return e.id.startsWith('exp_xl_'+ts+'_');});
-    await Promise.all(newExp.map(function(e){return FDB.save('expenses',e.id,e);}));
-    showToast('✅ تم استيراد '+imported+' مصروف'+(skippedDup?(' | ⏭️ تم تجاهل '+skippedDup+' مكرر'):'')+' وحفظها في السحابة ☁️','success',5000);
-  }catch(err){showToast('✅ تم الاستيراد محلياً | ⚠️ فشل الحفظ في السحابة','warning',5000);}
+  const newExp=expenses.filter(function(e){return e.id.startsWith('exp_xl_'+ts+'_');});
+  const _res=await Promise.all(newExp.map(function(e){return FDB.save('expenses',e.id,e);}));
+  const _bad=_res.filter(function(r){return !r;}).length;
+  if(_bad)showToast('✅ تم استيراد '+imported+' مصروف محلياً | ⚠️ '+_bad+' منها لم تصل السحابة — اضغط الشارة أسفل اليسار','warning',9000);
+  else showToast('✅ تم استيراد '+imported+' مصروف'+(skippedDup?(' | ⏭️ تم تجاهل '+skippedDup+' مكرر'):'')+' وحفظها في السحابة ☁️','success',5000);
 }
 
 function toggleSelectAllExp(cb){
@@ -3093,19 +3273,22 @@ function saveRenameExpenseEntity(oldName){
   if(newName===oldName){S.expEntityRenameTarget='';renderContent();return;}
   let expenses=DB.get('expenses',[]);
   const affected=expenses.filter(e=>e.factory===oldName);
-  if(!affected.length){showToast('لا توجد مصاريف لهذه الجهة','warning');S.expEntityRenameTarget='';renderContent();return;}
   const mergeExisting=expenses.some(e=>e.factory===newName);
-  if(mergeExisting&&!confirm('الجهة "'+newName+'" موجودة مسبقاً — سيتم دمج '+affected.length+' مصروف من "'+oldName+'" معها. متابعة؟'))return;
-  affected.forEach(e=>{e.factory=newName;});
-  DB.set('expenses',expenses);
-  affected.forEach(e=>FDB.save('expenses',e.id,e));
+  if(mergeExisting&&affected.length&&!confirm('الجهة "'+newName+'" موجودة مسبقاً — سيتم دمج '+affected.length+' مصروف من "'+oldName+'" معها. متابعة؟'))return;
+  // يُسجَّل قبل أي شيء: يجعل استيراد Excel لاحقاً يحترم التسمية الجديدة حتى لو لم يكن للجهة مصاريف بعد
+  recordExpenseAlias(oldName,newName);
+  if(affected.length){
+    affected.forEach(e=>{e.factory=newName;});
+    DB.set('expenses',expenses);
+    affected.forEach(e=>FDB.save('expenses',e.id,e));
+  }
   // تحديث الاسم في قائمة الجهات المعرَّفة مسبقاً إن وجدت
   const predefList=DB.get('expense_entities',[]);
   const predefIdx=predefList.findIndex(e=>e.name===oldName);
   if(predefIdx>=0){predefList[predefIdx].name=newName;DB.set('expense_entities',predefList);FDB.save('expense_entities',predefList[predefIdx].id,predefList[predefIdx]);}
   auditLog('تعديل تسمية جهة صرف',`من: ${oldName} إلى: ${newName} | عدد المصاريف: ${affected.length}`);
   S.expEntityRenameTarget='';
-  showToast('تم تحديث التسمية في '+affected.length+' مصروف','success');
+  showToast(affected.length?('تم تحديث التسمية في '+affected.length+' مصروف'):'تم تحديث التسمية','success');
   setTimeout(()=>renderContent(),500);
 }
 
@@ -3115,8 +3298,8 @@ function getPersonAdvances(person,month){let d=0,dl=0;if(person==='haidar'){getH
 function getPersonAdvancesList(person,month){let list=[];if(person==='haidar'){getHaidarKroobSalaf().filter(e=>(e.date||'').startsWith(month)).forEach(e=>list.push({date:e.date,desc:e.description||'',source:'كروب',dinar:safeNum(e.amount_dinar),dollar:safeNum(e.amount_dollar)}));getHaidarRafidSalaf().filter(e=>(e.date||'').startsWith(month)).forEach(e=>list.push({date:e.date,desc:e.description||'',source:'رافد',dinar:safeNum(e.dinar),dollar:safeNum(e.dollar)}));getHaiderManualSalaf().filter(e=>(e.date||'').startsWith(month)).forEach(e=>list.push({date:e.date,desc:e.note||'',source:'يدوي',dinar:safeNum(e.amount_dinar),dollar:safeNum(e.amount_dollar)}));}else{getMohammedKroobSalaf().filter(e=>(e.date||'').startsWith(month)).forEach(e=>list.push({date:e.date,desc:e.description||'',source:'كروب',dinar:safeNum(e.amount_dinar),dollar:safeNum(e.amount_dollar)}));getMohammedRafidSalaf().filter(e=>(e.date||'').startsWith(month)).forEach(e=>list.push({date:e.date,desc:e.description||'',source:'رافد',dinar:safeNum(e.dinar),dollar:safeNum(e.dollar)}));getKhaledManualSalaf().filter(e=>(e.date||'').startsWith(month)).forEach(e=>list.push({date:e.date,desc:e.note||'',source:'يدوي',dinar:safeNum(e.amount_dinar),dollar:safeNum(e.amount_dollar)}));}return list.sort((a,b)=>(a.date||'').localeCompare(b.date||''));}
 function getPersonExpenses(personName,month){if(!personName)return[];return DB.get('expenses',[]).filter(e=>e.person===personName&&(!month||expDateMatchesMonth(e.date,month))).sort((a,b)=>(a.date||'').localeCompare(b.date||''));}
 function getPersonExpensesTotal(personName,month){const list=getPersonExpenses(personName,month);return{dinar:list.reduce((s,e)=>s+safeNum(e.amount_dinar),0),dollar:list.reduce((s,e)=>s+safeNum(e.amount_dollar),0)};}
-function getFactoryExpensesTotal(factory,month){if(!factory)return{dinar:0,dollar:0};const list=getExpenseList(factory==='__all__'?'':factory).filter(e=>(factory==='__all__'||e.factory===factory)&&expDateMatchesMonth(e.date,month));return{dinar:list.reduce((s,e)=>s+safeNum(e.amount_dinar),0),dollar:list.reduce((s,e)=>s+safeNum(e.amount_dollar),0)};}
-function getFactoryExpensesList(factory,month){if(!factory)return[];return getExpenseList(factory==='__all__'?'':factory).filter(e=>(factory==='__all__'||e.factory===factory)&&expDateMatchesMonth(e.date,month)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));}
+function getFactoryExpensesTotal(factory,month){if(!factory)return{dinar:0,dollar:0};const list=getExpenseList(factory==='__all__'?'':factory).filter(e=>(factory==='__all__'||sameExpEntity(e.factory,factory))&&expDateMatchesMonth(e.date,month));return{dinar:list.reduce((s,e)=>s+safeNum(e.amount_dinar),0),dollar:list.reduce((s,e)=>s+safeNum(e.amount_dollar),0)};}
+function getFactoryExpensesList(factory,month){if(!factory)return[];return getExpenseList(factory==='__all__'?'':factory).filter(e=>(factory==='__all__'||sameExpEntity(e.factory,factory))&&expDateMatchesMonth(e.date,month)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));}
 function getSalafCarryForward(person,month){const cfg=getSalafSettlementConfig(),pcfg=person==='haidar'?cfg.haidar:cfg.mohammed;const personName=pcfg.personName||'';let d=safeNum(pcfg.openDinar),dl=safeNum(pcfg.openDollar);const allAdv=person==='haidar'?[...getHaidarKroobSalaf().map(e=>({date:e.date,d:safeNum(e.amount_dinar),dl:safeNum(e.amount_dollar)})),...getHaidarRafidSalaf().map(e=>({date:e.date,d:safeNum(e.dinar),dl:safeNum(e.dollar)})),...getHaiderManualSalaf().map(e=>({date:e.date,d:safeNum(e.amount_dinar),dl:safeNum(e.amount_dollar)}))]:([...getMohammedKroobSalaf().map(e=>({date:e.date,d:safeNum(e.amount_dinar),dl:safeNum(e.amount_dollar)})),...getMohammedRafidSalaf().map(e=>({date:e.date,d:safeNum(e.dinar),dl:safeNum(e.dollar)})),...getKhaledManualSalaf().map(e=>({date:e.date,d:safeNum(e.amount_dinar),dl:safeNum(e.amount_dollar)}))]);allAdv.filter(e=>(e.date||'').slice(0,7)<month).forEach(e=>{d+=e.d;dl+=e.dl;});if(personName){DB.get('expenses',[]).filter(e=>e.person===personName&&expDateToYM(e.date)<month&&expDateToYM(e.date)!=='').forEach(e=>{d-=safeNum(e.amount_dinar);dl-=safeNum(e.amount_dollar);});}return{dinar:d,dollar:dl};}
 function viewSalafSettlement(){
   const month=S.salafSettlementMonth||today().slice(0,7);
@@ -4005,7 +4188,7 @@ function autoKroobCommission(force){
   const opType=(document.getElementById('kr_op_type')?.value||'').trim();
   if(!/حواله|حوالة/.test(opType))return;
   const desc=(document.getElementById('kr_desc')?.value||'').trim();
-  const dinar=parseFloat(document.getElementById('kr_dinar')?.value||0);
+  const dinar=amtVal0('kr_dinar');
   if(!dinar&&!force)return;
   const isKurdish=/أربيل|اربيل|سليمانية|سليمانيه|دهوك/.test(desc);
   const rate=isKurdish?0.002:0.001;
@@ -4018,7 +4201,7 @@ function autoKroobCommission(force){
 function autoKroobCommissionDollar(force){
   const opType=(document.getElementById('kr_op_type')?.value||'').trim();
   if(!/حواله|حوالة/.test(opType))return;
-  const dollar=parseFloat(document.getElementById('kr_dollar')?.value||0);
+  const dollar=amtVal0('kr_dollar');
   if(!dollar&&!force)return;
   const comm=dollar?dollar*0.001:0;
   const commEl=document.getElementById('kr_comm_dollar');
@@ -4032,9 +4215,11 @@ function saveKroob(){
   const type_dinar=document.getElementById('kr_type_dinar')?.value||'مدين';
   const type_dollar=document.getElementById('kr_type_dollar')?.value||'مدين';
   const beneficiary=gv('kr_beneficiary'),receiver=gv('kr_receiver');
-  const dinar=parseFloat(document.getElementById('kr_dinar')?.value||0),dollar=parseFloat(document.getElementById('kr_dollar')?.value||0);
-  const commission=parseFloat(document.getElementById('kr_comm')?.value||0),commission_dollar=parseFloat(document.getElementById('kr_comm_dollar')?.value||0);
+  const dinar=amtVal('kr_dinar'),dollar=amtVal('kr_dollar');
+  const commission=amtVal('kr_comm'),commission_dollar=amtVal('kr_comm_dollar');
+  if(badAmt(dinar,dollar,commission,commission_dollar)){warnBadAmt();return;}
   if(!desc){showToast('يرجى كتابة البيان','error');return;}
+  if(!dinar&&!dollar&&!commission&&!commission_dollar&&!confirm('لم تُدخل أي مبلغ (دينار/دولار/عمولة). هل تحفظ الحركة بصفر؟'))return;
   if(op_type){const types=DB.get('kroob_op_types',['صرف','إيداع','حواله']);if(!types.includes(op_type)){types.push(op_type);DB.set('kroob_op_types',types);}}
   let kroob=DB.get('kroob',[]);const editId=S.kroobEditId||'';let entry;
   if(editId){const idx=kroob.findIndex(e=>e.id===editId);if(idx>=0){entry={...kroob[idx],date,description:desc,operation_type:op_type,type_dinar,type_dollar,beneficiary,receiver,amount_dinar:dinar,amount_dollar:dollar,commission,commission_dollar};kroob[idx]=entry;}S.kroobEditId='';}
@@ -4083,7 +4268,7 @@ function deleteKroobSelected(){
   renderContent();
 }
 
-function saveKroobOpening(){const d=parseFloat(el('op_dinar')?.value||0),dl=parseFloat(el('op_dollar')?.value||0);DB.set('kroob_opening',{dinar:d,dollar:dl});FDB.save('kroob_opening','opening',{dinar:d,dollar:dl});renderContent();}
+function saveKroobOpening(){const d=amtVal('op_dinar'),dl=amtVal('op_dollar');if(badAmt(d,dl)){warnBadAmt();return;}DB.set('kroob_opening',{dinar:d,dollar:dl});FDB.save('kroob_opening','opening',{dinar:d,dollar:dl});renderContent();}
 async function clearKroobMonth(){
   const month=S.kroobMonth||today().slice(0,7);
   const mnNames={'01':'يناير','02':'فبراير','03':'مارس','04':'أبريل','05':'مايو','06':'يونيو','07':'يوليو','08':'أغسطس','09':'سبتمبر','10':'أكتوبر','11':'نوفمبر','12':'ديسمبر'};
@@ -4286,15 +4471,13 @@ function importKroobXLSX(input){
     DB.set('kroob_cleared',false);
     renderContent();
     showToast('⏳ جاري الحفظ في السحابة...','info',3000);
-    try{
-      const saves=[...kroob.map(k=>FDB.save('kroob',k.id,k))];
-      if(shouldUpdateOpening) saves.push(FDB.save('kroob_opening','opening',{dinar:opDinar,dollar:opDollar}));
-      if(opDinar!==0||opDollar!==0) saves.push(FDB.save('kroob_month_openings',targetMonth,{id:targetMonth,dinar:opDinar,dollar:opDollar}));
-      await Promise.all(saves);
-      showToast('✅ تم استيراد '+imported+' حركة لشهر '+targetMonth+' وحفظها في السحابة ☁️','success',5000);
-    }catch(err){
-      showToast('✅ تم الاستيراد محلياً | ⚠️ فشل الحفظ في السحابة: '+err.message,'warning',5000);
-    }
+    const saves=[...kroob.map(k=>FDB.save('kroob',k.id,k))];
+    if(shouldUpdateOpening) saves.push(FDB.save('kroob_opening','opening',{dinar:opDinar,dollar:opDollar}));
+    if(opDinar!==0||opDollar!==0) saves.push(FDB.save('kroob_month_openings',targetMonth,{id:targetMonth,dinar:opDinar,dollar:opDollar}));
+    const _res=await Promise.all(saves);
+    const _bad=_res.filter(r=>!r).length;
+    if(_bad)showToast('✅ تم استيراد '+imported+' حركة محلياً | ⚠️ '+_bad+' سجلاً لم يصل السحابة — اضغط الشارة أسفل اليسار','warning',9000);
+    else showToast('✅ تم استيراد '+imported+' حركة لشهر '+targetMonth+' وحفظها في السحابة ☁️','success',5000);
     input.value='';
   };
   reader.readAsArrayBuffer(file);
@@ -4438,7 +4621,7 @@ function viewRafidAccounts(){
 function autoRafidCommissionDollar(force){
   const opType=(document.getElementById('rf_type')?.value||'').trim();
   if(!/حواله|حوالة/.test(opType))return;
-  const dollar=parseFloat(document.getElementById('rf_dollar')?.value||0);
+  const dollar=amtVal0('rf_dollar');
   if(!dollar&&!force)return;
   const comm=dollar?dollar*0.001:0;
   const commEl=document.getElementById('rf_comm_d');
@@ -4448,10 +4631,12 @@ function autoRafidCommissionDollar(force){
 }
 function saveRafid(){
   const date=gv('rf_date'),desc=gv('rf_desc'),benef=gv('rf_benef'),recv=gv('rf_recv'),opType=document.getElementById('rf_type')?.value||'';
-  const dinar=parseFloat(document.getElementById('rf_dinar')?.value||0),typeDin=document.getElementById('rf_type_dinar')?.value||'مدين';
-  const dollar=parseFloat(document.getElementById('rf_dollar')?.value||0),typeDol=document.getElementById('rf_type_dollar')?.value||'مدين';
-  const comm=parseFloat(document.getElementById('rf_comm')?.value||0),commD=parseFloat(document.getElementById('rf_comm_d')?.value||0);
+  const dinar=amtVal('rf_dinar'),typeDin=document.getElementById('rf_type_dinar')?.value||'مدين';
+  const dollar=amtVal('rf_dollar'),typeDol=document.getElementById('rf_type_dollar')?.value||'مدين';
+  const comm=amtVal('rf_comm'),commD=amtVal('rf_comm_d');
+  if(badAmt(dinar,dollar,comm,commD)){warnBadAmt();return;}
   if(!desc){showToast('يرجى كتابة البيان','error');return;}
+  if(!dinar&&!dollar&&!comm&&!commD&&!confirm('لم تُدخل أي مبلغ (دينار/دولار/عمولة). هل تحفظ الحركة بصفر؟'))return;
   let list=DB.get('rafid_accounts',[]);const editId=S.rafidEditId||'';
   const entry={id:editId||('rf_'+Date.now()),date,description:desc,beneficiary:benef,receiver:recv,op_type:opType,dinar,type_dinar:typeDin,dollar,type_dollar:typeDol,commission:comm,commission_dollar:commD,accountant:currentUser.email,time:Date.now()};
   if(editId){const idx=list.findIndex(e=>e.id===editId);if(idx>=0)list[idx]=entry;else list.push(entry);}else list.push(entry);
@@ -4499,7 +4684,7 @@ function deleteRafidSelected(){
   showToast(`✅ تم حذف ${count} سطر بنجاح`,'success');
   renderContent();
 }
-function saveRafidOpening(){const d=parseFloat(el('rf_op_dinar')?.value||0),dl=parseFloat(el('rf_op_dollar')?.value||0);DB.set('rafid_opening',{dinar:d,dollar:dl});FDB.save('rafid_opening','opening',{dinar:d,dollar:dl});renderContent();}
+function saveRafidOpening(){const d=amtVal('rf_op_dinar'),dl=amtVal('rf_op_dollar');if(badAmt(d,dl)){warnBadAmt();return;}DB.set('rafid_opening',{dinar:d,dollar:dl});FDB.save('rafid_opening','opening',{dinar:d,dollar:dl});renderContent();}
 async function clearRafidData(){
   if(!confirm('مسح جميع بيانات حسابات سيد رافد؟'))return;
   if(!confirm('تأكيد نهائي — لا يمكن التراجع!'))return;
@@ -4560,7 +4745,7 @@ function renderKroobDailySection(from,to){
   todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isInD2=kroobDir(e,'dinar')==='دائن',isInDol2=kroobDir(e,'dollar')==='دائن',badgeIn2=d2?isInD2:(dl2?isInDol2:isInD2);let r='\n'+(badgeIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.date||'')+' | '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+(isInD2?'+':'-')+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 '+(isInDol2?'+':'-')+'$'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
   waTextK+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextK+=' | $'+fmtM(balDollar);
-  waTextK+='\n✅ نظام المراقبة v44.9';
+  waTextK+='\n✅ نظام المراقبة v46.0';
   window._kroobWaText=waTextK;
 
   const stat=(bg,bd,c,t,v)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:11px 12px;text-align:center"><div style="font-size:10px;font-weight:800;color:${c};margin-bottom:4px">${t}</div><div style="font-size:15px;font-weight:900;color:${c}">${v}</div></div>`;
@@ -4621,7 +4806,7 @@ function renderRafidDailySection(from,to){
   todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.date||'')+' | '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(rafidDir(e2,'dollar')==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
   waTextR+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextR+=' | $'+fmtM(balDollar);
-  waTextR+='\n✅ نظام المراقبة v44.9';
+  waTextR+='\n✅ نظام المراقبة v46.0';
   window._rafidWaText=waTextR;
 
   const stat=(bg,bd,c,t,v)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:11px 12px;text-align:center"><div style="font-size:10px;font-weight:800;color:${c};margin-bottom:4px">${t}</div><div style="font-size:15px;font-weight:900;color:${c}">${v}</div></div>`;
@@ -5006,7 +5191,9 @@ function importRafidXLSX(input){
       let date='';
       const rawDate=row[1];
       if(rawDate instanceof Date){
-        date=rawDate.toISOString().split('T')[0];
+        // مكوّنات محلية لا toISOString: SheetJS يُنتج منتصف ليل محلياً، وUTC يُرجع تاريخ الأمس ببغداد
+        const _y=rawDate.getFullYear(),_mo=String(rawDate.getMonth()+1).padStart(2,'0'),_dy=String(rawDate.getDate()).padStart(2,'0');
+        date=_y+'-'+_mo+'-'+_dy;
       } else {
         const ds=String(rawDate||'').trim();
         const m1=ds.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -5078,12 +5265,12 @@ function importRafidXLSX(input){
     DB.set('rafid_cleared',false);
     renderContent();
     showToast('⏳ جاري الحفظ في السحابة...','info',3000);
-    try{
-      const saves=list.map(k=>FDB.save('rafid_accounts',k.id,k));
-      if(shouldUpdateOpening) saves.push(FDB.save('rafid_opening','opening',{dinar:opDinar,dollar:opDollar}));
-      await Promise.all(saves);
-      showToast('✅ تم استيراد '+imported+' حركة لشهر '+targetMonth+' وحفظها في السحابة ☁️','success',5000);
-    }catch(err){showToast('✅ تم الاستيراد محلياً | ⚠️ فشل الحفظ في السحابة','warning',5000);}
+    const saves=list.map(k=>FDB.save('rafid_accounts',k.id,k));
+    if(shouldUpdateOpening) saves.push(FDB.save('rafid_opening','opening',{dinar:opDinar,dollar:opDollar}));
+    const _res=await Promise.all(saves);
+    const _bad=_res.filter(r=>!r).length;
+    if(_bad)showToast('✅ تم استيراد '+imported+' حركة محلياً | ⚠️ '+_bad+' سجلاً لم يصل السحابة — اضغط الشارة أسفل اليسار','warning',9000);
+    else showToast('✅ تم استيراد '+imported+' حركة لشهر '+targetMonth+' وحفظها في السحابة ☁️','success',5000);
     input.value='';
   };
   reader.readAsArrayBuffer(file);
@@ -5289,7 +5476,7 @@ function sendRefineryWhatsapp(){
     lines.push((grandRemaining>0?'⚠️':'✅')+' المتبقي: '+fmtM(Math.abs(grandRemaining))+' د.ع '+(grandRemaining>0?'(غير مسوى)':'(مسوى)'));
     lines.push(sep);
   });
-  lines.push('✅ نظام المراقبة v44.9');
+  lines.push('✅ نظام المراقبة v46.0');
   var msg=lines.join(NL);
   if(navigator.clipboard){
     navigator.clipboard.writeText(msg).then(function(){showToast('تم نسخ نص الواتساب','success');}).catch(function(){});
@@ -5348,8 +5535,8 @@ function generateRefineryPDF(refineryName){
 function viewAdmin(){
   const users=DB.get('users',{});
   FACTORIES=DB.get('factories',["الذهب الأسود","عطاء الذهب الأسود","معمل الفهد","معمل الوطنية","روعة المشرق"]);
-  const factRows=FACTORIES.map((f,i)=>`<tr><td class="td" style="color:#64748b">${i+1}</td><td class="td" style="font-weight:900">${f}</td><td class="td"><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="deleteFactory('${f}')">حذف</button></td></tr>`).join('');
-  const userRows=Object.entries(users).map(([k,u])=>`<tr><td class="td" style="color:#64748b;font-size:11px">${k}</td><td class="td">${u.email||''}</td><td class="td"><span class="badge" style="background:${u.role==='manager'?'#eff6ff':'#f0fdf4'};color:${u.role==='manager'?'#2563eb':'#059669'}">${u.role==='manager'?'مدير':'محاسب'}</span></td><td class="td">${u.factory||'الكل'}</td><td class="td">${k!==ADMIN_UID?`<button class="btn btn-red" style="padding:6px 10px;font-size:11px" onclick="deleteUser('${k}')">حذف</button>`:''}</td></tr>`).join('');
+  const factRows=FACTORIES.map((f,i)=>`<tr><td class="td" style="color:#64748b">${i+1}</td><td class="td" style="font-weight:900">${f}</td><td class="td"><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="deleteFactory('${escJs(f)}')">حذف</button></td></tr>`).join('');
+  const userRows=Object.entries(users).map(([k,u])=>`<tr><td class="td" style="color:#64748b;font-size:11px">${k}</td><td class="td">${u.email||''}</td><td class="td"><span class="badge" style="background:${u.role==='manager'?'#eff6ff':'#f0fdf4'};color:${u.role==='manager'?'#2563eb':'#059669'}">${u.role==='manager'?'مدير':'محاسب'}</span></td><td class="td">${u.factory||'الكل'}</td><td class="td">${k!==ADMIN_UID?`<button class="btn btn-red" style="padding:6px 10px;font-size:11px" onclick="deleteUser('${escJs(k)}')">حذف</button>`:''}</td></tr>`).join('');
   const predefEntities=DB.get('expense_entities',[]);
   const predefNames=predefEntities.map(e=>e.name);
   const dynExpNames=DB.get('expenses',[]).map(e=>e.factory||'').filter(f=>f);
@@ -5362,11 +5549,11 @@ function viewAdmin(){
       ?`<td class="td"><span class="badge" style="background:#eff6ff;color:#2563eb;font-size:10px">${esc(predef.factory_assoc)}</span></td>`
       :`<td class="td" style="color:#64748b;font-size:10px">—</td>`;
     if(renameTarget===f){
-      return `<tr style="background:#eff6ff"><td class="td" style="color:#64748b">${i+1}</td><td class="td" colspan="2"><input class="inp" id="rename_entity_inp" value="${esc(f)}" style="font-size:12px"></td>${factAssocCell}<td class="td" style="white-space:nowrap"><button class="btn btn-blue" style="padding:3px 10px;font-size:11px;margin-left:4px" onclick="saveRenameExpenseEntity('${f}')">💾 حفظ</button><button class="btn btn-gray" style="padding:3px 10px;font-size:11px" onclick="cancelRenameExpenseEntity()">إلغاء</button></td></tr>`;
+      return `<tr style="background:#eff6ff"><td class="td" style="color:#64748b">${i+1}</td><td class="td" colspan="2"><input class="inp" id="rename_entity_inp" value="${esc(f)}" style="font-size:12px"></td>${factAssocCell}<td class="td" style="white-space:nowrap"><button class="btn btn-blue" style="padding:3px 10px;font-size:11px;margin-left:4px" onclick="saveRenameExpenseEntity('${escJs(f)}')">💾 حفظ</button><button class="btn btn-gray" style="padding:3px 10px;font-size:11px" onclick="cancelRenameExpenseEntity()">إلغاء</button></td></tr>`;
     }
     const actionBtns=cnt===0&&predef
       ?`<button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="deleteExpenseEntityPredef('${predef.id}')">🗑️ حذف</button>`
-      :`<button class="btn btn-gray" style="padding:3px 10px;font-size:11px;margin-left:4px" onclick="startRenameExpenseEntity('${f}')">✏️ تعديل التسمية</button><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="clearFactoryExpenses('${f}')">🗑️ حذف</button>`;
+      :`<button class="btn btn-gray" style="padding:3px 10px;font-size:11px;margin-left:4px" onclick="startRenameExpenseEntity('${escJs(f)}')">✏️ تعديل التسمية</button><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="clearFactoryExpenses('${escJs(f)}')">🗑️ حذف</button>`;
     return `<tr><td class="td" style="color:#64748b">${i+1}</td><td class="td" style="font-weight:900">${esc(f)}</td><td class="td" style="color:#64748b;font-size:11px">${cnt} مصروف</td>${factAssocCell}<td class="td" style="white-space:nowrap">${actionBtns}</td></tr>`;
   }).join('');
   return`<div style="max-width:900px">
@@ -5458,10 +5645,10 @@ async function migrateExpensesToHaidar(){
   DB.set('expenses',expenses);
   DB.set('expenses_haidar_migrated',true);
   showToast(`⏳ جاري الرفع لـ Firebase (${toMigrate.length} سجل)...`,'info',4000);
-  try{
-    await Promise.all(toMigrate.map(e=>FDB.save('expenses',e.id,e)));
-    showToast(`✅ تم ترحيل ${toMigrate.length} مصروف بنجاح إلى حيدر صبري`,'success',6000);
-  }catch(err){showToast('✅ تم الترحيل محلياً | ⚠️ فشل الرفع السحابي — حاول مزامنة يدوياً','warning',6000);}
+  const _res=await Promise.all(toMigrate.map(e=>FDB.save('expenses',e.id,e)));
+  const _bad=_res.filter(r=>!r).length;
+  if(_bad)showToast('✅ تم الترحيل محلياً | ⚠️ '+_bad+' سجلاً لم يصل السحابة — اضغط الشارة أسفل اليسار','warning',9000);
+  else showToast(`✅ تم ترحيل ${toMigrate.length} مصروف بنجاح إلى حيدر صبري`,'success',6000);
   renderContent();
 }
 async function cleanupExpensesSettlementData(){
@@ -5710,7 +5897,7 @@ function deleteUser(k){if(!confirm('حذف المستخدم: '+k+'?'))return;con
 // ===== النسخ الاحتياطي =====
 // ===== النسخ الاحتياطي: مجلّد ثابت + نسخة يومية تلقائية + الاحتفاظ بآخر 30 =====
 // كل مفاتيح البيانات (بلا صور البوجر — تعيش بمجموعة voucher_scans بـFirestore)
-const BACKUP_KEYS=['entries','sales','expenses','expense_entities','deleted_expense_ids',
+const BACKUP_KEYS=['entries','sales','expenses','expense_entities','expense_entity_aliases','deleted_expense_ids',
   'salaf','salaf_settlement_cfg','private_salaf','deleted_private_salaf_ids',
   'kroob','kroob_opening','kroob_month_openings','kroob_op_types',
   'rafid_accounts','rafid_opening','refinery_received',
@@ -5764,7 +5951,7 @@ async function bkPerm(h,request){
 }
 
 function bkPayload(){
-  var b={_version:44.8,_date:new Date().toISOString(),_by:(currentUser&&currentUser.email)||'',_counts:{}};
+  var b={_version:46.0,_date:new Date().toISOString(),_by:(currentUser&&currentUser.email)||'',_counts:{}};
   BACKUP_KEYS.forEach(function(k){
     var v=DB.get(k,null);
     b[k]=v;
@@ -6118,7 +6305,7 @@ async function fullSyncToFirebase(fromRestore){
 }
 
 function rebuildDrivers(){const entries=DB.get('entries',[]),sales=DB.get('sales',[]);const drivers={};entries.forEach(e=>{if(e.driver_name)drivers[e.driver_name]={name:e.driver_name,car_no:e.car_no||'',location:e.location||''};});sales.forEach(e=>{if(e.driver_name&&!drivers[e.driver_name])drivers[e.driver_name]={name:e.driver_name,car_no:e.car_no||'',location:e.location||''};});DB.set('drivers',drivers);showToast('تم إعادة بناء '+Object.keys(drivers).length+' سائق','success');renderContent();}
-function clearFactoryData(factory){if(!confirm('مسح كل بيانات: '+factory+'?'))return;const allE=DB.get('entries',[]);const delE=allE.filter(e=>e.factory===factory);DB.set('entries',allE.filter(e=>e.factory!==factory));delE.forEach(e=>FDB.delete('entries',e.id));const allS=DB.get('sales',[]);const delS=allS.filter(s=>s.factory===factory);DB.set('sales',allS.filter(s=>s.factory!==factory));delS.forEach(s=>FDB.delete('sales',s.id));showToast('تم المسح','success');renderContent();}
+function clearFactoryData(factory){if(!confirm('مسح كل بيانات: '+factory+'?'))return;const allE=DB.get('entries',[]);const delE=allE.filter(e=>sameFactory(e.factory,factory));DB.set('entries',allE.filter(e=>!sameFactory(e.factory,factory)));delE.forEach(e=>FDB.delete('entries',e.id));const allS=DB.get('sales',[]);const delS=allS.filter(s=>sameFactory(s.factory,factory));DB.set('sales',allS.filter(s=>!sameFactory(s.factory,factory)));delS.forEach(s=>FDB.delete('sales',s.id));showToast('تم المسح','success');renderContent();}
 function clearByIndex(idx, type){
   const f = FACTORIES[idx];
   if(!f){ showToast('معمل غير موجود','error'); return; }
@@ -6135,8 +6322,9 @@ async function clearTypeData(factory,type){
   
   // خطوة 1: مسح من localStorage أولاً
   const localData=DB.get(key,[]);
-  const toDelete=localData.filter(x=>x.factory===factory);
-  const remaining=localData.filter(x=>x.factory!==factory);
+  // sameFactory لا === : فرق مسافة أو همزة كان يُبقي سجلات بعد «المسح» وتظل ظاهرة باللوحة
+  const toDelete=localData.filter(x=>sameFactory(x.factory,factory));
+  const remaining=localData.filter(x=>!sameFactory(x.factory,factory));
   DB.set(key,remaining);
   
   // خطوة 2: مسح من Firebase
@@ -6145,7 +6333,7 @@ async function clearTypeData(factory,type){
     try{
       const {db,collection:col2,getDocs,deleteDoc,doc}=window._fb;
       const snap=await getDocs(col2(db,col));
-      const toDelFB=snap.docs.filter(d=>d.data().factory===factory);
+      const toDelFB=snap.docs.filter(d=>sameFactory(d.data().factory,factory));
       fbDeleted=toDelFB.length;
       // حذف على دفعات
       const batchSize=20;
@@ -6205,8 +6393,8 @@ function viewPermissions(){
   const accountants=Object.entries(users).filter(([k,u])=>u.role!=='manager');
   const cards=accountants.map(([k,u])=>{
     const perms=u.permissions||[];
-    const checks=ALL_PERMS.map(p=>`<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;cursor:pointer;background:${perms.includes(p)?'#ecfdf5':'#f8fafc'};border:1px solid ${perms.includes(p)?'#6ee7b7':'#e2e8f0'}"><input type="checkbox" ${perms.includes(p)?'checked':''} onchange="togglePerm('${k}','${p}',this.checked)"> <span style="font-size:12px;font-weight:700;color:#1a3a5c">${PERM_LABELS[p]||p}</span></label>`).join('');
-    return`<div class="card" style="border-right:5px solid #7c3aed;margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div><div style="font-weight:900;font-size:13px">${u.email}</div><div style="font-size:11px;color:#64748b">معمل: ${u.factory||'الكل'}</div></div><span class="badge" style="background:#f5f3ff;color:#7c3aed">محاسب</span></div><div style="display:flex;gap:8px;flex-wrap:wrap">${checks}</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-green" style="font-size:11px;padding:5px 12px" onclick="grantAll('${k}')">✅ كل الصلاحيات</button><button class="btn btn-red" style="font-size:11px;padding:5px 12px" onclick="revokeAll('${k}')">❌ سحب الكل</button></div></div>`;}).join('');
+    const checks=ALL_PERMS.map(p=>`<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;cursor:pointer;background:${perms.includes(p)?'#ecfdf5':'#f8fafc'};border:1px solid ${perms.includes(p)?'#6ee7b7':'#e2e8f0'}"><input type="checkbox" ${perms.includes(p)?'checked':''} onchange="togglePerm('${escJs(k)}','${escJs(p)}',this.checked)"> <span style="font-size:12px;font-weight:700;color:#1a3a5c">${PERM_LABELS[p]||p}</span></label>`).join('');
+    return`<div class="card" style="border-right:5px solid #7c3aed;margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div><div style="font-weight:900;font-size:13px">${u.email}</div><div style="font-size:11px;color:#64748b">معمل: ${u.factory||'الكل'}</div></div><span class="badge" style="background:#f5f3ff;color:#7c3aed">محاسب</span></div><div style="display:flex;gap:8px;flex-wrap:wrap">${checks}</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-green" style="font-size:11px;padding:5px 12px" onclick="grantAll('${escJs(k)}')">✅ كل الصلاحيات</button><button class="btn btn-red" style="font-size:11px;padding:5px 12px" onclick="revokeAll('${escJs(k)}')">❌ سحب الكل</button></div></div>`;}).join('');
   return`<h2 style="font-size:15px;font-weight:900;margin-bottom:16px;color:#6d28d9">🔐 إدارة الصلاحيات</h2>${accountants.length?cards:'<div class="card" style="text-align:center;color:#64748b;padding:30px">لا يوجد محاسبون</div>'}`;
 }
 
@@ -6322,7 +6510,8 @@ function _resetAuditFilter(){
 
 // ===== إشعارات =====
 function initNotifications(){const badge=el('notif-badge');if(!badge)return;const all=DB.get('notifs',[]);const unread=all.filter(n=>!n.read);badge.style.display=unread.length?'flex':'none';badge.textContent=unread.length;}
-function toggleNotif(){const panel=document.getElementById('notif-panel');if(panel){panel.remove();return;}const all=DB.get('notifs',[]).slice().reverse().slice(0,10);const items=all.map(n=>`<div class="notif-item" style="background:${n.read?'#f8fafc':'#eff6ff'}"><div style="font-size:12px;font-weight:700">${n.title}</div><div style="font-size:11px;color:#64748b">${n.msg||''}</div><div style="font-size:10px;color:#64748b;margin-top:3px">${new Date(n.time).toLocaleString('ar-IQ')}</div></div>`).join('');const np=document.createElement('div');np.id='notif-panel';np.className='notif-panel';np.innerHTML=`<div style="padding:12px 16px;background:#0f172a;color:#fff;font-weight:900;font-size:13px;display:flex;justify-content:space-between;align-items:center">🔔 الإشعارات<button onclick="clearNotifs()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:11px">مسح الكل</button></div><div style="overflow-y:auto;max-height:320px">${items||'<div style="padding:20px;text-align:center;color:#64748b;font-size:13px">لا توجد إشعارات</div>'}</div>`;document.body.appendChild(np);all.forEach(n=>n.read=true);DB.set('notifs',all.reverse());initNotifications();}
+function toggleNotif(){const panel=document.getElementById('notif-panel');if(panel){panel.remove();return;}const _allN=DB.get('notifs',[]);const all=_allN.slice().reverse().slice(0,10);const items=all.map(n=>`<div class="notif-item" style="background:${n.read?'#f8fafc':'#eff6ff'}"><div style="font-size:12px;font-weight:700">${n.title}</div><div style="font-size:11px;color:#64748b">${n.msg||''}</div><div style="font-size:10px;color:#64748b;margin-top:3px">${new Date(n.time).toLocaleString('ar-IQ')}</div></div>`).join('');const np=document.createElement('div');np.id='notif-panel';np.className='notif-panel';np.innerHTML=`<div style="padding:12px 16px;background:#0f172a;color:#fff;font-weight:900;font-size:13px;display:flex;justify-content:space-between;align-items:center">🔔 الإشعارات<button onclick="clearNotifs()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:11px">مسح الكل</button></div><div style="overflow-y:auto;max-height:320px">${items||'<div style="padding:20px;text-align:center;color:#64748b;font-size:13px">لا توجد إشعارات</div>'}</div>`;document.body.appendChild(np);// تُؤشَّر المقروءة على القائمة الكاملة — الكتابة بآخر 10 فقط كانت تحذف الباقي
+  _allN.forEach(n=>{n.read=true;});DB.set('notifs',_allN);initNotifications();}
 function addNotif(title,msg){const all=DB.get('notifs',[]);all.push({id:'n_'+Date.now(),title,msg,time:Date.now(),read:false});DB.set('notifs',all.slice(-50));initNotifications();}
 function clearNotifs(){DB.set('notifs',[]);const p=document.getElementById('notif-panel');if(p)p.remove();initNotifications();}
 
@@ -6469,6 +6658,12 @@ function logout(){
   window.logout = function(){ clearTimeout(_timer); clearTimeout(_warnTimer); const w=document.getElementById('_session_warn'); if(w)w.remove(); if(typeof _origLogout==='function') _origLogout(); };
 })();
 
+// ===== رفع السجلات المعلَّقة تلقائياً =====
+// الطابور يمتلئ عند انقطاع الاتصال؛ هذه المشغّلات تُفرغه بلا تدخّل المستخدم
+document.addEventListener('fb-ready', function(){ setTimeout(function(){ _fdbBadge(); flushFdbQueue(true); }, 2500); setTimeout(pruneCloudAuditLog, 20000); });
+window.addEventListener('online', function(){ setTimeout(function(){ flushFdbQueue(true); }, 1500); });
+setInterval(function(){ if(fdbPendingCount()&&navigator.onLine) flushFdbQueue(true); }, 120000);
+
 // ===== التشغيل الرئيسي =====
 document.addEventListener('fb-ready', function(){
   const lastUser=DB.get('last_user',null);
@@ -6492,6 +6687,12 @@ setTimeout(()=>{
 const _fsExpandIcon = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
 const _fsCompressIcon = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>';
 async function forceFullResync(){
+  // localStorage.clear() يمحو أيضاً طابور الرفع — أي سجل لم يصل السحابة يضيع نهائياً
+  const _pend=fdbPendingCount();
+  if(_pend){
+    const r=await flushFdbQueue(false);
+    if(r.fail){ showToast('⛔ يوجد '+r.fail+' سجل لم يصل السحابة بعد — لا تُعِد المزامنة الآن وإلا ضاع نهائياً. أعد المحاولة بعد عودة الاتصال.','error',12000); return; }
+  }
   if(!confirm('سيتم مسح الذاكرة المؤقتة المحلية لهذا الجهاز فقط (لا يمس أي بيانات بالسحابة) وإعادة تسجيل الدخول من جديد. استخدمها إذا كانت البيانات هنا تبدو قديمة أو مختلفة عن جهاز آخر. متابعة؟'))return;
   try{
     localStorage.clear();

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام المشتريات النفطية v47.1</title>
+<title>نظام المشتريات النفطية v47.2</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='14' y='16' width='36' height='34' rx='5' fill='%231e3a5f'/><ellipse cx='32' cy='16' rx='18' ry='6' fill='%232563eb'/><ellipse cx='32' cy='50' rx='18' ry='6' fill='%231e293b'/><rect x='14' y='26' width='36' height='5' fill='%23f59e0b'/><rect x='14' y='37' width='36' height='5' fill='%23f59e0b'/><text x='32' y='35' text-anchor='middle' fill='%2334d399' font-size='10' font-weight='bold' font-family='Arial'>OIL</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -1141,7 +1141,7 @@ function render() {
       '<aside style="width:225px;background:#0f172a;display:flex;flex-direction:column;flex-shrink:0;z-index:50">' +
         '<div style="padding:10px;background:#020617;border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
           '<div style="width:34px;height:34px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:11px;margin:0 auto 5px">OIL</div>' +
-          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v47.1</p>' +
+          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v47.2</p>' +
           '<p style="font-size:10px;color:#94a3b8;margin-top:2px;font-weight:900;letter-spacing:0.5px">'+(isM?'المدققين':'محاسب: '+currentUser.factory)+'</p>' +
         '</div>' +
         '<nav id="sidebar-nav" style="flex:1;padding:8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
@@ -1554,7 +1554,7 @@ tfoot td{font-weight:900;background:#f0f0f0}
 ${K||R?'<h2>🏦 ملخص الحسابات</h2>':''}
 ${acct('كشف الكروب',K)}
 ${acct('كشف حسابات سيد رافد',R)}
-<div class="foot">نظام مراقبة المشتريات النفطية v47.1 — طُبع بواسطة: ${esc((currentUser&&currentUser.name)||'')}</div>
+<div class="foot">نظام مراقبة المشتريات النفطية v47.2 — طُبع بواسطة: ${esc((currentUser&&currentUser.name)||'')}</div>
 <script>window.onload=()=>{window.print();};<\/script></body></html>`;
   const w=window.open('','_blank');
   if(!w){showToast('المتصفح منع فتح نافذة الطباعة','warning');return;}
@@ -1574,7 +1574,7 @@ function copyWhatsapp(){
   txt+=`\n*📦 المبيعات:*\n`;
   for(const f of facts){const d=anOf(saleAn,f).total;if(!d.cars)continue;sc2+=d.cars;sk+=d.kaban;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
   txt+=`━━━━━━━━━━━━━\n*الإجمالي:* ${sc2} سيارة | ${fmtKaban(sk)} كبان\n`;
-  txt+=`\n✅ نظام المراقبة v47.1`;
+  txt+=`\n✅ نظام المراقبة v47.2`;
   ovCopy(txt);
   const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}
 }
@@ -2714,8 +2714,35 @@ function expNormAr(s){return String(s||'').replace(/[أإآ]/g,'ا').trim();}
 // عند تعديل تسمية جهة من إدارة النظام يُسجَّل الاسم القديم هنا، فيحترم استيراد Excel
 // التسمية الجديدة بدل إعادة إنشاء الاسم القديم من جدول الربط المكتوب داخل الكود
 function expAliasKey(s){return String(s||'').replace(/\s+/g,' ').trim();}        // مفتاح حرفي
-function expAliasNorm(s){return expNormAr(String(s||'').replace(/\s+/g,' '));}  // مفتاح مُطبَّع (يتجاهل فرق الهمزة)
+// تُزال المحارف غير المرئية (مسافة غير فاصلة/محارف اتجاه/تطويل/حركات) قبل أي مقارنة:
+// اسمان يبدوان متطابقين على الشاشة يجب أن يتطابقا هنا أيضاً
+function expStripInvisible(s){return String(s||'').replace(/[\u200B-\u200F\u061C\u202A-\u202E\u2066-\u2069\uFEFF\u0640\u064B-\u0652\u0670]/g,'').replace(/[\u00A0\u2007\u202F]/g,' ');}
+function expAliasNorm(s){return expNormAr(expStripInvisible(s).replace(/\s+/g,' ')).replace(/\u0649/g,'\u064A').replace(/[\u0624\u0626]/g,'\u0621').replace(/\u0629/g,'\u0647');}  // مفتاح مُطبَّع (يتجاهل الهمزة/التاء المربوطة/المحارف الخفية)
 function sameExpEntity(a,b){ return expAliasNorm(a)===expAliasNorm(b); }
+// إظهار المحارف الخفية داخل الاسم — تُعرض بشاشة الإدارة لتفسير سبب ظهور اسمين متطابقين شكلاً
+function expRevealHidden(s){
+  const NM={'\u00A0':'\u00ABمسافة-ثابتة\u00BB','\u200B':'\u00ABZWSP\u00BB','\u200C':'\u00ABZWNJ\u00BB','\u200D':'\u00ABZWJ\u00BB','\u200E':'\u00ABLRM\u00BB','\u200F':'\u00ABRLM\u00BB','\u061C':'\u00ABALM\u00BB','\uFEFF':'\u00ABBOM\u00BB','\u0640':'\u00ABتطويل\u00BB'};
+  let out='';for(const ch of String(s||'')){out+=(NM[ch]!==undefined)?NM[ch]:(ch===' '?'\u00B7':ch);}return out;
+}
+function expCodePoints(s){return[...String(s||'')].map(c=>'U+'+c.codePointAt(0).toString(16).toUpperCase().padStart(4,'0')).join(' ');}
+// أسماء جهات الصرف الموجودة فعلاً مع عدد مصاريف كل اسم (تشمل الجهات المعرَّفة بلا مصاريف)
+function allExpenseEntityCounts(){
+  const counts={};
+  DB.get('expenses',[]).forEach(function(e){const f=e.factory||'';if(f)counts[f]=(counts[f]||0)+1;});
+  DB.get('expense_entities',[]).forEach(function(e){const f=e.name||'';if(f&&counts[f]===undefined)counts[f]=0;});
+  return counts;
+}
+// التسمية المعتمدة: إن وُجد اسم مخزَّن يطابق الاسم بعد التطبيع فالأكثر استعمالاً منها هو المعتمد.
+// بهذا لا يُنشئ الاستيراد ولا الإدخال اليدوي نسخة ثانية من جهة موجودة بفارق همزة أو محرف خفي.
+function expEntityGroupKey(name){return expAliasNorm(resolveExpenseEntityName(name));}
+function sameExpEntityGroup(a,b){return expEntityGroupKey(a)===expEntityGroupKey(b);}
+function canonicalExpenseEntity(name){
+  const raw=expAliasKey(name);if(!raw)return raw;
+  const counts=allExpenseEntityCounts(),key=expEntityGroupKey(raw);
+  let best=raw,bestCnt=(counts[raw]!==undefined)?counts[raw]:-1;
+  Object.keys(counts).forEach(function(k){if(k!==raw&&expEntityGroupKey(k)===key&&counts[k]>bestCnt){best=k;bestCnt=counts[k];}});
+  return best;
+}
 function getExpenseAliases(){const m=DB.get('expense_entity_aliases',{});return(m&&typeof m==='object'&&!Array.isArray(m))?m:{};}
 function saveExpenseAliases(m){DB.set('expense_entity_aliases',m);FDB.save('settings','expense_entity_aliases',{id:'expense_entity_aliases',map:m});}
 // يتبع سلسلة المرادفات (أ→ب→ج) بمطابقة حرفية أولاً ثم مُطبَّعة، بحدّ أقصى يمنع الدوران اللانهائي
@@ -2979,6 +3006,8 @@ function saveExpense(){
     if(!factoryRaw){showToast('يرجى كتابة جهة الصرف','error');return;}
     factories=factoryRaw.split('+').map(f=>f.trim()).filter(f=>f);
   }
+  // توحيد التسمية: اسم يطابق جهة موجودة بعد التطبيع يُحفَظ بتسميتها المعتمدة لا كجهة جديدة
+  factories=factories.map(function(f){return canonicalExpenseEntity(resolveExpenseEntityName(f));});
   const n=factories.length;
   const baseDinar=n>1?Math.floor(dinar/n):dinar;
   const baseDollar=n>1?Math.floor(dollar*100/n)/100:dollar;
@@ -3140,7 +3169,7 @@ async function confirmImportExpensesSheets(){
   selectedSheets.forEach(function(sheetName){
     const rawName=sheetName.trim();
     // المرادفات آخر خطوة: تعديل التسمية من إدارة النظام يتغلّب على جدول الربط
-    const factory=resolveExpenseEntityName(sheetMap[rawName]||sheetMapNorm[expAliasNorm(rawName)]||rawName);
+    const factory=canonicalExpenseEntity(resolveExpenseEntityName(sheetMap[rawName]||sheetMapNorm[expAliasNorm(rawName)]||rawName));
     const ws=wb.Sheets[sheetName];
     const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
     var lastDate='';
@@ -3319,6 +3348,38 @@ function saveRenameExpenseEntity(oldName){
   S.expEntityRenameTarget='';
   showToast(affected.length?('تم تحديث التسمية في '+affected.length+' مصروف'):'تم تحديث التسمية','success');
   setTimeout(()=>renderContent(),500);
+}
+
+// يدمج كل التسميات المتطابقة شكلاً مع الاسم المُختار تحته (المصاريف + قائمة الجهات + المرادفات)
+function mergeExpenseEntityVariants(keepName){
+  const counts=allExpenseEntityCounts();
+  const variants=Object.keys(counts).filter(function(k){return k!==keepName&&sameExpEntityGroup(k,keepName);});
+  if(!variants.length){showToast('لا توجد تسميات متطابقة شكلاً مع هذه الجهة','error');return;}
+  let expenses=DB.get('expenses',[]);
+  const affected=expenses.filter(function(e){return variants.indexOf(e.factory)>=0;});
+  if(!confirm('سيتم توحيد '+(variants.length+1)+' تسميات متطابقة شكلاً تحت الاسم:\n\u00AB'+keepName+'\u00BB\nونقل '+affected.length+' مصروف إليه. متابعة؟'))return;
+  variants.forEach(function(v){recordExpenseAlias(v,keepName);});
+  if(affected.length){
+    affected.forEach(function(e){e.factory=keepName;});
+    DB.set('expenses',expenses);
+    affected.forEach(function(e){FDB.save('expenses',e.id,e);});
+  }
+  // قائمة الجهات المعرَّفة مسبقاً: تُعاد تسمية المتغيّرات ويُحذف ما يتكرر منها
+  const predef=DB.get('expense_entities',[]),kept=[];let seenKeep=false;
+  predef.forEach(function(ent){
+    const isVar=variants.indexOf(ent.name)>=0;
+    const nm=isVar?keepName:ent.name;
+    if(nm===keepName){
+      if(seenKeep){FDB.delete('expense_entities',ent.id);return;}
+      seenKeep=true;
+    }
+    if(ent.name!==nm){ent.name=nm;FDB.save('expense_entities',ent.id,ent);}
+    kept.push(ent);
+  });
+  DB.set('expense_entities',kept);
+  auditLog('دمج تسميات جهة صرف',keepName+' \u2190 '+variants.join(' , ')+' | عدد المصاريف: '+affected.length);
+  showToast('تم الدمج — '+affected.length+' مصروف صار تحت \u00AB'+keepName+'\u00BB','success');
+  setTimeout(function(){renderContent();},500);
 }
 
 // ===== تسوية السلف =====
@@ -4774,7 +4835,7 @@ function renderKroobDailySection(from,to){
   todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isInD2=kroobDir(e,'dinar')==='دائن',isInDol2=kroobDir(e,'dollar')==='دائن',badgeIn2=d2?isInD2:(dl2?isInDol2:isInD2);let r='\n'+(badgeIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.date||'')+' | '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+(isInD2?'+':'-')+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 '+(isInDol2?'+':'-')+'$'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
   waTextK+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextK+=' | $'+fmtM(balDollar);
-  waTextK+='\n✅ نظام المراقبة v47.1';
+  waTextK+='\n✅ نظام المراقبة v47.2';
   window._kroobWaText=waTextK;
 
   const stat=(bg,bd,c,t,v)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:11px 12px;text-align:center"><div style="font-size:10px;font-weight:800;color:${c};margin-bottom:4px">${t}</div><div style="font-size:15px;font-weight:900;color:${c}">${v}</div></div>`;
@@ -4835,7 +4896,7 @@ function renderRafidDailySection(from,to){
   todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.date||'')+' | '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(rafidDir(e2,'dollar')==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
   waTextR+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextR+=' | $'+fmtM(balDollar);
-  waTextR+='\n✅ نظام المراقبة v47.1';
+  waTextR+='\n✅ نظام المراقبة v47.2';
   window._rafidWaText=waTextR;
 
   const stat=(bg,bd,c,t,v)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:11px 12px;text-align:center"><div style="font-size:10px;font-weight:800;color:${c};margin-bottom:4px">${t}</div><div style="font-size:15px;font-weight:900;color:${c}">${v}</div></div>`;
@@ -5505,7 +5566,7 @@ function sendRefineryWhatsapp(){
     lines.push((grandRemaining>0?'⚠️':'✅')+' المتبقي: '+fmtM(Math.abs(grandRemaining))+' د.ع '+(grandRemaining>0?'(غير مسوى)':'(مسوى)'));
     lines.push(sep);
   });
-  lines.push('✅ نظام المراقبة v47.1');
+  lines.push('✅ نظام المراقبة v47.2');
   var msg=lines.join(NL);
   if(navigator.clipboard){
     navigator.clipboard.writeText(msg).then(function(){showToast('تم نسخ نص الواتساب','success');}).catch(function(){});
@@ -5570,9 +5631,15 @@ function viewAdmin(){
   const predefNames=predefEntities.map(e=>e.name);
   const dynExpNames=DB.get('expenses',[]).map(e=>e.factory||'').filter(f=>f);
   const allExpEntities=[...new Set([...predefNames,...dynExpNames])].sort();
+  // كشف الأسماء المتطابقة شكلاً (فرق همزة/مسافة مزدوجة/محرف اتجاه خفي) لعرض زر الدمج
+  const expEntGroups={};
+  allExpEntities.forEach(function(n){const k=expEntityGroupKey(n);(expEntGroups[k]=expEntGroups[k]||[]).push(n);});
+  const expDupCount=Object.keys(expEntGroups).filter(function(k){return expEntGroups[k].length>1;}).length;
   const renameTarget=S.expEntityRenameTarget||'';
   const expEntityRows=allExpEntities.map((f,i)=>{
     const cnt=DB.get('expenses',[]).filter(e=>e.factory===f).length;
+    const dupGroup=expEntGroups[expEntityGroupKey(f)]||[f];
+    const isDup=dupGroup.length>1;
     const predef=predefEntities.find(e=>e.name===f);
     const factAssocCell=predef
       ?`<td class="td"><span class="badge" style="background:#eff6ff;color:#2563eb;font-size:10px">${esc(predef.factory_assoc)}</span></td>`
@@ -5580,10 +5647,12 @@ function viewAdmin(){
     if(renameTarget===f){
       return `<tr style="background:#eff6ff"><td class="td" style="color:#64748b">${i+1}</td><td class="td" colspan="2"><input class="inp" id="rename_entity_inp" value="${esc(f)}" style="font-size:12px"></td>${factAssocCell}<td class="td" style="white-space:nowrap"><button class="btn btn-blue" style="padding:3px 10px;font-size:11px;margin-left:4px" onclick="saveRenameExpenseEntity('${escJs(f)}')">💾 حفظ</button><button class="btn btn-gray" style="padding:3px 10px;font-size:11px" onclick="cancelRenameExpenseEntity()">إلغاء</button></td></tr>`;
     }
-    const actionBtns=cnt===0&&predef
+    const mergeBtn=isDup?`<button class="btn" style="background:#f59e0b;color:#fff;padding:3px 10px;font-size:11px;margin-left:4px" onclick="mergeExpenseEntityVariants('${escJs(f)}')" title="دمج كل التسميات المتطابقة شكلاً تحت هذا الاسم">🔗 دمج</button>`:'';
+    const actionBtns=mergeBtn+(cnt===0&&predef
       ?`<button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="deleteExpenseEntityPredef('${predef.id}')">🗑️ حذف</button>`
-      :`<button class="btn btn-gray" style="padding:3px 10px;font-size:11px;margin-left:4px" onclick="startRenameExpenseEntity('${escJs(f)}')">✏️ تعديل التسمية</button><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="clearFactoryExpenses('${escJs(f)}')">🗑️ حذف</button>`;
-    return `<tr><td class="td" style="color:#64748b">${i+1}</td><td class="td" style="font-weight:900">${esc(f)}</td><td class="td" style="color:#64748b;font-size:11px">${cnt} مصروف</td>${factAssocCell}<td class="td" style="white-space:nowrap">${actionBtns}</td></tr>`;
+      :`<button class="btn btn-gray" style="padding:3px 10px;font-size:11px;margin-left:4px" onclick="startRenameExpenseEntity('${escJs(f)}')">✏️ تعديل التسمية</button><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="clearFactoryExpenses('${escJs(f)}')">🗑️ حذف</button>`);
+    const nameCell=`<td class="td" style="font-weight:900">${esc(f)}${isDup?`<div style="font-size:10px;font-weight:700;color:#b45309;margin-top:3px" title="${esc(expCodePoints(f))}">⚠️ نفس الجهة بـ${dupGroup.length-1} تسمية أخرى — النص الفعلي: <span style="font-family:monospace">${esc(expRevealHidden(f))}</span></div>`:''}</td>`;
+    return `<tr${isDup?' style="background:#fffbeb"':''}><td class="td" style="color:#64748b">${i+1}</td>${nameCell}<td class="td" style="color:#64748b;font-size:11px">${cnt} مصروف</td>${factAssocCell}<td class="td" style="white-space:nowrap">${actionBtns}</td></tr>`;
   }).join('');
   return`<div style="max-width:900px">
   <div class="card" style="margin-bottom:14px;border:2px solid #2563eb">
@@ -5624,7 +5693,7 @@ function viewAdmin(){
       <button class="btn btn-red" style="font-weight:900;padding:10px 22px;font-size:12px" onclick="cleanupExpensesSettlementData()">🗑️ حذف نهائي</button>
     </div>
   </div>`:''}
-  <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px"><div style="padding:12px 16px;background:#7f1d1d;font-weight:900;font-size:13px;color:#fecaca">🧾 إدارة جهات الصرف (المصاريف)</div><div style="padding:14px 16px;background:#fef9f9;border-bottom:1px solid #fecaca"><h4 style="font-size:12px;font-weight:900;color:#7f1d1d;margin:0 0 10px">➕ إضافة جهة صرف جديدة</h4><div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><div style="flex:1;min-width:160px"><label class="lbl">اسم الجهة *</label><input class="inp" id="new_exp_entity_name" placeholder="مثال: شركة الوقود الوطنية..." style="font-size:12px"></div><div style="min-width:160px"><label class="lbl">المعمل المرتبط</label><select class="inp" id="new_exp_entity_factory" style="font-size:12px"><option value="الكل">الكل</option>${FACTORIES.map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join('')}</select></div><button class="btn btn-red" style="padding:9px 22px;font-size:12px;white-space:nowrap;align-self:flex-end" onclick="addExpenseEntity()">إضافة</button></div></div><div style="padding:8px 16px;background:#fef2f2;font-size:11px;font-weight:700;color:#7f1d1d;border-bottom:1px solid #fecaca">تعديل التسمية يُحدِّث الاسم في كل المصاريف القديمة. حذف جهة بدون مصاريف يزيلها من القائمة فقط. حذف جهة بها مصاريف يمسح كل مصاريفها نهائياً.</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">ت</th><th class="th">اسم الجهة</th><th class="th">عدد المصاريف</th><th class="th">المعمل</th><th class="th">إجراءات</th></tr></thead><tbody>${expEntityRows||'<tr><td colspan="5" class="td" style="padding:16px;color:#64748b">لا توجد جهات صرف بعد — أضف من النموذج أعلاه</td></tr>'}</tbody></table></div></div>
+  <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px"><div style="padding:12px 16px;background:#7f1d1d;font-weight:900;font-size:13px;color:#fecaca">🧾 إدارة جهات الصرف (المصاريف)</div><div style="padding:14px 16px;background:#fef9f9;border-bottom:1px solid #fecaca"><h4 style="font-size:12px;font-weight:900;color:#7f1d1d;margin:0 0 10px">➕ إضافة جهة صرف جديدة</h4><div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><div style="flex:1;min-width:160px"><label class="lbl">اسم الجهة *</label><input class="inp" id="new_exp_entity_name" placeholder="مثال: شركة الوقود الوطنية..." style="font-size:12px"></div><div style="min-width:160px"><label class="lbl">المعمل المرتبط</label><select class="inp" id="new_exp_entity_factory" style="font-size:12px"><option value="الكل">الكل</option>${FACTORIES.map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join('')}</select></div><button class="btn btn-red" style="padding:9px 22px;font-size:12px;white-space:nowrap;align-self:flex-end" onclick="addExpenseEntity()">إضافة</button></div></div><div style="padding:8px 16px;background:#fef2f2;font-size:11px;font-weight:700;color:#7f1d1d;border-bottom:1px solid #fecaca">تعديل التسمية يُحدِّث الاسم في كل المصاريف القديمة. حذف جهة بدون مصاريف يزيلها من القائمة فقط. حذف جهة بها مصاريف يمسح كل مصاريفها نهائياً.</div>${expDupCount?`<div style="padding:8px 16px;background:#fffbeb;font-size:11px;font-weight:900;color:#92400e;border-bottom:1px solid #fcd34d">⚠️ يوجد ${expDupCount} اسم يظهر أكثر من مرة بتسميات متطابقة شكلاً (فرق همزة أو مسافة أو محرف خفي أو تسمية قديمة مُسجَّلة كمرادف) — اضغط «🔗 دمج» على السطر الذي تريد الإبقاء عليه لتوحيدها.</div>`:''}<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">ت</th><th class="th">اسم الجهة</th><th class="th">عدد المصاريف</th><th class="th">المعمل</th><th class="th">إجراءات</th></tr></thead><tbody>${expEntityRows||'<tr><td colspan="5" class="td" style="padding:16px;color:#64748b">لا توجد جهات صرف بعد — أضف من النموذج أعلاه</td></tr>'}</tbody></table></div></div>
   <div class="card" style="margin-bottom:14px">
     <h3 style="font-size:14px;font-weight:900;margin-bottom:14px;color:#0f172a">إضافة مستخدم جديد</h3>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><div><label class="lbl">البريد الإلكتروني *</label><input class="inp" id="new_email" placeholder="user@example.com"></div><div><label class="lbl">كلمة السر *</label><input class="inp" id="new_pass" type="password" placeholder="Password123"></div><div><label class="lbl">الدور *</label><select class="inp" id="new_role"><option value="accountant">محاسب</option><option value="manager">مدير</option></select></div><div style="grid-column:span 3"><label class="lbl">المعمل المسؤول عنه *</label><select class="inp" id="new_factory_sel"><option value="الكل">الكل</option>${FACTORIES.map(f=>`<option value="${f}">${f}</option>`).join('')}</select></div></div><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-blue" onclick="addUser()">إضافة المستخدم</button></div><div id="user-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>

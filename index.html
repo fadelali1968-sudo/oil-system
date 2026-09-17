@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام المشتريات النفطية v47.2</title>
+<title>نظام المشتريات النفطية v47.3</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='14' y='16' width='36' height='34' rx='5' fill='%231e3a5f'/><ellipse cx='32' cy='16' rx='18' ry='6' fill='%232563eb'/><ellipse cx='32' cy='50' rx='18' ry='6' fill='%231e293b'/><rect x='14' y='26' width='36' height='5' fill='%23f59e0b'/><rect x='14' y='37' width='36' height='5' fill='%23f59e0b'/><text x='32' y='35' text-anchor='middle' fill='%2334d399' font-size='10' font-weight='bold' font-family='Arial'>OIL</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -1141,7 +1141,7 @@ function render() {
       '<aside style="width:225px;background:#0f172a;display:flex;flex-direction:column;flex-shrink:0;z-index:50">' +
         '<div style="padding:10px;background:#020617;border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
           '<div style="width:34px;height:34px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:11px;margin:0 auto 5px">OIL</div>' +
-          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v47.2</p>' +
+          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v47.3</p>' +
           '<p style="font-size:10px;color:#94a3b8;margin-top:2px;font-weight:900;letter-spacing:0.5px">'+(isM?'المدققين':'محاسب: '+currentUser.factory)+'</p>' +
         '</div>' +
         '<nav id="sidebar-nav" style="flex:1;padding:8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
@@ -1554,7 +1554,7 @@ tfoot td{font-weight:900;background:#f0f0f0}
 ${K||R?'<h2>🏦 ملخص الحسابات</h2>':''}
 ${acct('كشف الكروب',K)}
 ${acct('كشف حسابات سيد رافد',R)}
-<div class="foot">نظام مراقبة المشتريات النفطية v47.2 — طُبع بواسطة: ${esc((currentUser&&currentUser.name)||'')}</div>
+<div class="foot">نظام مراقبة المشتريات النفطية v47.3 — طُبع بواسطة: ${esc((currentUser&&currentUser.name)||'')}</div>
 <script>window.onload=()=>{window.print();};<\/script></body></html>`;
   const w=window.open('','_blank');
   if(!w){showToast('المتصفح منع فتح نافذة الطباعة','warning');return;}
@@ -1574,7 +1574,7 @@ function copyWhatsapp(){
   txt+=`\n*📦 المبيعات:*\n`;
   for(const f of facts){const d=anOf(saleAn,f).total;if(!d.cars)continue;sc2+=d.cars;sk+=d.kaban;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
   txt+=`━━━━━━━━━━━━━\n*الإجمالي:* ${sc2} سيارة | ${fmtKaban(sk)} كبان\n`;
-  txt+=`\n✅ نظام المراقبة v47.2`;
+  txt+=`\n✅ نظام المراقبة v47.3`;
   ovCopy(txt);
   const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}
 }
@@ -1828,6 +1828,355 @@ async function saveSale(){
   S.editSale=null;S.view='sale_table';render();
 }
 
+// ===== 📚 توزيع بوجرات من ملف مجمّع على عدة سجلات (PDF متعدد الصفحات أو عدة صور) =====
+// كل صفحة تُحوَّل صورة JPEG مستقلة. إن كان بالـPDF طبقة نص تُستخرج بيانات البوجر
+// (رقم السيارة/التاريخ/السائق/الوزن/العائدية) لترشيح السجل المطابق — وإن كان صوراً فقط فالإسناد يدوي بالكامل.
+// لا يُحفظ شيء إلا بضغط «حفظ الإسنادات»؛ القرار النهائي بيد المستخدم دائماً.
+let _bulk=null;
+
+function _bulkDigits(s){
+  return (s==null?'':s).toString()
+    .replace(/[٠-٩]/g,function(d){return String.fromCharCode(d.charCodeAt(0)-0x0660+48);})
+    .replace(/[۰-۹]/g,function(d){return String.fromCharCode(d.charCodeAt(0)-0x06F0+48);});
+}
+function _bulkLabelVal(lines,labels){
+  for(const ln of lines){
+    for(const lb of labels){
+      const i=ln.indexOf(lb);
+      if(i>=0){
+        const rest=(ln.slice(0,i)+' '+ln.slice(i+lb.length)).replace(/[:|]/g,' ').trim();
+        if(rest) return rest;
+      }
+    }
+  }
+  return '';
+}
+function _bulkDateFrom(txt){
+  const p2=n=>('0'+n).slice(-2);
+  const t=_bulkDigits(txt||'');
+  let m=t.match(/(20\d\d)\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})/);
+  if(m) return m[1]+'-'+p2(+m[2])+'-'+p2(+m[3]);
+  m=t.match(/(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(20\d\d)/);
+  if(m) return m[3]+'-'+p2(+m[2])+'-'+p2(+m[1]);
+  return '';
+}
+// استخراج أسطر صفحة PDF (نفس أسلوب extractPDFText) — تُرجع [] إذا كانت الصفحة صورة بلا طبقة نص
+async function bulkPageLines(page){
+  try{
+    const tc=await page.getTextContent();
+    const items=tc.items.map(i=>({str:i.str,x:i.transform[4],y:i.transform[5]})).filter(i=>i.str&&i.str.trim());
+    if(!items.length) return [];
+    const rowMap={};
+    items.forEach(i=>{const yk=Math.round(i.y/5)*5;(rowMap[yk]=rowMap[yk]||[]).push(i);});
+    return Object.keys(rowMap).map(Number).sort((a,b)=>b-a)
+      .map(yk=>rowMap[yk].sort((a,b)=>b.x-a.x).map(i=>i.str).join(' ').trim()).filter(Boolean);
+  }catch(e){ return []; }
+}
+function bulkParseLines(lines){
+  const out={car:'',driver:'',date:'',net:0,voucher:'',loc:'',factory:''};
+  if(!lines||!lines.length) return out;
+  const dl=lines.map(l=>_bulkDigits(l));
+  out.date=_bulkDateFrom(_bulkLabelVal(dl,['التاريخ']))||_bulkDateFrom(dl.join('\n'));
+  out.car=(_bulkLabelVal(dl,['رقم السيارة','رقم الشاحنة','رقم العجلة'])||'').replace(/[^0-9]/g,'');
+  out.voucher=(_bulkLabelVal(dl,['رقم البوجر','رقم الوثيقة','البوجر'])||'').trim();
+  out.loc=(_bulkLabelVal(lines,['العائدية'])||'').trim();
+  out.driver=(_bulkLabelVal(lines,['اسم السائق','السائق'])||'').replace(/[0-9٠-٩۰-۹]/g,'').trim();
+  const netS=_bulkLabelVal(dl,['الوزن الصافي','الصافي','الكبان']);
+  out.net=parseFloat((netS||'').replace(/,/g,'').replace(/[^0-9.]/g,''))||0;
+  const facLine=lines.find(l=>l.indexOf('معمل')>=0);
+  if(facLine) out.factory=facLine.trim();
+  return out;
+}
+// درجة تطابق صفحة مع سجل — تُعرض للمستخدم كترشيح ولا تحفظ شيئاً من نفسها
+function bulkScore(p,r,kind){
+  let s=0; const why=[];
+  if(!p) return {s:0,why};
+  // رقم السيارة بالسجل قد يكون مركّباً مع العائدية (19151/21L) — تُقارَن أول مجموعة أرقام
+  const carNum=v=>{ const m=_bulkDigits(v==null?'':v).match(/\d+/); return m?m[0]:''; };
+  const pc=carNum(p.car), rc=carNum(r.car_no);
+  if(pc.length>=3&&pc===rc){ s+=50; why.push('رقم السيارة'); }
+  const pv=normVoucher(p.voucher), rv=normVoucher(r.voucher_no);
+  const pvD=pv.replace(/\D/g,''), rvD=rv.replace(/\D/g,'');
+  if(kind==='purchases'&&pv&&rv&&(pv===rv||(pvD.length>=4&&pvD===rvD))){ s+=60; why.push('رقم البوجر'); }
+  if(p.date&&r.date){
+    if(p.date===r.date){ s+=25; why.push('التاريخ'); }
+    else if(Math.abs(Date.parse(p.date)-Date.parse(r.date))<=2*86400000) s+=8;
+  }
+  if(p.driver&&r.driver_name){
+    const a=p.driver.replace(/\s+/g,''), b=(r.driver_name||'').replace(/\s+/g,'');
+    if(a&&b&&(a.indexOf(b)>=0||b.indexOf(a)>=0)){ s+=20; why.push('السائق'); }
+  }
+  if(p.net>0){
+    const q=kind==='sales'?parseFloat(r.kaban||0):(parseFloat(r.weight_kg||0)||parseFloat(r.qty_tons||0));
+    if(q>0&&[q,q*1000].some(c=>Math.abs(c-p.net)<=Math.max(5,c*0.002))){ s+=20; why.push('الوزن'); }
+  }
+  if(p.loc&&r.location&&p.loc.replace(/\s+/g,'').toLowerCase()===(r.location||'').replace(/\s+/g,'').toLowerCase()){ s+=10; why.push('العائدية'); }
+  return {s,why};
+}
+
+function bulkScanOpen(kind){
+  if(!canEdit(kind==='sales'?'sales':'purchases')){ showToast('لا تملك صلاحية تعديل هذا السجل','error'); return; }
+  const recs=kind==='sales'?getSaleList():getList();
+  if(!recs.length){ showToast('لا توجد سجلات معروضة لإسناد البوجرات إليها','warning'); return; }
+  _bulk={kind,recs,pages:[],idx:0,q:'',onlyNoImg:true,saving:false,hasText:false};
+  bulkRender();
+}
+function bulkClose(){
+  if(_bulk&&_bulk.saving){ showToast('انتظر انتهاء الحفظ','warning'); return; }
+  if(_bulk&&_bulk.pages.some(p=>p.recId)&&!confirm('توجد إسنادات لم تُحفظ بعد — إغلاق النافذة وفقدانها؟')) return;
+  if(_bulk) _bulk.pages.forEach(p=>{ try{ URL.revokeObjectURL(p.url); }catch(e){} });
+  _bulk=null;
+  const m=document.getElementById('bulk-scan-modal'); if(m) m.remove();
+}
+function bulkRender(){
+  let m=document.getElementById('bulk-scan-modal');
+  if(!m){
+    m=document.createElement('div'); m.id='bulk-scan-modal';
+    m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.88);z-index:99000;display:flex;align-items:center;justify-content:center;padding:14px';
+    document.body.appendChild(m);
+  }
+  if(!_bulk){ m.remove(); return; }
+  m.innerHTML=_bulk.pages.length?bulkWorkspaceHTML():bulkPickHTML();
+  const qEl=document.getElementById('bulk_q');
+  if(qEl&&_bulk.focusQ){ qEl.focus(); qEl.setSelectionRange(qEl.value.length,qEl.value.length); _bulk.focusQ=false; }
+}
+function bulkPickHTML(){
+  const lbl=_bulk.kind==='sales'?'المبيعات':'المشتريات';
+  return `<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-weight:900;font-size:14px;color:#1e3a8a">📚 توزيع بوجرات من ملف مجمّع — ${lbl}</span>
+      <button type="button" class="btn btn-gray" style="padding:5px 12px;font-size:12px" onclick="bulkClose()">✕</button>
+    </div>
+    <div style="font-size:11px;color:#64748b;line-height:1.9;margin-bottom:12px">
+      اختر ملف PDF يحتوي عدة بوجرات (بوجر بكل صفحة)، أو حدّد عدة صور دفعة واحدة.<br>
+      يُقسَّم الملف لصفحات وتُعرض كل صفحة أمامك مع قائمة السجلات لإسنادها بنقرة واحدة.
+      وإن كان الـPDF يحوي نصاً يُرشَّح السجل المطابق تلقائياً (رقم السيارة/التاريخ/السائق/الوزن).
+    </div>
+    <div style="background:#f8fafc;border:2px dashed #cbd5e1;border-radius:10px;padding:18px;text-align:center">
+      <input class="inp" type="file" id="bulk_file" accept="application/pdf,.pdf,image/*" multiple onchange="bulkPickFiles(this)" style="padding:8px">
+      <div id="bulk-prog" style="margin-top:10px;font-size:12px;font-weight:700;color:#0f172a"></div>
+    </div>
+    <div style="margin-top:12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px;font-size:11px;color:#92400e;font-weight:700">
+      ستُعرض سجلات «${esc(S.selectedFactory)}» ضمن الفلاتر المختارة حالياً (${_bulk.recs.length} سجل).
+    </div>
+  </div>`;
+}
+async function bulkPickFiles(input){
+  const files=Array.from(input.files||[]); if(!files.length) return;
+  const setP=t=>{ const e=document.getElementById('bulk-prog'); if(e) e.textContent=t; };
+  const pages=[];
+  try{
+    for(const f of files){
+      if(isPdfFile(f)){
+        await ensurePdfJs();
+        const pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;
+        for(let n=1;n<=pdf.numPages;n++){
+          setP('⏳ جاري تجهيز الصفحة '+n+' من '+pdf.numPages+'...');
+          const page=await pdf.getPage(n);
+          const base=page.getViewport({scale:1});
+          const scale=Math.min(1600/base.width,1600/base.height);
+          const vp=page.getViewport({scale});
+          const cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height;
+          await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+          const jpg=await canvasToJpegFile(cv,(f.name||'scan').replace(/\.pdf$/i,'')+'_p'+n+'.jpg');
+          const lines=await bulkPageLines(page);
+          pages.push({file:jpg,url:URL.createObjectURL(jpg),lines,parsed:bulkParseLines(lines),recId:'',slot:'load',auto:false,src:(f.name||'ملف')+' — صفحة '+n});
+        }
+      }else{
+        setP('⏳ جاري تجهيز الصور...');
+        pages.push({file:f,url:URL.createObjectURL(f),lines:[],parsed:bulkParseLines([]),recId:'',slot:'load',auto:false,src:f.name||'صورة'});
+      }
+    }
+  }catch(err){
+    console.warn('bulk pages error:',err);
+    showToast('تعذر قراءة الملف: '+(err.message||''),'error',5000);
+    return;
+  }
+  if(!pages.length){ showToast('لم يُعثر على صفحات داخل الملف','error'); return; }
+  _bulk.pages=pages; _bulk.idx=0;
+  _bulk.hasText=pages.some(p=>p.lines.length>0);
+  bulkAutoSuggest();
+  bulkRender();
+}
+// ترشيح تلقائي مبدئي للصفحات عالية التطابق فقط — يُعرض بعلامة «مقترح» ويبقى قابلاً للتعديل قبل الحفظ
+function bulkAutoSuggest(){
+  if(!_bulk.hasText) return;
+  const taken=new Set();
+  _bulk.pages.forEach(p=>{
+    if(!p.lines.length) return;
+    const scored=_bulk.recs.map(r=>({r,...bulkScore(p.parsed,r,_bulk.kind)})).filter(x=>x.s>=75).sort((a,b)=>b.s-a.s);
+    if(!scored.length) return;
+    const best=scored[0];
+    if(scored.length>1&&scored[1].s===best.s) return;   // تعادل ⇐ لا ترشيح
+    const key=best.r.id+'|'+p.slot;
+    if(taken.has(key)) return;
+    taken.add(key);
+    p.recId=best.r.id; p.auto=true;
+  });
+}
+function bulkGoto(i){ if(i>=0&&i<_bulk.pages.length){ _bulk.idx=i; bulkRender(); } }
+function bulkGo(d){ bulkGoto(Math.min(_bulk.pages.length-1,Math.max(0,_bulk.idx+d))); }
+function bulkSetSlot(slot){ const p=_bulk.pages[_bulk.idx]; if(p){ p.slot=slot; bulkRender(); } }
+// البحث يحدّث قائمة السجلات وحدها — إعادة بناء النافذة كلها بكل ضغطة حرف تُعيد تحميل صورة الصفحة وتُفقد التركيز
+function bulkSearch(v){
+  _bulk.q=v;
+  const listEl=document.getElementById('bulk-list'), cntEl=document.getElementById('bulk-count');
+  if(listEl&&cntEl){
+    const L=bulkListHTML();
+    listEl.innerHTML=L.cards||'<div style="text-align:center;color:#64748b;font-size:12px;padding:20px">لا توجد سجلات — ألغِ «بلا صورة فقط» أو امسح البحث</div>';
+    cntEl.textContent=L.n+' سجل ضمن الفلتر'+(L.n>80?' — تُعرض أول 80، استخدم البحث':'');
+    return;
+  }
+  _bulk.focusQ=true; bulkRender();
+}
+function bulkToggleNoImg(v){ _bulk.onlyNoImg=v; bulkRender(); }
+function bulkUnassign(i){ const p=_bulk.pages[i]; if(p){ p.recId=''; p.auto=false; bulkRender(); } }
+function bulkAssign(recId){
+  const p=_bulk.pages[_bulk.idx]; if(!p) return;
+  const clash=_bulk.pages.findIndex((x,i)=>i!==_bulk.idx&&x.recId===recId&&(_bulk.kind!=='sales'||x.slot===p.slot));
+  if(clash>=0){
+    if(!confirm('هذا السجل مُسند مسبقاً للصفحة '+(clash+1)+' — نقل الإسناد لهذه الصفحة؟')) return;
+    _bulk.pages[clash].recId=''; _bulk.pages[clash].auto=false;
+  }
+  p.recId=recId; p.auto=false;
+  const next=_bulk.pages.findIndex((x,i)=>i>_bulk.idx&&!x.recId);
+  if(next>=0) _bulk.idx=next;
+  bulkRender();
+}
+function bulkRecLine(r,kind){
+  if(kind==='sales')
+    return '<b style="color:#6d28d9">'+esc(r.driver_name||'—')+'</b> · سيارة '+esc(r.car_no||'—')+' · '+esc(r.date||'—')
+      +'<br><span style="color:#64748b">العائدية: '+esc(r.location||'—')+' · كبان: '+fmtKaban(r.kaban)+' · '+esc(r.factory||'')+'</span>';
+  return '<b style="color:#1e3a8a">بوجر '+esc(r.voucher_no||'—')+'</b> · '+esc(r.driver_name||'—')+' · سيارة '+esc(r.car_no||'—')
+    +'<br><span style="color:#64748b">'+esc(r.date||'—')+' · العائدية: '+esc(r.location||'—')+' · '+fmtM(r.weight_kg||0)+' كغم · '+esc(r.factory||'')+'</span>';
+}
+function bulkWorkspaceHTML(){
+  const k=_bulk.kind, p=_bulk.pages[_bulk.idx], total=_bulk.pages.length;
+  const done=_bulk.pages.filter(x=>x.recId).length;
+  const autoN=_bulk.pages.filter(x=>x.recId&&x.auto).length;
+  const strip=_bulk.pages.map((x,i)=>'<button type="button" onclick="bulkGoto('+i+')" title="'+esc(x.src||'')+'" style="border:2px solid '+(i===_bulk.idx?'#1e3a8a':(x.recId?'#34d399':'#e2e8f0'))+';background:'+(x.recId?(x.auto?'#fffbeb':'#ecfdf5'):'#fff')+';border-radius:6px;min-width:32px;height:28px;font-size:11px;font-weight:900;cursor:pointer;font-family:inherit">'+(x.recId?(x.auto?'◆':'✓'):'')+(i+1)+'</button>').join('');
+  const assignedRec=p.recId?_bulk.recs.find(r=>r.id===p.recId):null;
+  const pr=p.parsed||{};
+  const readFields=[pr.car?'سيارة <b>'+esc(pr.car)+'</b>':'',pr.date?'تاريخ <b>'+esc(pr.date)+'</b>':'',pr.driver?'سائق <b>'+esc(pr.driver)+'</b>':'',pr.loc?'عائدية <b>'+esc(pr.loc)+'</b>':'',pr.net?'وزن <b>'+fmtM(pr.net)+'</b>':''].filter(Boolean);
+  const parsedHTML=(_bulk.hasText&&p.lines.length)
+    ? '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:6px 9px;font-size:11px;color:#1e40af;line-height:1.8">📄 قُرئ من الصفحة: '
+      +(readFields.length?readFields.join(' · '):'<span style="color:#b45309;font-weight:700">لم تُميَّز حقول معروفة — الإسناد يدوي</span>')+'</div>'
+    : '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:6px 9px;font-size:11px;color:#92400e;font-weight:700">🖼️ هذه الصفحة صورة بلا نص — اقرأ البوجر واختر السجل يدوياً.</div>';
+  const L=bulkListHTML();
+  return bulkShellHTML(k,p,total,done,autoN,strip,assignedRec,parsedHTML,L);
+}
+// قائمة السجلات المرشّحة للصفحة الحالية (تُحدَّث وحدها عند البحث)
+function bulkListHTML(){
+  const k=_bulk.kind, p=_bulk.pages[_bulk.idx], pr=p.parsed||{};
+  const q=(_bulk.q||'').toLowerCase().trim();
+  let recs=_bulk.recs.slice();
+  if(_bulk.onlyNoImg) recs=recs.filter(r=>k==='sales'?!(p.slot==='unload'?r.has_unload_scan:r.has_load_scan):!r.has_scan);
+  if(q) recs=recs.filter(r=>((r.driver_name||'')+' '+(r.car_no||'')+' '+(r.voucher_no||'')+' '+(r.location||'')).toString().toLowerCase().includes(q));
+  const scored=recs.map(r=>({r,...bulkScore(pr,r,k)})).sort((a,b)=>b.s-a.s);
+  const cards=scored.slice(0,80).map(x=>{
+    const r=x.r, isCur=p.recId===r.id;
+    const otherIdx=_bulk.pages.findIndex((pg,i)=>i!==_bulk.idx&&pg.recId===r.id&&(k!=='sales'||pg.slot===p.slot));
+    const hasImg=k==='sales'?(p.slot==='unload'?r.has_unload_scan:r.has_load_scan):r.has_scan;
+    const bg=isCur?'#ecfdf5':(x.s>=50?'#f0f9ff':'#fff');
+    const bd=isCur?'#059669':(x.s>=50?'#60a5fa':'#e2e8f0');
+    return '<div style="border:1px solid '+bd+';background:'+bg+';border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<div style="font-size:11px;line-height:1.7;flex:1">'+bulkRecLine(r,k)
+      +(x.s>=50?'<br><span style="background:#1d4ed8;color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:900">🎯 مرشّح — '+esc(x.why.join(' + '))+'</span>':'')
+      +(hasImg?'<br><span style="color:#b45309;font-size:9px;font-weight:900">⚠️ توجد صورة محفوظة — ستُستبدل</span>':'')
+      +(otherIdx>=0?'<br><span style="color:#7c3aed;font-size:9px;font-weight:900">مُسند للصفحة '+(otherIdx+1)+'</span>':'')
+      +'</div>'
+      +(isCur
+        ? '<button type="button" class="btn btn-gray" style="font-size:11px;padding:6px 10px;white-space:nowrap" onclick="bulkUnassign('+_bulk.idx+')">✕ إلغاء</button>'
+        : '<button type="button" class="btn btn-blue" style="font-size:11px;padding:6px 10px;white-space:nowrap" onclick="bulkAssign(\''+escJs(r.id)+'\')">إسناد ✅</button>')
+      +'</div>';
+  }).join('');
+  return {cards,n:scored.length};
+}
+function bulkShellHTML(k,p,total,done,autoN,strip,assignedRec,parsedHTML,L){
+  return `<div style="background:#fff;border-radius:14px;max-width:1180px;width:100%;max-height:94vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-weight:900;font-size:13px;color:#1e3a8a">📚 توزيع البوجرات — ${k==='sales'?'المبيعات':'المشتريات'}
+        <span class="badge" style="background:#e0e7ff;color:#3730a3">صفحة ${_bulk.idx+1} من ${total}</span>
+        <span class="badge" style="background:#dcfce7;color:#166534">مُسندة ${done}</span>
+        ${autoN?`<span class="badge" style="background:#fef3c7;color:#92400e">منها ${autoN} مقترحة آلياً — راجعها</span>`:''}
+      </span>
+      <button type="button" class="btn btn-gray" style="font-size:11px;padding:6px 12px" onclick="bulkClose()">✕ إغلاق</button>
+    </div>
+    <div style="padding:6px 14px;border-bottom:1px solid #f1f5f9;display:flex;gap:4px;flex-wrap:wrap;max-height:74px;overflow-y:auto">${strip}</div>
+    <div style="flex:1;display:flex;gap:12px;padding:12px 14px;overflow:hidden;min-height:0">
+      <div style="flex:1.15;display:flex;flex-direction:column;gap:8px;min-width:0">
+        ${parsedHTML}
+        <div style="flex:1;background:#0f172a;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:0">
+          <img src="${p.url}" alt="صفحة البوجر" style="max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in" onclick="showScanModal('${escJs(p.url)}')">
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <button type="button" class="btn btn-gray" style="font-size:11px;padding:6px 14px" onclick="bulkGo(-1)" ${_bulk.idx===0?'disabled':''}>◀ السابقة</button>
+          <span style="font-size:10px;color:#64748b">${esc(p.src||'')}</span>
+          <button type="button" class="btn btn-gray" style="font-size:11px;padding:6px 14px" onclick="bulkGo(1)" ${_bulk.idx>=total-1?'disabled':''}>التالية ▶</button>
+        </div>
+        ${k==='sales'?`<div style="display:flex;align-items:center;gap:12px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:7px 10px">
+          <span style="font-size:11px;font-weight:900;color:#6d28d9">نوع هذا البوجر:</span>
+          <label style="font-size:11px;font-weight:700;cursor:pointer"><input type="radio" name="bulk_slot" ${p.slot!=='unload'?'checked':''} onchange="bulkSetSlot('load')"> 🚚 تحميل</label>
+          <label style="font-size:11px;font-weight:700;cursor:pointer"><input type="radio" name="bulk_slot" ${p.slot==='unload'?'checked':''} onchange="bulkSetSlot('unload')"> 📥 تفريغ</label>
+        </div>`:''}
+      </div>
+      <div style="width:430px;display:flex;flex-direction:column;gap:8px;min-width:0">
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="inp" id="bulk_q" placeholder="🔍 بحث بالسائق/السيارة/البوجر..." value="${esc(_bulk.q||'')}" style="flex:1;font-size:12px;padding:7px" oninput="bulkSearch(this.value)">
+          <label style="font-size:10px;font-weight:700;color:#64748b;white-space:nowrap;cursor:pointer"><input type="checkbox" ${_bulk.onlyNoImg?'checked':''} onchange="bulkToggleNoImg(this.checked)"> بلا صورة فقط</label>
+        </div>
+        <div id="bulk-count" style="font-size:10px;color:#64748b">${L.n} سجل ضمن الفلتر${L.n>80?' — تُعرض أول 80، استخدم البحث':''}</div>
+        <div id="bulk-list" style="flex:1;overflow-y:auto;min-height:0;padding-left:4px">${L.cards||'<div style="text-align:center;color:#64748b;font-size:12px;padding:20px">لا توجد سجلات — ألغِ «بلا صورة فقط» أو امسح البحث</div>'}</div>
+      </div>
+    </div>
+    <div style="padding:10px 14px;background:#f8fafc;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:11px;font-weight:700;color:${assignedRec?'#059669':'#64748b'}" id="bulk-save-prog">${assignedRec?'الصفحة الحالية مُسندة إلى: '+esc(assignedRec.driver_name||assignedRec.voucher_no||'')+(k==='sales'?(p.slot==='unload'?' (تفريغ)':' (تحميل)'):''):'الصفحة الحالية غير مُسندة'}</span>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn btn-gray" style="font-size:12px;padding:8px 16px" onclick="bulkClose()">إلغاء</button>
+        <button type="button" class="btn btn-green" style="font-size:12px;padding:8px 22px" onclick="bulkSave()" ${(done&&!_bulk.saving)?'':'disabled'}>💾 حفظ الإسنادات (${done})</button>
+      </div>
+    </div>
+  </div>`;
+}
+async function bulkSave(){
+  if(!_bulk||_bulk.saving) return;
+  const assigned=_bulk.pages.map((p,i)=>({p,i})).filter(x=>x.p.recId);
+  if(!assigned.length){ showToast('لم تُسند أي صفحة بعد','warning'); return; }
+  _bulk.saving=true; bulkRender();
+  const prog=t=>{ const e=document.getElementById('bulk-save-prog'); if(e){ e.textContent=t; e.style.color='#1e3a8a'; } };
+  let ok=0,fail=0,queued=0;
+  const isSales=_bulk.kind==='sales';
+  const col=isSales?'sales':'entries';
+  let list=DB.get(col,[]);
+  for(let n=0;n<assigned.length;n++){
+    const {p,i}=assigned[n];
+    prog('⏳ جاري حفظ الصورة '+(n+1)+' من '+assigned.length+'...');
+    const idx=list.findIndex(x=>x.id===p.recId);
+    if(idx<0){ fail++; continue; }
+    try{
+      if(isSales){
+        const field=p.slot==='unload'?'img_unload':'img_load';
+        await saveSaleScan(p.file,p.recId,field);
+        if(field==='img_load') list[idx].has_load_scan=true; else list[idx].has_unload_scan=true;
+      }else{
+        await saveVoucherScan(p.file,p.recId);
+        list[idx].has_scan=true;
+      }
+      DB.set(col,list);
+      const cloudOk=await FDB.save(col,p.recId,list[idx]);
+      if(!cloudOk) queued++;
+      ok++;
+    }catch(err){ console.warn('bulk scan save error (page '+(i+1)+'):',err); fail++; }
+  }
+  auditLog('توزيع بوجرات من ملف مجمّع',(isSales?'مبيعات':'مشتريات')+' | '+ok+' صورة'+(fail?' | فشل '+fail:'')+' | '+(S.selectedFactory||''));
+  _bulk.saving=false;
+  showToast(fail?('تم حفظ '+ok+' صورة — تعذّر حفظ '+fail+' (سجل محذوف أو خطأ بالرفع)'):('تم حفظ '+ok+' صورة ✅'),fail?'warning':'success',fail?7000:4000);
+  if(queued) showToast('⚠️ '+queued+' سجل لم يصل السحابة — اضغط الشارة أسفل اليسار عند عودة الاتصال','warning',9000);
+  _bulk.pages.forEach(p=>{ try{ URL.revokeObjectURL(p.url); }catch(e){} });
+  _bulk=null;
+  const m=document.getElementById('bulk-scan-modal'); if(m) m.remove();
+  renderContent();
+}
 // ===== سجل المشتريات =====
 function viewTable(){
   const sf=S.selectedFactory,isM=isManager();
@@ -1856,6 +2205,7 @@ function viewTable(){
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-blue no-print" style="font-size:11px;padding:7px 12px" onclick="printSelectedScans('purchases')" title="طباعة صور البوجرات المحددة — A4 عمودي، بوجر بكل صفحة">🖨️ طباعة البوجرات (<span id="cnt_scans_purchases">${_scanSel.purchases.size}</span>)</button>
         <button class="btn btn-gray no-print" style="font-size:11px;padding:7px 12px" onclick="clearScanSel('purchases')" title="إلغاء تحديد البوجرات">✕ إلغاء التحديد</button>
+        <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="bulkScanOpen('purchases')" title="رفع ملف PDF يحوي عدة بوجرات وتوزيع كل صفحة على سجلها">📚 توزيع بوجرات من ملف</button>
         <button class="btn btn-green no-print" style="font-size:11px;padding:7px 12px" onclick="exportXLSX('purchases')">📊 Excel</button>
         <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="window.print()">🖨️</button>
         <button class="btn btn-red no-print" style="font-size:11px;padding:7px 12px" onclick="generatePDF('purchases')">📄 PDF</button>
@@ -1923,6 +2273,7 @@ function viewSaleTable(){
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-blue no-print" style="font-size:11px;padding:7px 12px" onclick="printSelectedScans('sales')" title="طباعة بوجرات التحميل والتفريغ للسجلات المحددة — كل بوجر بصفحة">🖨️ طباعة البوجرات (<span id="cnt_scans_sales">${_scanSel.sales.size}</span>)</button>
         <button class="btn btn-gray no-print" style="font-size:11px;padding:7px 12px" onclick="clearScanSel('sales')" title="إلغاء تحديد البوجرات">✕ إلغاء التحديد</button>
+        <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="bulkScanOpen('sales')" title="رفع ملف PDF يحوي عدة بوجرات وتوزيع كل صفحة على سجلها (تحميل/تفريغ)">📚 توزيع بوجرات من ملف</button>
         <button class="btn btn-green no-print" style="font-size:11px;padding:7px 12px" onclick="exportXLSX('sales')">📊 Excel</button>
         <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="window.print()">🖨️</button>
         <button class="btn btn-red no-print" style="font-size:11px;padding:7px 12px" onclick="generatePDF('sales')">📄 PDF</button>
@@ -4835,7 +5186,7 @@ function renderKroobDailySection(from,to){
   todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isInD2=kroobDir(e,'dinar')==='دائن',isInDol2=kroobDir(e,'dollar')==='دائن',badgeIn2=d2?isInD2:(dl2?isInDol2:isInD2);let r='\n'+(badgeIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.date||'')+' | '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+(isInD2?'+':'-')+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 '+(isInDol2?'+':'-')+'$'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
   waTextK+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextK+=' | $'+fmtM(balDollar);
-  waTextK+='\n✅ نظام المراقبة v47.2';
+  waTextK+='\n✅ نظام المراقبة v47.3';
   window._kroobWaText=waTextK;
 
   const stat=(bg,bd,c,t,v)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:11px 12px;text-align:center"><div style="font-size:10px;font-weight:800;color:${c};margin-bottom:4px">${t}</div><div style="font-size:15px;font-weight:900;color:${c}">${v}</div></div>`;
@@ -4896,7 +5247,7 @@ function renderRafidDailySection(from,to){
   todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.date||'')+' | '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(rafidDir(e2,'dollar')==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
   waTextR+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextR+=' | $'+fmtM(balDollar);
-  waTextR+='\n✅ نظام المراقبة v47.2';
+  waTextR+='\n✅ نظام المراقبة v47.3';
   window._rafidWaText=waTextR;
 
   const stat=(bg,bd,c,t,v)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:11px 12px;text-align:center"><div style="font-size:10px;font-weight:800;color:${c};margin-bottom:4px">${t}</div><div style="font-size:15px;font-weight:900;color:${c}">${v}</div></div>`;
@@ -5566,7 +5917,7 @@ function sendRefineryWhatsapp(){
     lines.push((grandRemaining>0?'⚠️':'✅')+' المتبقي: '+fmtM(Math.abs(grandRemaining))+' د.ع '+(grandRemaining>0?'(غير مسوى)':'(مسوى)'));
     lines.push(sep);
   });
-  lines.push('✅ نظام المراقبة v47.2');
+  lines.push('✅ نظام المراقبة v47.3');
   var msg=lines.join(NL);
   if(navigator.clipboard){
     navigator.clipboard.writeText(msg).then(function(){showToast('تم نسخ نص الواتساب','success');}).catch(function(){});

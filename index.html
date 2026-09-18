@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام المشتريات النفطية v47.3</title>
+<title>نظام المشتريات النفطية v47.5</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='14' y='16' width='36' height='34' rx='5' fill='%231e3a5f'/><ellipse cx='32' cy='16' rx='18' ry='6' fill='%232563eb'/><ellipse cx='32' cy='50' rx='18' ry='6' fill='%231e293b'/><rect x='14' y='26' width='36' height='5' fill='%23f59e0b'/><rect x='14' y='37' width='36' height='5' fill='%23f59e0b'/><text x='32' y='35' text-anchor='middle' fill='%2334d399' font-size='10' font-weight='bold' font-family='Arial'>OIL</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -762,7 +762,7 @@ async function syncFromCloud(silent=false) {
       const rafidAccounts = await FDB.getAll('rafid_accounts'); if(rafidAccounts&&rafidAccounts.length) DB.set('rafid_accounts',rafidAccounts);
       const rafidOpArr = await FDB.getAll('rafid_opening'); if(rafidOpArr&&rafidOpArr.length){const op=rafidOpArr.find(x=>x.id==='opening')||rafidOpArr[0];if(op)DB.set('rafid_opening',{dinar:parseFloat(op.dinar||0),dollar:parseFloat(op.dollar||0)});}
     }
-    const settings=await FDB.getAll('settings');if(settings&&settings.length){const fd=settings.find(x=>x.id==='factories');if(fd&&fd.list&&fd.list.length){DB.set('factories',fd.list);}const kot=settings.find(x=>x.id==='kroob_op_types');if(kot&&kot.list&&kot.list.length)DB.set('kroob_op_types',kot.list);const fq=settings.find(x=>x.id==='factory_quotas');if(fq&&fq.map&&typeof fq.map==='object')DB.set('factory_quotas',fq.map);const qh=settings.find(x=>x.id==='quota_history');if(qh&&Array.isArray(qh.list))DB.set('quota_history',qh.list);const ea=settings.find(x=>x.id==='expense_entity_aliases');if(ea&&ea.map&&typeof ea.map==='object')DB.set('expense_entity_aliases',ea.map);}
+    const settings=await FDB.getAll('settings');if(settings&&settings.length){const fd=settings.find(x=>x.id==='factories');if(fd&&fd.list&&fd.list.length){DB.set('factories',fd.list);}const kot=settings.find(x=>x.id==='kroob_op_types');if(kot&&kot.list&&kot.list.length)DB.set('kroob_op_types',kot.list);const fq=settings.find(x=>x.id==='factory_quotas');if(fq&&fq.map&&typeof fq.map==='object')DB.set('factory_quotas',fq.map);const qh=settings.find(x=>x.id==='quota_history');if(qh&&Array.isArray(qh.list))DB.set('quota_history',qh.list);const ea=settings.find(x=>x.id==='expense_entity_aliases');if(ea&&ea.map&&typeof ea.map==='object')DB.set('expense_entity_aliases',ea.map);const prl=settings.find(x=>x.id==='pricing_rules');if(prl&&Array.isArray(prl.list))DB.set('pricing_rules',prl.list);}
     const expEntArr=await FDB.getAll('expense_entities');if(expEntArr&&expEntArr.length)DB.set('expense_entities',expEntArr);
     if(!silent) showToast('تمت المزامنة مع Firebase','info',2000);
     return true;
@@ -1141,7 +1141,7 @@ function render() {
       '<aside style="width:225px;background:#0f172a;display:flex;flex-direction:column;flex-shrink:0;z-index:50">' +
         '<div style="padding:10px;background:#020617;border-bottom:1px solid #1e293b;text-align:center;flex-shrink:0">' +
           '<div style="width:34px;height:34px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:11px;margin:0 auto 5px">OIL</div>' +
-          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v47.3</p>' +
+          '<p style="font-size:13px;font-weight:900;color:#60a5fa">نظام المراقبة v47.5</p>' +
           '<p style="font-size:10px;color:#94a3b8;margin-top:2px;font-weight:900;letter-spacing:0.5px">'+(isM?'المدققين':'محاسب: '+currentUser.factory)+'</p>' +
         '</div>' +
         '<nav id="sidebar-nav" style="flex:1;padding:8px;overflow-y:auto;min-height:0">'+nav+'</nav>' +
@@ -1554,7 +1554,7 @@ tfoot td{font-weight:900;background:#f0f0f0}
 ${K||R?'<h2>🏦 ملخص الحسابات</h2>':''}
 ${acct('كشف الكروب',K)}
 ${acct('كشف حسابات سيد رافد',R)}
-<div class="foot">نظام مراقبة المشتريات النفطية v47.3 — طُبع بواسطة: ${esc((currentUser&&currentUser.name)||'')}</div>
+<div class="foot">نظام مراقبة المشتريات النفطية v47.5 — طُبع بواسطة: ${esc((currentUser&&currentUser.name)||'')}</div>
 <script>window.onload=()=>{window.print();};<\/script></body></html>`;
   const w=window.open('','_blank');
   if(!w){showToast('المتصفح منع فتح نافذة الطباعة','warning');return;}
@@ -1574,7 +1574,7 @@ function copyWhatsapp(){
   txt+=`\n*📦 المبيعات:*\n`;
   for(const f of facts){const d=anOf(saleAn,f).total;if(!d.cars)continue;sc2+=d.cars;sk+=d.kaban;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
   txt+=`━━━━━━━━━━━━━\n*الإجمالي:* ${sc2} سيارة | ${fmtKaban(sk)} كبان\n`;
-  txt+=`\n✅ نظام المراقبة v47.3`;
+  txt+=`\n✅ نظام المراقبة v47.5`;
   ovCopy(txt);
   const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}
 }
@@ -1593,7 +1593,7 @@ function viewForm(){
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
       ${sf==='الكل'?`<div style="grid-column:span 3;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px"><label class="lbl" for="f_factory">🏭 المعمل * <span style="color:#b45309;font-weight:700;font-size:10px">(مطلوب — المختار أعلى الصفحة «الكل» فلا يمكن معرفة المعمل تلقائياً)</span></label><select class="inp" id="f_factory"><option value="">اختر المعمل...</option>${allFactoryNames().filter(x=>!sameFactory(x,'الكل')).map(x=>`<option value="${esc(x)}" ${sameFactory(e.factory,x)?'selected':''}>${esc(x)}</option>`).join('')}</select></div>`:''}
       <div><label class="lbl" for="f_voucher">رقم البوجر *</label><input class="inp" id="f_voucher" value="${e.voucher_no||''}"></div>
-      <div><label class="lbl" for="f_date">التاريخ *</label><input class="inp" id="f_date" type="date" value="${e.date||today()}"></div>
+      <div><label class="lbl" for="f_date">التاريخ *</label><input class="inp" id="f_date" type="date" value="${e.date||today()}" onchange="refreshFormPricing()"></div>
       <div><label class="lbl" for="f_ref">المصفى *</label>
         <select class="inp" id="f_ref" onchange="updateProduct()">
           <option value="">اختر...</option>
@@ -1609,8 +1609,8 @@ function viewForm(){
       <div><label class="lbl" for="f_tons">الطن *</label><input class="inp" id="f_tons" type="number" step="0.001" min="10000" max="999999" value="${e.qty_tons||''}" oninput="validateQty(this)" placeholder="مثال: 31500"></div>
       <div><label class="lbl" for="f_liters">طبيعي / لتر *</label><input class="inp" id="f_liters" type="number" step="0.001" min="10000" max="999999" value="${e.natural_liters||''}" oninput="calcTotal();validateQty(this)" placeholder="مثال: 32000"></div>
       <div><label class="lbl" for="f_kg">وزن كغم *</label><input class="inp" id="f_kg" type="number" step="0.001" min="10000" max="999999" value="${e.weight_kg||''}" oninput="validateQty(this)" placeholder="مثال: 31200"></div>
-      <div><label class="lbl">السعر (ثابت)</label><input class="inp" value="150" readonly aria-label="السعر (ثابت)"></div>
-      <div><label class="lbl">أجور النقل (ثابت)</label><input class="inp" value="42" readonly aria-label="أجور النقل (ثابت)"></div>
+      <div><label class="lbl">السعر / لتر</label><input class="inp" id="f_price_disp" value="${fmtM(pricingFor(e.date||today()).price)}" readonly aria-label="السعر لكل لتر" style="background:#f8fafc;color:#1d4ed8;font-weight:900"><div id="f_price_note" style="font-size:10px;color:#64748b;font-weight:700;margin-top:3px">${pricingFor(e.date||today()).from?('نافذ من '+pricingFor(e.date||today()).from):'السعر القديم (قبل أي قاعدة تسعير)'}</div></div>
+      <div><label class="lbl">أجور النقل</label><input class="inp" id="f_transport_disp" value="${fmtM(pricingFor(e.date||today()).transport)}" readonly aria-label="أجور النقل" style="background:#f8fafc"></div>
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:12px;font-weight:900;color:#1e3a8a">إجمالي سعر المصفى:</span>
         <span id="f_tot" style="font-size:18px;font-weight:900;color:#2563eb">0 د.ع</span>
@@ -1653,7 +1653,7 @@ async function viewVoucherScan(entryId){
 }
 
 function updateProduct(){const r=gv('f_ref'),pt=el('f_pt');if(pt)pt.value=r==='مصفى كربلاء'?'HFO':r==='مصفى صلاح الدين'?'VR':'';}
-function calcTotal(){const l=amtVal0('f_liters'),t=el('f_tot');if(t)t.textContent=fmtM(l*150)+' د.ع';}
+function calcTotal(){const l=amtVal0('f_liters'),t=el('f_tot');if(t)t.textContent=fmtM(l*pricingFor(gv('f_date')||today()).price)+' د.ع';}
 function validateQty(inp){
   const raw=(inp.value||'').toString().trim();
   if(!raw)return;
@@ -1708,7 +1708,8 @@ async function saveEntry(){
     if(btn){btn.disabled=false;btn.textContent='💾 حفظ وتأكيد';}
   }
   pendingScanFile=null;
-  const entry={id:entryId,voucher_no:v,refinery:ref,date,product_type:pt,driver_name:driver,car_no:car,location:loc,qty_tons:tons,natural_liters:liters,weight_kg:kg,po_no:po,price:150,transport_fee:42,refinery_price:150*liters,factory:fac,has_scan:hasScan,accountant:currentUser.email,time:Date.now()};
+  const _pr=pricingFor(date);
+  const entry={id:entryId,voucher_no:v,refinery:ref,date,product_type:pt,driver_name:driver,car_no:car,location:loc,qty_tons:tons,natural_liters:liters,weight_kg:kg,po_no:po,price:_pr.price,transport_fee:_pr.transport,refinery_price:_pr.price*liters,factory:fac,has_scan:hasScan,accountant:currentUser.email,time:Date.now()};
   let entries=DB.get('entries',[]);
   if(e.id){const idx=entries.findIndex(x=>x.id===e.id);if(idx>=0)entries[idx]=entry;else entries.push(entry);}else entries.push(entry);
   DB.set('entries',entries);
@@ -1828,6 +1829,208 @@ async function saveSale(){
   S.editSale=null;S.view='sale_table';render();
 }
 
+// ===== 💰 تسعير المشتريات: سعر اللتر وأجرة النقل حسب تاريخ نفاذ =====
+// كان السعر 150 وأجرة النقل 42 مكتوبَين داخل الكود بستة مواضع. صارا الآن قواعد مؤرَّخة:
+// كل قاعدة {from, price, transport} تسري على أي سجل تاريخه >= from، وآخر قاعدة مطابقة هي النافذة.
+// ما قبل أول قاعدة يبقى على القيم القديمة (150/42) — فلا تتغير أرقام تاريخية بلا قصد.
+const PRICE_LEGACY=150, TRANSPORT_LEGACY=42;
+function pricingRules(){
+  const l=DB.get('pricing_rules',[]);
+  return Array.isArray(l)?l.slice().filter(r=>r&&r.from).sort((a,b)=>String(a.from).localeCompare(String(b.from))):[];
+}
+function savePricingRules(l){
+  DB.set('pricing_rules',l);
+  FDB.save('settings','pricing_rules',{id:'pricing_rules',list:l});
+}
+function pricingFor(date){
+  const d=(date||'').toString();
+  let out={price:PRICE_LEGACY,transport:TRANSPORT_LEGACY,from:''};
+  if(!d) return out;
+  pricingRules().forEach(function(r){
+    if(d>=String(r.from)){
+      const p=parseFloat(r.price), t=parseFloat(r.transport);
+      out={price:isNaN(p)?PRICE_LEGACY:p,transport:isNaN(t)?TRANSPORT_LEGACY:t,from:r.from};
+    }
+  });
+  return out;
+}
+// بذرة أولى (قرار المستخدم 2026-09-18): السعر 200 لكل قيد تاريخه من 2026-08-19 فصاعداً.
+// تُنفَّذ مرة واحدة لكل جهاز — القواعد بيانات لا كود، والمحاسب لا يُشغّل syncFromCloud فلا تصله إلا هكذا.
+function seedPricingRule(){
+  try{
+    if(DB.get('pricing_seed_v1',false)) return;
+    const l=pricingRules();
+    if(!l.some(function(r){ return r.from==='2026-08-19'; })){
+      l.push({from:'2026-08-19',price:200,transport:TRANSPORT_LEGACY,at:Date.now(),by:'seed'});
+      savePricingRules(l);
+    }
+    DB.set('pricing_seed_v1',true);
+  }catch(e){ console.warn('seedPricingRule:',e); }
+}
+// السعر المعروض بنموذج الإدخال يتبع تاريخ القيد نفسه لا تاريخ اليوم
+function refreshFormPricing(){
+  const d=gv('f_date'), pr=pricingFor(d);
+  const pEl=el('f_price_disp'), tEl=el('f_transport_disp');
+  if(pEl) pEl.value=fmtM(pr.price);
+  if(tEl) tEl.value=fmtM(pr.transport);
+  const note=el('f_price_note');
+  if(note) note.textContent=pr.from?('وفق قاعدة التسعير النافذة من '+pr.from):'السعر القديم (قبل أي قاعدة تسعير)';
+  calcTotal();
+}
+
+// ===== بطاقة التسعير بصفحة الإدارة (للمدير فقط) =====
+function renderPricingAdmin(){
+  if(!isManager()) return '';
+  const rules=pricingRules();
+  const ruleRows=rules.map(function(r,i){
+    const cnt=loadEntries().filter(function(e){ return (e.date||'')>=r.from && pricingFor(e.date).from===r.from; }).length;
+    return '<tr>'
+      +'<td class="td" style="color:#64748b">'+(i+1)+'</td>'
+      +'<td class="td" style="font-weight:900">'+esc(r.from)+'</td>'
+      +'<td class="td" style="font-weight:900;color:#1d4ed8">'+fmtM(r.price)+'</td>'
+      +'<td class="td">'+fmtM(r.transport)+'</td>'
+      +'<td class="td" style="color:#64748b;font-size:11px">'+cnt+' سجل</td>'
+      +'<td class="td"><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="deletePricingRule(\''+escJs(r.from)+'\')">حذف</button></td>'
+      +'</tr>';
+  }).join('');
+  const pv=S.priceApplyPreview||null;
+  const facts=allFactoryNames().filter(function(x){ return !sameFactory(x,'الكل'); });
+  // أداة التطبيق تبدأ مملوءة بآخر قاعدة تسعير — الحالة الغالبة: طبّق القاعدة الجديدة على سجلات فترتها
+  const lastRule=rules.length?rules[rules.length-1]:null;
+  const paFrom=S.paFrom!==undefined?S.paFrom:(lastRule?lastRule.from:'');
+  const paPrice=S.paPrice!==undefined?S.paPrice:(lastRule?String(lastRule.price):'');
+  const pvHTML=pv?(
+    '<div style="margin-top:12px;background:'+(pv.n?'#f0fdf4':'#fffbeb')+';border:1px solid '+(pv.n?'#6ee7b7':'#fcd34d')+';border-radius:10px;padding:12px">'
+    +'<div style="font-size:12px;font-weight:900;color:#065f46;margin-bottom:8px">👁️ معاينة التطبيق (لم يُحفَظ شيء بعد)</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;font-size:11px">'
+    +'<div style="background:#fff;border-radius:8px;padding:8px;text-align:center"><div style="color:#64748b;font-weight:700">السجلات المتأثرة</div><div style="font-size:20px;font-weight:900;color:#0f172a">'+pv.n+'</div></div>'
+    +'<div style="background:#fff;border-radius:8px;padding:8px;text-align:center"><div style="color:#64748b;font-weight:700">الإجمالي الحالي</div><div style="font-size:15px;font-weight:900;color:#0f172a">'+fmtM(pv.oldSum)+'</div></div>'
+    +'<div style="background:#fff;border-radius:8px;padding:8px;text-align:center"><div style="color:#64748b;font-weight:700">الإجمالي بعد التطبيق</div><div style="font-size:15px;font-weight:900;color:#1d4ed8">'+fmtM(pv.newSum)+'</div></div>'
+    +'<div style="background:#fff;border-radius:8px;padding:8px;text-align:center"><div style="color:#64748b;font-weight:700">الفرق</div><div style="font-size:15px;font-weight:900;color:'+(pv.newSum-pv.oldSum>=0?'#059669':'#dc2626')+'">'+(pv.newSum-pv.oldSum>=0?'+':'−')+fmtM(Math.abs(pv.newSum-pv.oldSum))+'</div></div>'
+    +'</div>'
+    +(pv.imported?'<div style="margin-top:8px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:7px 9px;font-size:11px;font-weight:700;color:#92400e">⚠️ من ضمنها '+pv.imported+' سجل مستورد من Excel إجماليه لا يساوي (سعره × لتره) — سيُستبدل إجماليه بالمحتسب.</div>':'')
+    +(pv.sample?'<div style="margin-top:8px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th class="th" style="font-size:10px">البوجر</th><th class="th" style="font-size:10px">التاريخ</th><th class="th" style="font-size:10px">المعمل</th><th class="th" style="font-size:10px">لتر</th><th class="th" style="font-size:10px">سعر حالي</th><th class="th" style="font-size:10px">إجمالي حالي</th><th class="th" style="font-size:10px">إجمالي جديد</th></tr></thead><tbody>'+pv.sample+'</tbody></table>'+(pv.n>8?'<div style="font-size:10px;color:#64748b;margin-top:4px">تُعرض أول 8 سجلات من '+pv.n+'</div>':'')+'</div>':'')
+    +(pv.n?'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn btn-gray" style="font-size:12px;padding:7px 14px" onclick="cancelPriceApply()">إلغاء</button><button class="btn btn-red" style="font-size:12px;padding:7px 20px;font-weight:900" onclick="runPriceApply()">✅ تنفيذ التطبيق على '+pv.n+' سجل</button></div>':'<div style="margin-top:8px;font-size:11px;font-weight:700;color:#92400e">لا توجد سجلات ضمن هذا النطاق.</div>')
+    +'<div id="pa-prog" style="margin-top:8px;font-size:11px;font-weight:900;color:#1e3a8a"></div>'
+    +'</div>'):'';
+  return '<div class="card" style="margin-bottom:14px;border:2px solid #1d4ed8;padding:0;overflow:hidden">'
+    +'<div style="padding:12px 16px;background:#1e3a8a;font-weight:900;font-size:13px;color:#dbeafe">💰 تسعير المشتريات (سعر اللتر وأجرة النقل)</div>'
+    +'<div style="padding:14px 16px">'
+    +'<p style="font-size:11px;color:#64748b;font-weight:700;line-height:1.9;margin:0 0 10px">كل قاعدة تسري على القيود التي تاريخها <b>من</b> ذلك اليوم فصاعداً (حتى قاعدة أحدث). ما قبل أول قاعدة يبقى بالسعر القديم '+PRICE_LEGACY+' وأجرة '+TRANSPORT_LEGACY+'.<br>إضافة قاعدة تُغيّر <b>القيود الجديدة فقط</b> — لتعديل سجلات محفوظة سابقاً استخدم أداة التطبيق بالأسفل.</p>'
+    +'<div style="overflow-x:auto;margin-bottom:12px"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">ت</th><th class="th">نافذة من تاريخ</th><th class="th">السعر/لتر</th><th class="th">أجرة النقل</th><th class="th">سجلات تتبعها</th><th class="th">حذف</th></tr></thead>'
+    +'<tbody>'+(ruleRows||'<tr><td colspan="6" class="td" style="padding:14px;color:#64748b">لا توجد قواعد — النظام يستعمل '+PRICE_LEGACY+' و'+TRANSPORT_LEGACY+'</td></tr>')+'</tbody></table></div>'
+    +'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:14px">'
+      +'<div style="font-size:12px;font-weight:900;color:#1e3a8a;margin-bottom:8px">➕ إضافة/تعديل قاعدة تسعير</div>'
+      +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">'
+        +'<div><label class="lbl" for="pr_from">نافذة من تاريخ *</label><input class="inp" id="pr_from" type="date" style="width:170px"></div>'
+        +'<div><label class="lbl" for="pr_price">السعر/لتر *</label><input class="inp" id="pr_price" type="text" inputmode="numeric" dir="ltr" placeholder="200" style="width:130px;text-align:center"></div>'
+        +'<div><label class="lbl" for="pr_transport">أجرة النقل *</label><input class="inp" id="pr_transport" type="text" inputmode="numeric" dir="ltr" placeholder="42" style="width:130px;text-align:center"></div>'
+        +'<button class="btn btn-blue" style="padding:9px 20px" onclick="savePricingRule()">💾 حفظ القاعدة</button>'
+      +'</div>'
+    +'</div>'
+    +'<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:12px">'
+      +'<div style="font-size:12px;font-weight:900;color:#991b1b;margin-bottom:4px">🛠️ تطبيق السعر على سجلات محفوظة (تعديل رجعي)</div>'
+      +'<p style="font-size:11px;color:#7f1d1d;font-weight:700;margin:0 0 10px">يغيّر حقول السعر/أجرة النقل — ومع إعادة الاحتساب يغيّر «سعر المصفى» لكل سجل ضمن النطاق، فتتغير معه كل المجاميع المالية باللوحة والتقارير. خذ نسخة احتياطية أولاً.</p>'
+      +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">'
+        +'<div><label class="lbl" for="pa_from">من تاريخ *</label><input class="inp" id="pa_from" type="date" value="'+esc(paFrom)+'" style="width:160px"></div>'
+        +'<div><label class="lbl" for="pa_to">إلى تاريخ</label><input class="inp" id="pa_to" type="date" value="'+esc(S.paTo||'')+'" style="width:160px"></div>'
+        +'<div><label class="lbl" for="pa_factory">المعمل</label><select class="inp" id="pa_factory" style="width:180px"><option value="">كل المعامل</option>'+facts.map(function(f){return '<option value="'+esc(f)+'"'+(S.paFactory===f?' selected':'')+'>'+esc(f)+'</option>';}).join('')+'</select></div>'
+        +'<div><label class="lbl" for="pa_price">السعر/لتر *</label><input class="inp" id="pa_price" type="text" inputmode="numeric" dir="ltr" value="'+esc(paPrice)+'" placeholder="200" style="width:120px;text-align:center"></div>'
+        +'<div><label class="lbl" for="pa_transport">أجرة النقل</label><input class="inp" id="pa_transport" type="text" inputmode="numeric" dir="ltr" value="'+esc(S.paTransport||'')+'" placeholder="اتركه فارغاً = بلا تغيير" style="width:170px;text-align:center"></div>'
+        +'<label style="font-size:11px;font-weight:900;color:#7f1d1d;cursor:pointer;padding-bottom:9px"><input type="checkbox" id="pa_recalc" '+(S.paRecalc===false?'':'checked')+'> أعد احتساب الإجمالي (السعر × اللتر)</label>'
+        +'<button class="btn btn-amber" style="padding:9px 20px;font-weight:900" onclick="previewPriceApply()">👁️ معاينة</button>'
+      +'</div>'
+      +pvHTML
+    +'</div>'
+    +'</div></div>';
+}
+function savePricingRule(){
+  if(!isManager()){ showToast('غير مصرّح','error'); return; }
+  const from=gv('pr_from'), price=_qNum('pr_price'), tr=_qNum('pr_transport');
+  if(!from){ showToast('حدّد تاريخ نفاذ القاعدة','warning'); return; }
+  if(price<=0){ showToast('أدخل سعر اللتر','warning'); return; }
+  if(tr<0){ showToast('أجرة النقل غير صالحة','warning'); return; }
+  const l=pricingRules().filter(function(r){ return r.from!==from; });
+  l.push({from:from,price:price,transport:tr,at:Date.now(),by:(currentUser&&currentUser.email)||''});
+  savePricingRules(l);
+  auditLog('قاعدة تسعير مشتريات','من '+from+' | السعر '+fmtM(price)+' | أجرة النقل '+fmtM(tr));
+  showToast('حُفظت قاعدة التسعير — تسري على القيود الجديدة من '+from,'success',5000);
+  renderContent();
+}
+function deletePricingRule(from){
+  if(!isManager()){ showToast('غير مصرّح','error'); return; }
+  if(!confirm('حذف قاعدة التسعير النافذة من '+from+'؟ (السجلات المحفوظة لا تتغير)')) return;
+  savePricingRules(pricingRules().filter(function(r){ return r.from!==from; }));
+  auditLog('حذف قاعدة تسعير','من '+from);
+  showToast('حُذفت القاعدة','info');
+  renderContent();
+}
+function _priceApplyTargets(){
+  const from=gv('pa_from'), to=gv('pa_to'), fac=gv('pa_factory');
+  const price=_qNum('pa_price');
+  const trRaw=(gv('pa_transport')||'').trim();
+  const tr=trRaw===''?null:_qNum('pa_transport');
+  const recalc=!!(el('pa_recalc')&&el('pa_recalc').checked);
+  const list=loadEntries().filter(function(e){
+    const d=e.date||'';
+    if(from&&d<from) return false;
+    if(to&&d>to) return false;
+    if(fac&&!sameFactory(e.factory,fac)) return false;
+    return true;
+  });
+  return {from:from,to:to,fac:fac,price:price,tr:tr,recalc:recalc,list:list};
+}
+function previewPriceApply(){
+  if(!isManager()){ showToast('غير مصرّح','error'); return; }
+  const t=_priceApplyTargets();
+  if(!t.from){ showToast('حدّد «من تاريخ» — التعديل الرجعي بلا حد تاريخي يمسّ كل السجلات','warning',5000); return; }
+  if(t.price<=0){ showToast('أدخل السعر الجديد','warning'); return; }
+  S.paFrom=t.from; S.paTo=t.to; S.paFactory=t.fac; S.paPrice=String(t.price); S.paTransport=t.tr==null?'':String(t.tr); S.paRecalc=t.recalc;
+  let oldSum=0,newSum=0,imported=0;
+  const rows=[];
+  t.list.forEach(function(e,i){
+    const liters=parseFloat(e.natural_liters)||0;
+    const oldTot=parseFloat(e.refinery_price)||0;
+    const newTot=t.recalc?(t.price*liters):oldTot;
+    oldSum+=oldTot; newSum+=newTot;
+    const oldPrice=parseFloat(e.price)||0;
+    if(t.recalc&&oldPrice>0&&Math.abs(oldPrice*liters-oldTot)>1) imported++;
+    if(i<8) rows.push('<tr><td class="td" style="font-size:10px">'+esc(e.voucher_no||'—')+'</td><td class="td" style="font-size:10px">'+esc(e.date||'')+'</td><td class="td" style="font-size:10px">'+esc(e.factory||'')+'</td><td class="td" style="font-size:10px">'+fmtM(liters)+'</td><td class="td" style="font-size:10px">'+fmtM(oldPrice)+'</td><td class="td" style="font-size:10px">'+fmtM(oldTot)+'</td><td class="td" style="font-size:10px;font-weight:900;color:#1d4ed8">'+fmtM(newTot)+'</td></tr>');
+  });
+  S.priceApplyPreview={n:t.list.length,oldSum:oldSum,newSum:newSum,imported:imported,sample:rows.join('')};
+  renderContent();
+}
+function cancelPriceApply(){ S.priceApplyPreview=null; renderContent(); }
+async function runPriceApply(){
+  if(!isManager()){ showToast('غير مصرّح','error'); return; }
+  const t=_priceApplyTargets();
+  if(!t.from||t.price<=0){ showToast('راجع مدخلات التطبيق','warning'); return; }
+  if(!t.list.length){ showToast('لا توجد سجلات ضمن النطاق','warning'); return; }
+  if(!confirm('تطبيق السعر '+fmtM(t.price)+(t.tr==null?'':' وأجرة النقل '+fmtM(t.tr))+' على '+t.list.length+' سجل من '+t.from+(t.to?' إلى '+t.to:'')+(t.recalc?'\n\nسيُعاد احتساب «سعر المصفى» لكل سجل — تتغير كل المجاميع المالية التاريخية لهذه الفترة.':'')+'\n\nمتأكد؟')) return;
+  const prog=function(s){ const e=el('pa-prog'); if(e) e.textContent=s; };
+  const ids={}; t.list.forEach(function(e){ ids[e.id]=true; });
+  const all=DB.get('entries',[]);
+  const changed=[];
+  all.forEach(function(e){
+    if(!ids[e.id]) return;
+    e.price=t.price;
+    if(t.tr!=null) e.transport_fee=t.tr;
+    if(t.recalc) e.refinery_price=t.price*(parseFloat(e.natural_liters)||0);
+    changed.push(e);
+  });
+  if(!DB.set('entries',all)){ showToast('تعذّر الحفظ على هذا الجهاز — أُلغي التطبيق','error',8000); return; }
+  let queued=0;
+  for(let i=0;i<changed.length;i++){
+    prog('⏳ جاري رفع السجل '+(i+1)+' من '+changed.length+'...');
+    const ok=await FDB.save('entries',changed[i].id,changed[i]);
+    if(!ok) queued++;
+  }
+  auditLog('تطبيق سعر رجعي','من '+t.from+(t.to?' إلى '+t.to:'')+(t.fac?' | '+t.fac:' | كل المعامل')+' | السعر '+fmtM(t.price)+(t.tr==null?'':' | أجرة '+fmtM(t.tr))+' | '+changed.length+' سجل'+(t.recalc?' | أُعيد احتساب الإجمالي':''));
+  S.priceApplyPreview=null;
+  showToast('طُبِّق السعر على '+changed.length+' سجل ✅','success',5000);
+  if(queued) showToast('⚠️ '+queued+' سجل لم يصل السحابة — اضغط الشارة أسفل اليسار عند عودة الاتصال','warning',9000);
+  renderContent();
+}
 // ===== 📚 توزيع بوجرات من ملف مجمّع على عدة سجلات (PDF متعدد الصفحات أو عدة صور) =====
 // كل صفحة تُحوَّل صورة JPEG مستقلة. إن كان بالـPDF طبقة نص تُستخرج بيانات البوجر
 // (رقم السيارة/التاريخ/السائق/الوزن/العائدية) لترشيح السجل المطابق — وإن كان صوراً فقط فالإسناد يدوي بالكامل.
@@ -1936,7 +2139,7 @@ function bulkRender(){
     document.body.appendChild(m);
   }
   if(!_bulk){ m.remove(); return; }
-  m.innerHTML=_bulk.pages.length?bulkWorkspaceHTML():bulkPickHTML();
+  m.innerHTML=_bulk.pages.length?bulkWorkspaceHTML():(_bulk.autoReport?bulkReportOnlyHTML():bulkPickHTML());
   const qEl=document.getElementById('bulk_q');
   if(qEl&&_bulk.focusQ){ qEl.focus(); qEl.setSelectionRange(qEl.value.length,qEl.value.length); _bulk.focusQ=false; }
 }
@@ -1965,6 +2168,10 @@ async function bulkPickFiles(input){
   const files=Array.from(input.files||[]); if(!files.length) return;
   const setP=t=>{ const e=document.getElementById('bulk-prog'); if(e) e.textContent=t; };
   const pages=[];
+  // بوجر المشتريات يحمل رقم بوجر (ورمز QR) — تُقرأ الصفحة بدقة أعلى ويُستخرج الرقم فوراً بينما الكانفاس موجود
+  const autoKind=_bulk.kind==='purchases';
+  const MAXDIM=autoKind?2000:1600;
+  if(autoKind){ setP('⏳ تحضير قارئ رمز QR...'); await ensureJsQR(); }
   try{
     for(const f of files){
       if(isPdfFile(f)){
@@ -1974,17 +2181,33 @@ async function bulkPickFiles(input){
           setP('⏳ جاري تجهيز الصفحة '+n+' من '+pdf.numPages+'...');
           const page=await pdf.getPage(n);
           const base=page.getViewport({scale:1});
-          const scale=Math.min(1600/base.width,1600/base.height);
+          const scale=Math.min(MAXDIM/base.width,MAXDIM/base.height);
           const vp=page.getViewport({scale});
           const cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height;
           await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
           const jpg=await canvasToJpegFile(cv,(f.name||'scan').replace(/\.pdf$/i,'')+'_p'+n+'.jpg');
           const lines=await bulkPageLines(page);
-          pages.push({file:jpg,url:URL.createObjectURL(jpg),lines,parsed:bulkParseLines(lines),recId:'',slot:'load',auto:false,src:(f.name||'ملف')+' — صفحة '+n});
+          const parsed=bulkParseLines(lines);
+          const pg={file:jpg,url:URL.createObjectURL(jpg),lines,parsed:parsed,recId:'',slot:'load',auto:false,src:(f.name||'ملف')+' — صفحة '+n,autoVoucher:'',autoCands:[],autoSrc:''};
+          if(autoKind){
+            const rv=await resolvePageVoucher(cv,parsed,function(t){ setP('صفحة '+n+' — '+t); });
+            pg.autoCands=rv.cands; pg.autoSrc=rv.src;
+          }
+          cv.width=cv.height=1;   // تحرير ذاكرة الكانفاس فوراً — 20 صفحة بدقة 2000px تلتهم مئات الميغابايت
+          pages.push(pg);
         }
       }else{
         setP('⏳ جاري تجهيز الصور...');
-        pages.push({file:f,url:URL.createObjectURL(f),lines:[],parsed:bulkParseLines([]),recId:'',slot:'load',auto:false,src:f.name||'صورة'});
+        const pg={file:f,url:URL.createObjectURL(f),lines:[],parsed:bulkParseLines([]),recId:'',slot:'load',auto:false,src:f.name||'صورة',autoVoucher:'',autoCands:[],autoSrc:''};
+        if(autoKind){
+          try{
+            const cv=await imageFileToCanvas(f,MAXDIM);
+            const rv=await resolvePageVoucher(cv,null,function(t){ setP(t); });
+            pg.autoCands=rv.cands; pg.autoSrc=rv.src;
+            cv.width=cv.height=1;
+          }catch(e){ console.warn('image voucher read:',e); }
+        }
+        pages.push(pg);
       }
     }
   }catch(err){
@@ -1995,8 +2218,180 @@ async function bulkPickFiles(input){
   if(!pages.length){ showToast('لم يُعثر على صفحات داخل الملف','error'); return; }
   _bulk.pages=pages; _bulk.idx=0;
   _bulk.hasText=pages.some(p=>p.lines.length>0);
+  if(_bulk.kind==='purchases'){ await bulkAutoDistribute(); return; }
   bulkAutoSuggest();
   bulkRender();
+}
+// ===== ⚡ التوزيع التلقائي لبوجرات المشتريات =====
+// رقم البوجر يُقرأ من الصفحة بثلاث طبقات بالترتيب: رمز QR ← طبقة نص الـPDF ← OCR محلي لزاوية الرقم.
+// المطابقة **تساوٍ تام** لرقم البوجر مع سجل واحد فقط — أي قراءة خاطئة لا تطابق أي سجل فتسقط لليدوي،
+// وهذا ما يجعل الحفظ التلقائي بلا مراجعة آمناً. كل ما لم يُطابَق يبقى بشاشة التوزيع اليدوية.
+const QR_LIB_URL='https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+const OCR_LIB_URL='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+function _loadScriptOnce(url,check){
+  return new Promise(function(resolve,reject){
+    if(check()) return resolve(true);
+    const s=document.createElement('script');
+    s.src=url;
+    s.onload=function(){ resolve(!!check()); };
+    s.onerror=function(){ reject(new Error('تعذّر تحميل المكتبة')); };
+    document.head.appendChild(s);
+  });
+}
+async function ensureJsQR(){ try{ return await _loadScriptOnce(QR_LIB_URL,function(){ return !!window.jsQR; }); }catch(e){ console.warn('jsQR:',e); return false; } }
+async function ensureTesseract(){ try{ return await _loadScriptOnce(OCR_LIB_URL,function(){ return !!window.Tesseract; }); }catch(e){ console.warn('tesseract:',e); return false; } }
+
+// الرمز صغير نسبةً للصفحة فيضيع بمسح الصفحة كاملة — تُمسح الصفحة ثم أرباعها بدقتها الأصلية
+function qrScanCanvas(canvas){
+  if(!window.jsQR||!canvas) return '';
+  const ctx=canvas.getContext('2d'), W=canvas.width, H=canvas.height;
+  const hw=Math.round(W*0.55), hh=Math.round(H*0.45);
+  const regions=[[0,0,W,H],[0,0,hw,hh],[W-hw,0,hw,hh],[0,H-hh,hw,hh],[W-hw,H-hh,hw,hh]];
+  for(let i=0;i<regions.length;i++){
+    const r=regions[i];
+    try{
+      const img=ctx.getImageData(r[0],r[1],r[2],r[3]);
+      const res=window.jsQR(img.data,img.width,img.height,{inversionAttempts:'attemptBoth'});
+      if(res&&res.data) return String(res.data);
+    }catch(e){}
+  }
+  return '';
+}
+// ناتج الـQR قد يكون رقماً مجرداً أو رابطاً يحوي الرقم أو نصاً مركّباً، ورقم البوجر نفسه
+// يُطبع مقسَّماً بمسافات ("A 192 85242" ← 19285242) — فتُرجَع كل الاحتمالات ويُجرَّب كلٌّ منها على السجلات.
+function voucherCandidates(t){
+  const s=_bulkDigits(String(t||''));
+  const out=[];
+  const add=function(x){
+    const v=String(x||'').replace(/\D/g,'').replace(/^0+(?=\d)/,'');
+    if(v.length>=4&&out.indexOf(v)<0) out.push(v);
+  };
+  const m=s.match(/(?:voucher|doc|no|id|رقم)[^0-9]{0,6}([0-9]{4,})/i);
+  if(m) add(m[1]);
+  const merged=s.match(/\d[\d\s\-\/]{3,}\d/g)||[];      // أرقام مفصولة بمسافات تُدمج
+  merged.slice().sort(function(a,b){ return b.replace(/\D/g,'').length-a.replace(/\D/g,'').length; }).forEach(add);
+  (s.match(/[0-9]{4,}/g)||[]).slice().sort(function(a,b){ return b.length-a.length; }).forEach(add);
+  return out;
+}
+function voucherFromText(t){ const c=voucherCandidates(t); return c.length?c[0]:''; }
+// رقم البوجر مطبوع أعلى يسار الوثيقة تحت رمز QR — يُقصّ هذا الربع وحده (أرقام لاتينية: أدق وأسرع من الصفحة كاملة)
+async function ocrVoucherFromCanvas(canvas){
+  if(!canvas) return '';
+  if(!(await ensureTesseract())) return '';
+  const cw=Math.round(canvas.width*0.55), ch=Math.round(canvas.height*0.3);
+  const crop=document.createElement('canvas');
+  crop.width=cw; crop.height=ch;
+  crop.getContext('2d').drawImage(canvas,0,0,cw,ch,0,0,cw,ch);
+  try{
+    const res=await window.Tesseract.recognize(crop,'eng');
+    return voucherCandidates((res&&res.data&&res.data.text)||'');
+  }catch(e){ console.warn('ocr:',e); return []; }
+}
+async function resolvePageVoucher(canvas,parsed,setP){
+  const qr=qrScanCanvas(canvas);
+  if(qr){ const c=voucherCandidates(qr); if(c.length) return {cands:c,src:'qr'}; }
+  if(parsed&&parsed.voucher){
+    const c=voucherCandidates(parsed.voucher);
+    if(c.length) return {cands:c,src:'text'};
+  }
+  if(setP) setP('⏳ قراءة رقم البوجر بصرياً (OCR محلي)...');
+  const o=await ocrVoucherFromCanvas(canvas);
+  if(o&&o.length) return {cands:o,src:'ocr'};
+  return {cands:[],src:''};
+}
+function _voucherKey(v){ return _bulkDigits(v==null?'':v).replace(/\D/g,'').replace(/^0+(?=\d)/,''); }
+
+// يُستدعى مباشرة بعد تجهيز صفحات المشتريات: يطابق ويحفظ بلا مراجعة، ويترك ما لم يُطابَق لليدوي
+async function bulkAutoDistribute(){
+  const setP=function(t){ const e=document.getElementById('bulk-prog'); if(e) e.textContent=t; };
+  const all=DB.get('entries',[]);
+  const byV={};
+  all.forEach(function(e){ const k=_voucherKey(e.voucher_no); if(k){ (byV[k]=byV[k]||[]).push(e); } });
+  const inScope={};
+  _bulk.recs.forEach(function(r){ const k=_voucherKey(r.voucher_no); if(k) inScope[k]=true; });
+  const rep={saved:0,queued:0,fail:0,bySrc:{qr:0,text:0,ocr:0},hasImg:[],dupPage:[],dupRec:[],notFound:[],noRead:[],outScope:[]};
+  const targets=[]; const seen={};
+  _bulk.pages.forEach(function(p,i){
+    const pg=i+1;
+    const cl=p.autoCands||[];
+    if(!cl.length){ rep.noRead.push(pg); return; }
+    // يُجرَّب كل احتمال على دليل أرقام البوجر؛ المطابقة معتبرة فقط لو أعطت سجلاً واحداً بلا لبس
+    const hits=[];
+    cl.forEach(function(k){ if(byV[k]&&hits.indexOf(k)<0) hits.push(k); });
+    if(!hits.length){ rep.notFound.push({pg:pg,v:cl[0],src:p.autoSrc}); return; }
+    if(hits.length>1){ rep.dupRec.push({pg:pg,v:hits.join('/')}); return; }
+    const k=hits[0];
+    p.autoVoucher=k;
+    if(seen[k]){ rep.dupPage.push({pg:pg,v:k,other:seen[k]}); return; }
+    seen[k]=pg;
+    const cands=byV[k];
+    if(cands.length>1){ rep.dupRec.push({pg:pg,v:k}); return; }
+    const rec=cands[0];
+    if(!inScope[k]) rep.outScope.push({pg:pg,v:k,fac:rec.factory||''});
+    if(rec.has_scan){ p.recId=rec.id; p.auto=true; rep.hasImg.push({pg:pg,v:k}); return; }
+    targets.push({p:p,pg:pg,rec:rec});
+  });
+  for(let i=0;i<targets.length;i++){
+    const t=targets[i];
+    setP('⏳ جاري حفظ الصورة '+(i+1)+' من '+targets.length+'...');
+    try{
+      await saveVoucherScan(t.p.file,t.rec.id);
+      const list=DB.get('entries',[]);
+      const idx=list.findIndex(function(x){ return x.id===t.rec.id; });
+      if(idx<0){ rep.fail++; continue; }
+      list[idx].has_scan=true;
+      DB.set('entries',list);
+      const ok=await FDB.save('entries',t.rec.id,list[idx]);
+      if(!ok) rep.queued++;
+      rep.saved++;
+      rep.bySrc[t.p.autoSrc]=(rep.bySrc[t.p.autoSrc]||0)+1;
+      t.p.savedAuto=true;
+    }catch(err){ console.warn('auto distribute save error (page '+t.pg+'):',err); rep.fail++; }
+  }
+  _bulk.pages.forEach(function(p){ if(p.savedAuto){ try{ URL.revokeObjectURL(p.url); }catch(e){} } });
+  _bulk.pages=_bulk.pages.filter(function(p){ return !p.savedAuto; });
+  _bulk.idx=0;
+  _bulk.autoReport=rep;
+  if(rep.saved) auditLog('توزيع تلقائي لبوجرات المشتريات',rep.saved+' صورة | QR '+(rep.bySrc.qr||0)+' | نص '+(rep.bySrc.text||0)+' | OCR '+(rep.bySrc.ocr||0)+' | '+(S.selectedFactory||''));
+  if(rep.saved) showToast('حُفظت '+rep.saved+' صورة تلقائياً ✅','success',5000);
+  if(rep.queued) showToast('⚠️ '+rep.queued+' سجل لم يصل السحابة — اضغط الشارة أسفل اليسار عند عودة الاتصال','warning',9000);
+  bulkAutoSuggest();
+  bulkRender();
+  renderContent();
+}
+function _bulkRepList(title,arr,color,fmt){
+  if(!arr||!arr.length) return '';
+  return '<div style="margin-top:6px;font-size:11px;color:'+color+';font-weight:700">'+title+' ('+arr.length+'): '
+    +arr.slice(0,12).map(fmt).join('، ')+(arr.length>12?' …':'')+'</div>';
+}
+function bulkReportOnlyHTML(){
+  return '<div style="background:#fff;border-radius:14px;max-width:640px;width:100%;padding:18px;max-height:92vh;overflow-y:auto">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+      +'<span style="font-weight:900;font-size:14px;color:#1e3a8a">⚡ انتهى التوزيع التلقائي</span>'
+      +'<button type="button" class="btn btn-gray" style="padding:5px 12px;font-size:12px" onclick="bulkClose()">✕</button>'
+    +'</div>'
+    +bulkReportHTML()
+    +'<div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-blue" style="padding:8px 20px" onclick="bulkClose()">تم</button></div>'
+  +'</div>';
+}
+function bulkReportHTML(){
+  const r=_bulk.autoReport; if(!r) return '';
+  const left=_bulk.pages.length;
+  return '<div style="background:'+(r.saved?'#f0fdf4':'#fffbeb')+';border:1px solid '+(r.saved?'#6ee7b7':'#fcd34d')+';border-radius:10px;padding:12px;margin-bottom:10px">'
+    +'<div style="font-size:13px;font-weight:900;color:'+(r.saved?'#065f46':'#92400e')+';margin-bottom:6px">⚡ نتيجة التوزيع التلقائي</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">'
+      +'<div style="background:#fff;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#64748b;font-weight:700">حُفظت تلقائياً</div><div style="font-size:20px;font-weight:900;color:#059669">'+r.saved+'</div></div>'
+      +'<div style="background:#fff;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#64748b;font-weight:700">بقيت لليدوي</div><div style="font-size:20px;font-weight:900;color:#b45309">'+left+'</div></div>'
+      +'<div style="background:#fff;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#64748b;font-weight:700">مصدر القراءة</div><div style="font-size:11px;font-weight:900;color:#0f172a">QR '+(r.bySrc.qr||0)+' · نص '+(r.bySrc.text||0)+' · OCR '+(r.bySrc.ocr||0)+'</div></div>'
+      +(r.fail?'<div style="background:#fff;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#64748b;font-weight:700">فشل الحفظ</div><div style="font-size:20px;font-weight:900;color:#dc2626">'+r.fail+'</div></div>':'')
+    +'</div>'
+    +_bulkRepList('📌 بوجرات لها صورة محفوظة — أُسندت ولم تُستبدل (اضغط حفظ الإسنادات للاستبدال)',r.hasImg,'#b45309',function(x){ return 'ص'+x.pg+'/'+x.v; })
+    +_bulkRepList('🏭 بوجرات تخص سجلات خارج فلترك الحالي (حُفظت بسجلها الصحيح)',r.outScope,'#1d4ed8',function(x){ return 'ص'+x.pg+'/'+x.v+(x.fac?' — '+esc(x.fac):''); })
+    +_bulkRepList('❓ رقم بوجر لا يطابق أي سجل',r.notFound,'#92400e',function(x){ return 'ص'+x.pg+'/'+x.v; })
+    +_bulkRepList('⚠️ رقم بوجر مكرر بصفحتين',r.dupPage,'#b45309',function(x){ return 'ص'+x.pg+' = ص'+x.other; })
+    +_bulkRepList('⚠️ رقم بوجر مكرر بسجلين',r.dupRec,'#b45309',function(x){ return 'ص'+x.pg+'/'+x.v; })
+    +_bulkRepList('🖼️ صفحات لم يُقرأ منها رقم بوجر',r.noRead,'#64748b',function(x){ return 'ص'+x; })
+    +'</div>';
 }
 // ترشيح تلقائي مبدئي للصفحات عالية التطابق فقط — يُعرض بعلامة «مقترح» ويبقى قابلاً للتعديل قبل الحفظ
 function bulkAutoSuggest(){
@@ -2105,6 +2500,7 @@ function bulkShellHTML(k,p,total,done,autoN,strip,assignedRec,parsedHTML,L){
     <div style="padding:6px 14px;border-bottom:1px solid #f1f5f9;display:flex;gap:4px;flex-wrap:wrap;max-height:74px;overflow-y:auto">${strip}</div>
     <div style="flex:1;display:flex;gap:12px;padding:12px 14px;overflow:hidden;min-height:0">
       <div style="flex:1.15;display:flex;flex-direction:column;gap:8px;min-width:0">
+        ${_bulk.autoReport?bulkReportHTML():''}
         ${parsedHTML}
         <div style="flex:1;background:#0f172a;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:0">
           <img src="${p.url}" alt="صفحة البوجر" style="max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in" onclick="showScanModal('${escJs(p.url)}')">
@@ -2195,7 +2591,7 @@ function viewTable(){
     <td class="td" style="color:#64748b;font-size:11px">${e.date}</td><td class="td" style="color:#2563eb;font-size:10px">${esc(e.product_type)}</td>
     <td class="td">${esc(e.driver_name)}</td><td class="td">${esc(e.car_no)}</td><td class="td" style="font-size:11px">${esc(e.location)}</td>
     <td class="td">${fmtTon(e.qty_tons)}</td><td class="td">${fmtLiter(e.natural_liters)}</td><td class="td">${fmtKg(e.weight_kg)}</td>
-    <td class="td" style="color:#64748b">${e.po_no}</td><td class="td">${fmtM(e.price)}</td><td class="td">${fmtM(e.transport_fee||42)}</td>
+    <td class="td" style="color:#64748b">${e.po_no}</td><td class="td">${fmtM(e.price||pricingFor(e.date).price)}</td><td class="td">${fmtM(e.transport_fee||pricingFor(e.date).transport)}</td>
     <td class="td" style="color:#1d4ed8;font-weight:900">${fmtM(e.refinery_price)}</td>
     ${showActionCol?`<td class="td" style="white-space:nowrap">${canEditRow(e)?`<button class="btn btn-gray" style="padding:6px 10px;font-size:11px;margin-left:6px" onclick="editEntry('${e.id}')">✏️</button>`:''}${canEdit('purchases')?`<button class="btn btn-red" style="padding:6px 10px;font-size:11px" onclick="deleteEntry('${e.id}')">🗑️</button>`:''}</td>`:''}
   </tr>`).join('');
@@ -2349,7 +2745,7 @@ function exportXLSX(type){
   if(type==='purchases'){
     list=getList();sheetName='المشتريات';fname='مشتريات_'+today()+'.xlsx';
     rows.push(['ت','المعمل','البوجر','المصفى','التاريخ','النوع','السائق','السيارة','العائدية','طن','لتر','كغم','PO','السعر','نقل','الإجمالي']);
-    list.forEach((e,i)=>rows.push([i+1,e.factory,e.voucher_no,e.refinery,e.date,e.product_type,e.driver_name,e.car_no,e.location,sc(e.qty_tons),sc(e.natural_liters),sc(e.weight_kg),e.po_no,e.price||150,e.transport_fee||42,parseFloat(e.refinery_price)||0]));
+    list.forEach((e,i)=>rows.push([i+1,e.factory,e.voucher_no,e.refinery,e.date,e.product_type,e.driver_name,e.car_no,e.location,sc(e.qty_tons),sc(e.natural_liters),sc(e.weight_kg),e.po_no,e.price||pricingFor(e.date).price,e.transport_fee||pricingFor(e.date).transport,parseFloat(e.refinery_price)||0]));
   }else{
     list=getSaleList();sheetName='المبيعات';fname='مبيعات_'+today()+'.xlsx';
     rows.push(['ت','المعمل','السائق','السيارة','التاريخ','العائدية','العنوان','النوع','الكبان','لتر','أجرة','الواصل','سعر البيع','إجمالي البيع','مكافأة السائق','المصدر']);
@@ -2564,9 +2960,10 @@ async function doImport(){
     const inV={},inC={};
     importedRows.forEach((row,i)=>{
       const xlTons=autoScale(row.qty_tons),xlLiters=autoScale(row.natural_liters),xlKg=autoScale(row.weight_kg);
-      const xlPrice=parseFloat(row.price)||150,xlRefPrice=parseFloat(row.refinery_price)||(xlPrice*xlLiters);
       const dName=(row.driver_name||'').toString().trim(),carNo=(row.car_no||'').toString().trim().replace(/\.0$/,''),loc=(row.location||'').toString().trim();
       const xlDate=parseXLDate(row.date);
+      const _xlPr=pricingFor(xlDate);
+      const xlPrice=parseFloat(row.price)||_xlPr.price,xlRefPrice=parseFloat(row.refinery_price)||(xlPrice*xlLiters);
       // تجاهل صامت لأي سجل مستورد سابقاً لنفس المعمل
       const rawV=importHasVoucherCol?normVoucher(row.voucher_no):'';
       if(rawV){
@@ -2579,7 +2976,7 @@ async function doImport(){
           if(inC[ck]<=(exC[ck]||0)){skippedDup++;return;}
         }
       }
-      const entry={id:'xl_p_'+Date.now()+'_'+i,voucher_no:row.voucher_no||(row._num||String(i+1)),refinery:(row.refinery||'').toString().trim(),date:xlDate,product_type:(row.product_type||'').toString().trim(),driver_name:dName,car_no:carNo,location:loc,qty_tons:xlTons,natural_liters:xlLiters,weight_kg:xlKg,po_no:(row.po_no||'').toString().trim(),price:xlPrice,transport_fee:42,refinery_price:xlRefPrice,factory,accountant:currentUser.email,time:Date.now()+i};
+      const entry={id:'xl_p_'+Date.now()+'_'+i,voucher_no:row.voucher_no||(row._num||String(i+1)),refinery:(row.refinery||'').toString().trim(),date:xlDate,product_type:(row.product_type||'').toString().trim(),driver_name:dName,car_no:carNo,location:loc,qty_tons:xlTons,natural_liters:xlLiters,weight_kg:xlKg,po_no:(row.po_no||'').toString().trim(),price:xlPrice,transport_fee:_xlPr.transport,refinery_price:xlRefPrice,factory,accountant:currentUser.email,time:Date.now()+i};
       entries.push(entry);newEntries.push(entry);
       if(dName)drivers[dName]={name:dName,car_no:carNo,location:loc};
       added++;
@@ -5186,7 +5583,7 @@ function renderKroobDailySection(from,to){
   todayList.forEach((e,i)=>{const d2=parseFloat(e.amount_dinar||0),dl2=parseFloat(e.amount_dollar||0),op2=(e.operation_type||'صرف').trim(),com2=parseFloat(e.commission||0),commD2=parseFloat(e.commission_dollar||0),isInD2=kroobDir(e,'dinar')==='دائن',isInDol2=kroobDir(e,'dollar')==='دائن',badgeIn2=d2?isInD2:(dl2?isInDol2:isInD2);let r='\n'+(badgeIn2?'🟢':'🔴')+' '+(i+1)+'. '+(e.date||'')+' | '+(e.description||'');if(e.receiver)r+=' | 👤 '+e.receiver;r+=' | '+op2;if(d2)r+=' | 💛 '+(isInD2?'+':'-')+fmtM(d2)+' د.ع';if(dl2)r+=' | 🖤 '+(isInDol2?'+':'-')+'$'+fmtM(dl2);if(com2)r+=' | عمولة: '+fmtM(com2)+' د.ع';if(commD2)r+=' | عمولة $: '+fmtM(commD2);waTextK+=r;});
   waTextK+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextK+=' | $'+fmtM(balDollar);
-  waTextK+='\n✅ نظام المراقبة v47.3';
+  waTextK+='\n✅ نظام المراقبة v47.5';
   window._kroobWaText=waTextK;
 
   const stat=(bg,bd,c,t,v)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:11px 12px;text-align:center"><div style="font-size:10px;font-weight:800;color:${c};margin-bottom:4px">${t}</div><div style="font-size:15px;font-weight:900;color:${c}">${v}</div></div>`;
@@ -5247,7 +5644,7 @@ function renderRafidDailySection(from,to){
   todayList.forEach((e2,i2)=>{const d3=parseFloat(e2.dinar||0),dl3=parseFloat(e2.dollar||0),tdD3=(e2.type_dinar||'مدين').trim(),isDainD3=tdD3==='دائن',com3=parseFloat(e2.commission||0),commD3=parseFloat(e2.commission_dollar||0);let r2='\n'+(isDainD3?'🟢':'🔴')+' '+(i2+1)+'. '+(e2.date||'')+' | '+(e2.description||'');if(e2.receiver)r2+=' | 👤 '+e2.receiver;if(d3)r2+=' | '+(isDainD3?'💛 +':'💛 -')+fmtM(d3)+' د.ع';if(dl3)r2+=' | '+(rafidDir(e2,'dollar')==='دائن'?'💚 +':'💔 -')+fmtM(dl3)+' $';if(com3)r2+=' | عمولة: '+fmtM(com3)+' د.ع';if(commD3)r2+=' | عمولة $: '+fmtM(commD3);waTextR+=r2;});
   waTextR+='\n─────────────────\n💰 *الرصيد الحالي:* '+fmtM(balDinar)+' د.ع';
   if(balDollar)waTextR+=' | $'+fmtM(balDollar);
-  waTextR+='\n✅ نظام المراقبة v47.3';
+  waTextR+='\n✅ نظام المراقبة v47.5';
   window._rafidWaText=waTextR;
 
   const stat=(bg,bd,c,t,v)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:11px 12px;text-align:center"><div style="font-size:10px;font-weight:800;color:${c};margin-bottom:4px">${t}</div><div style="font-size:15px;font-weight:900;color:${c}">${v}</div></div>`;
@@ -5917,7 +6314,7 @@ function sendRefineryWhatsapp(){
     lines.push((grandRemaining>0?'⚠️':'✅')+' المتبقي: '+fmtM(Math.abs(grandRemaining))+' د.ع '+(grandRemaining>0?'(غير مسوى)':'(مسوى)'));
     lines.push(sep);
   });
-  lines.push('✅ نظام المراقبة v47.3');
+  lines.push('✅ نظام المراقبة v47.5');
   var msg=lines.join(NL);
   if(navigator.clipboard){
     navigator.clipboard.writeText(msg).then(function(){showToast('تم نسخ نص الواتساب','success');}).catch(function(){});
@@ -6032,6 +6429,7 @@ function viewAdmin(){
   </div>
   <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px"><div style="padding:12px 16px;background:#0f172a;font-weight:900;font-size:13px;color:#94a3b8">قائمة المعامل</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">ت</th><th class="th">اسم المعمل</th><th class="th">حذف</th></tr></thead><tbody>${factRows}</tbody></table></div></div>
   ${renderQuotaAdmin()}
+  ${renderPricingAdmin()}
   ${!DB.get('expenses_haidar_migrated',false)?`<div class="card" style="margin-bottom:14px;border:2px solid #f59e0b;background:#fffbeb">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <div style="flex:1"><h3 style="font-size:13px;font-weight:900;color:#92400e;margin:0 0 4px">🔄 ترحيل المصاريف القديمة → حيدر صبري</h3><p style="font-size:11px;color:#78350f;margin:0">المصاريف المدخلة قبل إضافة حقل "الشخص" ستُنسب لـ حيدر صبري وتُؤشَّر كمُسوَّاة — اضغط مرة واحدة فقط</p></div>
@@ -6350,7 +6748,7 @@ const BACKUP_KEYS=['entries','sales','expenses','expense_entities','expense_enti
   'salaf','salaf_settlement_cfg','private_salaf','deleted_private_salaf_ids',
   'kroob','kroob_opening','kroob_month_openings','kroob_op_types',
   'rafid_accounts','rafid_opening','refinery_received',
-  'drivers','factories','factory_quotas','quota_history','users','audit_log','notifs',
+  'drivers','factories','factory_quotas','quota_history','pricing_rules','users','audit_log','notifs',
   'entries_cleaned','expenses_haidar_migrated','expenses_settlement_cleaned',
   'haider_salaf_migrated','kroob_cleared','rafid_cleared','statement_perms_migrated'];
 const BACKUP_KEEP=30;                       // عدد النسخ المحفوظة بالمجلّد
@@ -7120,16 +7518,22 @@ document.addEventListener('fb-ready', function(){
     const users=DB.get('users',{});const k=uid(lastUser.email);const fresh=users[k];
     const sealed=_userGuard.seal(fresh?{...lastUser,role:fresh.role,permissions:fresh.permissions,factory:fresh.factory}:lastUser);
     currentUser=sealed;
-    if(isManager())syncFromCloud().then(()=>render());else render();
+    if(isManager())syncFromCloud().then(()=>{seedPricingRule();render();});else render();
   }
   else renderLogin();
   // مزامنة المعامل من Firebase
+  // قواعد تسعير المشتريات يحتاجها كل مستخدم — المحاسب لا يُشغّل syncFromCloud فتُقرأ وحدها هنا
+  FDB.getAll('settings').then(function(list){
+    if(list){ const prl=list.find(function(x){return x&&x.id==='pricing_rules';}); if(prl&&Array.isArray(prl.list)) DB.set('pricing_rules',prl.list); }
+    seedPricingRule();
+    try{ if(currentUser&&typeof renderContent==='function') renderContent(); }catch(e){}
+  }).catch(function(){ seedPricingRule(); });
   FDB.getAll('users').then(users=>{if(users&&users.length){const obj={};users.forEach(u=>{if(u.email)obj[uid(u.email)]=u;});const local=DB.get('users',{});const merged={...local,...obj};DB.set('users',merged);}});
 });
 
 // تشغيل فوري لو Firebase تأخر
 setTimeout(()=>{
-  if(!window._fbReady){const lastUser=DB.get('last_user',null);if(lastUser&&lastUser.email){const users=DB.get('users',{});const k=uid(lastUser.email);const fresh=users[k];currentUser=_userGuard.seal(fresh?{...lastUser,role:fresh.role,permissions:fresh.permissions,factory:fresh.factory}:lastUser);render();}else renderLogin();}
+  if(!window._fbReady){seedPricingRule();const lastUser=DB.get('last_user',null);if(lastUser&&lastUser.email){const users=DB.get('users',{});const k=uid(lastUser.email);const fresh=users[k];currentUser=_userGuard.seal(fresh?{...lastUser,role:fresh.role,permissions:fresh.permissions,factory:fresh.factory}:lastUser);render();}else renderLogin();}
 },3000);
 
 // ===== Fullscreen =====

@@ -2682,7 +2682,7 @@ function viewSaleTable(){
   return `${stageDup?`<div class="card no-print" style="margin-bottom:12px;background:#fef2f2;border:1px solid #fca5a5;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
       <div style="font-size:13px;color:#991b1b;line-height:1.8"><b>⚠️ يوجد ${stageDup} سجل مكرر</b> نتج عن استيراد ملف «تحميل وتفريغ»: سجل قديم (كبانه = كمية التحميل) ونسخة مستوردة لنفس السيارة ونفس تاريخ التحميل.<br><span style="font-size:12px;color:#7f1d1d">الدمج يُبقي السجل القديم بصوره ومبالغه وينقل إليه كمية التحميل والتفريغ وتاريخ التفريغ وجهة التسويق، ثم يحذف النسخة المكررة.</span></div>
       <button class="btn btn-red" style="font-size:12px;padding:8px 16px;white-space:nowrap" onclick="mergeStageDuplicates()">🔗 دمج المكرر (${stageDup})</button>
-    </div>`:''}${addrMkt?`<div class="card no-print" style="margin-bottom:12px;background:#fffbeb;border:1px solid #fcd34d;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+    </div>`:''}${stageSuspectsPanel(sf)}${addrMkt?`<div class="card no-print" style="margin-bottom:12px;background:#fffbeb;border:1px solid #fcd34d;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
       <div style="font-size:13px;color:#92400e;line-height:1.8"><b>📝 ${addrMkt} سجل</b> فيه «العنوان» جهة تسويق (مثل «شركة لؤلؤة الدار») لا ميناء.<br><span style="font-size:12px">النقل يضع النص في «جهة التسويق» ويترك «العنوان» فارغاً.</span></div>
       <button class="btn btn-amber" style="font-size:12px;padding:8px 16px;white-space:nowrap" onclick="moveAddressToMarket()">↪️ نقل إلى جهة التسويق (${addrMkt})</button>
     </div>`:''}<div class="card" style="overflow:hidden;padding:0">
@@ -2960,14 +2960,20 @@ async function mergeStageDuplicates(){
   if(!pairs.length){showToast('لا توجد سجلات مكررة','info');renderContent();return;}
   const diffF=pairs.filter(p=>!sameFactory(p.old.factory,p.dup.factory)).length;
   if(!confirm('سيتم دمج '+pairs.length+' سجل مكرر'+(diffF?' (منها '+diffF+' باسم معمل مختلف — يأخذ السجل المدموج معمل السجل المستورد)':'')+':\n- يبقى السجل القديم (مع صور البوجر والمبالغ) وتُنقل إليه كمية التحميل والتفريغ وتاريخ التفريغ وجهة التسويق\n- ويُحذف السجل المستورد المكرر\n\nمتابعة؟'))return;
+  await applyStageMerge(pairs);
+  renderContent();
+}
+// ===== تكرار محتمل: أزواج لا تطابق شروط الدمج التلقائي — تُعرض للمراجعة وتُدمج زوجاً زوجاً =====
+async function applyStageMerge(pairs){
   let sales=DB.get('sales',[]);const byId={};sales.forEach(x=>byId[x.id]=x);
   const dupIds=new Set(),changed=[];
   pairs.forEach(({old,dup})=>{
     const o=byId[old.id],d=byId[dup.id];if(!o||!d)return;
-    o.load_qty=stageQty(d.load_qty);
-    o.kaban=stageQty(d.kaban);
+    // نسختان مستوردتان: تُملأ خانات الباقي الفارغة فقط؛ سجل قديم: يأخذ التحميل والتفريغ من المستورد
+    if(stageQty(o.load_qty)){if(!stageQty(o.kaban)&&stageQty(d.kaban))o.kaban=stageQty(d.kaban);}
+    else{o.load_qty=stageQty(d.load_qty);o.kaban=stageQty(d.kaban);}
     if(d.factory&&!sameFactory(o.factory,d.factory))o.factory=d.factory;
-    o.unload_date=o.kaban?(d.unload_date||o.unload_date||''):'';
+    o.unload_date=o.kaban?(o.unload_date||d.unload_date||''):'';
     if(d.market&&!o.market)o.market=d.market;
     if(!o.product_type&&d.product_type)o.product_type=d.product_type;
     if(!o.has_load_scan&&d.has_load_scan)o.has_load_scan=true;
@@ -2983,7 +2989,64 @@ async function mergeStageDuplicates(){
   for(const o of changed){if(!(await FDB.save('sales',o.id,o)))fail++;}
   for(const id of dupIds){if(!(await FDB.delete('sales',id)))fail++;}
   showToast(fail?`⚠️ دُمج ${changed.length} سجل لكن ${fail} عملية لم تصل السحابة`:`✅ دُمج ${changed.length} سجل وحُذفت النسخ المكررة`,fail?'warning':'success',7000);
-  renderContent();
+}
+function stageDays(a,b){const x=Date.parse(stageDate(a)),y=Date.parse(stageDate(b));return isNaN(x)||isNaN(y)?99:Math.abs(x-y)/864e5;}
+function stageDriverKey(v){return normTxtKey(v).split(' ').slice(0,2).join(' ');}
+function findStageSuspects(){
+  const sales=DB.get('sales',[]),exact=findStageDuplicates(),busy=new Set();
+  exact.forEach(p=>{busy.add(p.old.id);busy.add(p.dup.id);});
+  const out=[],used=new Set(busy);
+  // أ) سجل قديم بلا كمية تحميل ← أقرب سجل مستورد لنفس السيارة (أو نفس السائق) خلال 5 أيام
+  sales.filter(o=>!used.has(o.id)&&!stageQty(o.load_qty)&&stageQty(o.kaban)).forEach(o=>{
+    const q=stageQty(o.kaban),ck=saleCarKey(o.car_no),dk=stageDriverKey(o.driver_name);
+    let best=null,bs=1e18;
+    sales.forEach(x=>{
+      // السجل الذي يحمل صور بوجر ليس نسخة مستوردة — لا يُقترح للحذف
+      if(x.id===o.id||used.has(x.id)||!stageQty(x.load_qty)||x.has_load_scan||x.has_unload_scan)return;
+      const dd=stageDays(x.date,o.date),car=saleCarKey(x.car_no)===ck,drv=dk&&stageDriverKey(x.driver_name)===dk;
+      if(!((car&&dd<=5)||(drv&&dd<=3)))return;
+      const qd=Math.min(Math.abs(stageQty(x.load_qty)-q),Math.abs(stageQty(x.kaban)-q));
+      const sc=dd*1e6+qd+(car?0:5e5);
+      if(sc<bs){bs=sc;best=x;}
+    });
+    if(best){used.add(o.id);used.add(best.id);out.push({old:o,dup:best});}
+  });
+  // ب) نسختان مستوردتان لنفس السيارة ونفس التاريخ ونفس كمية التحميل
+  const withLoad=sales.filter(x=>!used.has(x.id)&&stageQty(x.load_qty));
+  withLoad.forEach(a=>{
+    if(used.has(a.id))return;
+    const b=withLoad.find(x=>x.id!==a.id&&!used.has(x.id)&&saleCarKey(x.car_no)===saleCarKey(a.car_no)&&stageDate(x.date)===stageDate(a.date)&&Math.abs(stageQty(x.load_qty)-stageQty(a.load_qty))<1);
+    if(!b)return;
+    // يبقى الذي يحمل صوراً/مبالغ، ويُحذف الآخر
+    const w=r=>(r.has_load_scan?4:0)+(r.has_unload_scan?4:0)+(parseFloat(r.advance)||parseFloat(r.received)||parseFloat(r.sale_price)?2:0)+(stageQty(r.kaban)?1:0);
+    const keep=w(b)>w(a)?b:a,drop=keep===a?b:a;
+    used.add(a.id);used.add(b.id);out.push({old:keep,dup:drop,twin:true});
+  });
+  return out;
+}
+async function mergeStagePair(oldId,dupId){
+  if(!canEdit('sales')){showToast('لا تملك صلاحية تعديل المبيعات','error');return;}
+  const p=findStageSuspects().find(x=>x.old.id===oldId&&x.dup.id===dupId);
+  if(!p){showToast('تغيّرت البيانات — أعد فتح الصفحة','warning');renderContent();return;}
+  const d=p.dup,o=p.old;
+  if(!confirm('دمج السجلين؟\n\nيبقى: '+(o.driver_name||'')+' | '+(o.car_no||'')+' | '+(o.date||'')+' | كبان '+fmtKaban(o.kaban)+'\nويُحذف: '+(d.driver_name||'')+' | '+(d.car_no||'')+' | '+(d.date||'')+' | تحميل '+fmtKaban(d.load_qty)+' | تفريغ '+fmtKaban(d.kaban)))return;
+  await applyStageMerge([p]);renderContent();
+}
+function stageSuspectsPanel(sf){
+  if(!canEdit('sales'))return '';
+  const list=findStageSuspects().filter(p=>sf==='الكل'||sameFactory(p.old.factory,sf)||sameFactory(p.dup.factory,sf));
+  if(!list.length)return '';
+  const td='padding:6px 8px;border-bottom:1px solid #fde68a;font-size:12px;text-align:center';
+  const hl=(a,b)=>a===b?'':'background:#fee2e2;font-weight:900';
+  const rows=list.map(p=>{const o=p.old,d=p.dup;
+    return `<tr><td style="${td};color:#475569">${p.twin?'سجل 1':'القديم'}${o.has_load_scan||o.has_unload_scan?' 📷':''}</td><td style="${td}">${esc(o.driver_name||'')}</td><td style="${td};${hl(saleCarKey(o.car_no),saleCarKey(d.car_no))}">${esc(o.car_no||'')}</td><td style="${td};${hl(stageDate(o.date),stageDate(d.date))}">${esc(o.date||'')}</td><td style="${td}">${o.load_qty?fmtKaban(o.load_qty):'—'}</td><td style="${td};color:#7c3aed;font-weight:900">${o.kaban?fmtKaban(o.kaban):'—'}</td><td style="${td};${sameFactory(o.factory,d.factory)?'':'background:#fee2e2'}">${esc(o.factory||'')}</td>
+      <td rowspan="2" style="${td};border-right:2px solid #fcd34d"><button class="btn btn-amber" style="font-size:11px;padding:6px 12px" onclick="mergeStagePair('${escJs(o.id)}','${escJs(d.id)}')">🔗 دمج</button></td></tr>
+      <tr style="background:#fffdf5"><td style="${td};color:#475569;border-bottom:2px solid #fcd34d">${p.twin?'سجل 2 (يُحذف)':'المستورد (يُحذف)'}</td><td style="${td};border-bottom:2px solid #fcd34d">${esc(d.driver_name||'')}</td><td style="${td};border-bottom:2px solid #fcd34d">${esc(d.car_no||'')}</td><td style="${td};border-bottom:2px solid #fcd34d">${esc(d.date||'')}</td><td style="${td};border-bottom:2px solid #fcd34d">${d.load_qty?fmtKaban(d.load_qty):'—'}</td><td style="${td};color:#7c3aed;font-weight:900;border-bottom:2px solid #fcd34d">${d.kaban?fmtKaban(d.kaban):'—'}</td><td style="${td};border-bottom:2px solid #fcd34d">${esc(d.factory||'')}</td></tr>`;}).join('');
+  return `<details class="card no-print" open style="margin-bottom:12px;background:#fffbeb;border:1px solid #fcd34d">
+    <summary style="cursor:pointer;font-weight:900;color:#92400e;font-size:13px">🔎 تكرار محتمل يحتاج مراجعتك (${list.length}) — لم يُدمج تلقائياً لوجود اختلاف (مظلَّل بالأحمر)</summary>
+    <p style="font-size:12px;color:#78350f;margin:8px 0">راجع كل زوج: إن كانا نفس السيارة ونفس النقلة اضغط «دمج» — يبقى السجل الأول بصوره ومبالغه ويأخذ كمية التحميل والتفريغ من الثاني، ثم يُحذف الثاني. إن كانا نقلتين مختلفتين فاتركهما.</p>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:760px"><thead><tr style="background:#fef3c7"><th style="${td}"></th><th style="${td}">السائق</th><th style="${td}">المركبة</th><th style="${td}">تاريخ التحميل</th><th style="${td}">التحميل</th><th style="${td}">التفريغ/الكبان</th><th style="${td}">المعمل</th><th style="${td}"></th></tr></thead><tbody>${rows}</tbody></table></div>
+  </details>`;
 }
 // ===== «العنوان» الذي يحوي جهة تسويق (مثل «شركة لؤلؤة الدار») بدل ميناء =====
 // العنوان مخصص للميناء (الخور/الحرة) وعليه يُبنى «موقف مبيعات الموانئ»؛ أي نص آخر هو جهة التسويق

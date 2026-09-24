@@ -2659,7 +2659,7 @@ function viewSaleTable(){
   const totLoad=list.reduce((s,e)=>s+(parseFloat(e.load_qty)||0),0);
   const pendingCnt=list.filter(e=>!(parseFloat(e.kaban)||0)).length;
   const totShort=list.reduce((s,e)=>s+(saleShortage(e)||0),0);
-  const stageDup=canEdit('sales')?findStageDuplicates().filter(p=>sf==='الكل'||sameFactory(p.old.factory,sf)).length:0;
+  const stageDup=canEdit('sales')?findStageDuplicates().filter(p=>sf==='الكل'||sameFactory(p.old.factory,sf)||sameFactory(p.dup.factory,sf)).length:0;
   const addrMkt=canEdit('sales')?findAddressAsMarket().filter(x=>sf==='الكل'||sameFactory(x.factory,sf)).length:0;
   const rows=list.map((e,i)=>{const sh=saleShortage(e),pend=!(parseFloat(e.kaban)||0);return `<tr${pend?' style="background:#fffbeb"':''}>
     <td class="td-p no-print" style="padding:4px">${(e.has_load_scan||e.has_unload_scan)?`<input type="checkbox" class="scan-chk-sales" data-id="${e.id}" ${_scanSel.sales.has(e.id)?'checked':''} onchange="toggleScanSel('sales','${e.id}',this.checked)" title="تحديد بوجري التحميل/التفريغ للطباعة" style="width:16px;height:16px;cursor:pointer">`:''}</td>
@@ -2920,29 +2920,37 @@ function saleCarKey(v){var m=String(v==null?'':v).replace(/\.0$/,'').match(/\d+/
 // وهو الغالب بالسجلات القديمة)  3) سجل قديم كبانه = كمية التفريغ  4) سجل بلا تحميل وبلا كبان
 function findSaleForStage(sales,factory,carNo,date,loadQty,unloadQty,used){
   const ck=saleCarKey(carNo);
-  const c=sales.filter(s=>!used.has(s.id)&&sameFactory(s.factory,factory)&&s.date===date&&saleCarKey(s.car_no)===ck);
-  const num=v=>parseFloat(v)||0;
-  return c.find(s=>num(s.load_qty)===loadQty)
-    ||c.find(s=>!num(s.load_qty)&&num(s.kaban)===loadQty)
-    ||(unloadQty?c.find(s=>!num(s.load_qty)&&num(s.kaban)===unloadQty):null)
+  const all=sales.filter(s=>!used.has(s.id)&&stageDate(s.date)===date&&saleCarKey(s.car_no)===ck);
+  const num=stageQty,eq=(a,b)=>a>0&&Math.abs(a-b)<1;
+  const pick=c=>c.find(s=>eq(num(s.load_qty),loadQty))
+    ||c.find(s=>!num(s.load_qty)&&eq(num(s.kaban),loadQty))
+    ||(unloadQty?c.find(s=>!num(s.load_qty)&&eq(num(s.kaban),unloadQty)):null)
     ||c.find(s=>!num(s.load_qty)&&!num(s.kaban))||null;
+  return pick(all.filter(s=>sameFactory(s.factory,factory)))||pick(all.filter(s=>!num(s.load_qty)&&num(s.kaban)));
 }
 // سجل قديم كبانه هو كمية التحميل: انقل الكبان إلى load_qty قبل الإكمال كي تُكتب كمية التفريغ مكانه
 function legacyLoadToStage(s,loadQty,unloadQty){
-  const num=v=>parseFloat(v)||0;
-  if(!num(s.load_qty)&&num(s.kaban)===loadQty&&unloadQty!==loadQty){s.load_qty=loadQty;s.kaban=0;s.unload_date='';return true;}
+  const num=stageQty;
+  if(!num(s.load_qty)&&Math.abs(num(s.kaban)-loadQty)<1&&unloadQty!==loadQty){s.load_qty=loadQty;s.kaban=0;s.unload_date='';return true;}
   return false;
 }
 // ===== دمج السجلات المكررة الناتجة عن استيراد «تحميل وتفريغ» =====
 // سجل قديم (بلا كمية تحميل) + سجل مستورد لنفس المعمل/السيارة/التاريخ كمية تحميله أو تفريغه = كبان القديم.
 // يُحتفظ بالقديم (قد يحمل صور البوجر والمبالغ) وتُنقل إليه بيانات التحميل/التفريغ ثم يُحذف المستورد.
+function stageQty(v){const n=parseFloat(String(v==null?'':v).replace(/,/g,''))||0;return n>0&&n<1000?n*1000:n;}
+function stageDate(v){return String(v||'').trim().slice(0,10);}
 function findStageDuplicates(){
-  const sales=DB.get('sales',[]),num=v=>parseFloat(v)||0,usedN=new Set(),pairs=[];
-  sales.forEach(o=>{
-    if(num(o.load_qty)||!num(o.kaban))return;
-    const k=saleCarKey(o.car_no);
-    const n=sales.find(x=>x.id!==o.id&&!usedN.has(x.id)&&num(x.load_qty)&&sameFactory(x.factory,o.factory)&&x.date===o.date&&saleCarKey(x.car_no)===k&&(num(x.load_qty)===num(o.kaban)||num(x.kaban)===num(o.kaban)));
-    if(n){usedN.add(n.id);pairs.push({old:o,dup:n});}
+  const sales=DB.get('sales',[]),usedN=new Set(),pairs=[];
+  const eq=(a,b)=>a>0&&Math.abs(a-b)<1;
+  const olds=sales.filter(o=>!stageQty(o.load_qty)&&stageQty(o.kaban));
+  // الأولوية لنفس المعمل، ثم أي معمل
+  [true,false].forEach(sameF=>{
+    olds.forEach(o=>{
+      if(pairs.some(p=>p.old.id===o.id))return;
+      const k=saleCarKey(o.car_no),d=stageDate(o.date),q=stageQty(o.kaban);
+      const n=sales.find(x=>x.id!==o.id&&!usedN.has(x.id)&&stageQty(x.load_qty)&&(!sameF||sameFactory(x.factory,o.factory))&&stageDate(x.date)===d&&saleCarKey(x.car_no)===k&&(eq(stageQty(x.load_qty),q)||eq(stageQty(x.kaban),q)));
+      if(n){usedN.add(n.id);pairs.push({old:o,dup:n});}
+    });
   });
   return pairs;
 }
@@ -2950,13 +2958,15 @@ async function mergeStageDuplicates(){
   if(!canEdit('sales')){showToast('لا تملك صلاحية تعديل المبيعات','error');return;}
   const pairs=findStageDuplicates();
   if(!pairs.length){showToast('لا توجد سجلات مكررة','info');renderContent();return;}
-  if(!confirm('سيتم دمج '+pairs.length+' سجل مكرر:\n- يبقى السجل القديم (مع صور البوجر والمبالغ) وتُنقل إليه كمية التحميل والتفريغ وتاريخ التفريغ وجهة التسويق\n- ويُحذف السجل المستورد المكرر\n\nمتابعة؟'))return;
+  const diffF=pairs.filter(p=>!sameFactory(p.old.factory,p.dup.factory)).length;
+  if(!confirm('سيتم دمج '+pairs.length+' سجل مكرر'+(diffF?' (منها '+diffF+' باسم معمل مختلف — يأخذ السجل المدموج معمل السجل المستورد)':'')+':\n- يبقى السجل القديم (مع صور البوجر والمبالغ) وتُنقل إليه كمية التحميل والتفريغ وتاريخ التفريغ وجهة التسويق\n- ويُحذف السجل المستورد المكرر\n\nمتابعة؟'))return;
   let sales=DB.get('sales',[]);const byId={};sales.forEach(x=>byId[x.id]=x);
   const dupIds=new Set(),changed=[];
   pairs.forEach(({old,dup})=>{
     const o=byId[old.id],d=byId[dup.id];if(!o||!d)return;
-    o.load_qty=parseFloat(d.load_qty)||0;
-    o.kaban=parseFloat(d.kaban)||0;
+    o.load_qty=stageQty(d.load_qty);
+    o.kaban=stageQty(d.kaban);
+    if(d.factory&&!sameFactory(o.factory,d.factory))o.factory=d.factory;
     o.unload_date=o.kaban?(d.unload_date||o.unload_date||''):'';
     if(d.market&&!o.market)o.market=d.market;
     if(!o.product_type&&d.product_type)o.product_type=d.product_type;
@@ -3150,7 +3160,8 @@ async function doImport(){
         const m=findSaleForStage(sales,factory,carNo,xlDate,loadQty,unloadQty,used);
         if(m){
           used.add(m.id);
-          const mv=legacyLoadToStage(m,loadQty,unloadQty);
+          let mv=legacyLoadToStage(m,loadQty,unloadQty);
+          if(!sameFactory(m.factory,factory)){m.factory=factory;mv=true;}
           const ch=fillSaleStage(m,{load_qty:loadQty,kaban:unloadQty,unload_date:unloadQty?unloadDate:'',market:market,product_type:(row.product_type||'').toString().trim(),location:loc});
           if(ch||mv){touched.push(m);updated++;}else skippedDup++;
           return;

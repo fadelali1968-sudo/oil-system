@@ -1739,8 +1739,9 @@ function viewSaleForm(){
       <div><label class="lbl" for="s_car">رقم السيارة *</label><input class="inp" id="s_car" value="${e.car_no||''}"></div>
       <div><label class="lbl" for="s_date">تاريخ التحميل *</label><input class="inp" id="s_date" type="date" value="${e.date||today()}"></div>
       <div><label class="lbl" for="s_loc">العائدية *</label><input class="inp" id="s_loc" value="${e.location||''}"></div>
-      <div><label class="lbl" for="s_addr">العنوان *</label><select class="inp" id="s_addr">
-          <option value="ميناء الخور" ${(e.address||'ميناء الخور')==='ميناء الخور'?'selected':''}>ميناء الخور</option>
+      <div><label class="lbl" for="s_addr">العنوان</label><select class="inp" id="s_addr">
+          <option value="" ${e.id&&!isPortAddress(e.address)?'selected':''}>— بلا ميناء —</option>
+          <option value="ميناء الخور" ${(e.id?e.address:'ميناء الخور')==='ميناء الخور'?'selected':''}>ميناء الخور</option>
           <option value="ميناء الحرة" ${(e.address||'')==='ميناء الحرة'?'selected':''}>ميناء الحرة</option>
         </select></div>
       <div><label class="lbl" for="s_type">النوع *</label><input class="inp" id="s_type" list="s_types" value="${e.product_type||'فلانكوت'}"><datalist id="s_types"><option value="فلانكوت"><option value="HFO"><option value="VR"><option value="زيت خام"></datalist></div>
@@ -2658,6 +2659,8 @@ function viewSaleTable(){
   const totLoad=list.reduce((s,e)=>s+(parseFloat(e.load_qty)||0),0);
   const pendingCnt=list.filter(e=>!(parseFloat(e.kaban)||0)).length;
   const totShort=list.reduce((s,e)=>s+(saleShortage(e)||0),0);
+  const stageDup=canEdit('sales')?findStageDuplicates().filter(p=>sf==='الكل'||sameFactory(p.old.factory,sf)).length:0;
+  const addrMkt=canEdit('sales')?findAddressAsMarket().filter(x=>sf==='الكل'||sameFactory(x.factory,sf)).length:0;
   const rows=list.map((e,i)=>{const sh=saleShortage(e),pend=!(parseFloat(e.kaban)||0);return `<tr${pend?' style="background:#fffbeb"':''}>
     <td class="td-p no-print" style="padding:4px">${(e.has_load_scan||e.has_unload_scan)?`<input type="checkbox" class="scan-chk-sales" data-id="${e.id}" ${_scanSel.sales.has(e.id)?'checked':''} onchange="toggleScanSel('sales','${e.id}',this.checked)" title="تحديد بوجري التحميل/التفريغ للطباعة" style="width:16px;height:16px;cursor:pointer">`:''}</td>
     <td class="td-p" style="color:#64748b">${i+1}</td><td class="td-p">${esc(e.driver_name)}${e.has_load_scan?` <button title="عرض بوجر التحميل" onclick="viewSaleScan('${e.id}','img_load')" style="border:none;background:none;cursor:pointer;font-size:11px;padding:6px;line-height:1">🚚📷</button>`:''}${e.has_unload_scan?` <button title="عرض بوجر التفريغ" onclick="viewSaleScan('${e.id}','img_unload')" style="border:none;background:none;cursor:pointer;font-size:11px;padding:6px;line-height:1">📥📷</button>`:''}</td><td class="td-p">${esc(e.car_no)}</td>
@@ -2676,7 +2679,13 @@ function viewSaleTable(){
     <td class="td-p" style="font-size:11px">${esc(e.car_source||'')}</td>
     ${canEdit('sales')?`<td class="td-p" style="white-space:nowrap"><button class="btn btn-gray" style="padding:6px 10px;font-size:11px;margin-left:6px" onclick="editSale('${e.id}')">✏️</button><button class="btn btn-red" style="padding:6px 10px;font-size:11px" onclick="deleteSale('${e.id}')">🗑️</button></td>`:''}
   </tr>`;}).join('');
-  return `<div class="card" style="overflow:hidden;padding:0">
+  return `${stageDup?`<div class="card no-print" style="margin-bottom:12px;background:#fef2f2;border:1px solid #fca5a5;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+      <div style="font-size:13px;color:#991b1b;line-height:1.8"><b>⚠️ يوجد ${stageDup} سجل مكرر</b> نتج عن استيراد ملف «تحميل وتفريغ»: سجل قديم (كبانه = كمية التحميل) ونسخة مستوردة لنفس السيارة ونفس تاريخ التحميل.<br><span style="font-size:12px;color:#7f1d1d">الدمج يُبقي السجل القديم بصوره ومبالغه وينقل إليه كمية التحميل والتفريغ وتاريخ التفريغ وجهة التسويق، ثم يحذف النسخة المكررة.</span></div>
+      <button class="btn btn-red" style="font-size:12px;padding:8px 16px;white-space:nowrap" onclick="mergeStageDuplicates()">🔗 دمج المكرر (${stageDup})</button>
+    </div>`:''}${addrMkt?`<div class="card no-print" style="margin-bottom:12px;background:#fffbeb;border:1px solid #fcd34d;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+      <div style="font-size:13px;color:#92400e;line-height:1.8"><b>📝 ${addrMkt} سجل</b> فيه «العنوان» جهة تسويق (مثل «شركة لؤلؤة الدار») لا ميناء.<br><span style="font-size:12px">النقل يضع النص في «جهة التسويق» ويترك «العنوان» فارغاً.</span></div>
+      <button class="btn btn-amber" style="font-size:12px;padding:8px 16px;white-space:nowrap" onclick="moveAddressToMarket()">↪️ نقل إلى جهة التسويق (${addrMkt})</button>
+    </div>`:''}<div class="card" style="overflow:hidden;padding:0">
     <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;background:#faf5ff;border-bottom:1px solid #e9d5ff">
       <span style="font-weight:900;font-size:14px;color:#6d28d9">سجل بيانات المبيعات — ${sf} <span class="badge" style="background:#f5f3ff;color:#7c3aed">${list.length} سجل</span> <span class="badge" style="background:#f5f3ff;color:#7c3aed">التحميل: ${fmtKaban(totLoad)}</span> <span class="badge" style="background:#f5f3ff;color:#7c3aed">التفريغ (الكبان): ${fmtKaban(totKaban)}</span> <span class="badge" style="background:${totShort<0?'#fef2f2;color:#dc2626':'#ecfdf5;color:#059669'}">النقص: ${fmtKaban(totShort)}</span>${pendingCnt?` <span class="badge" style="background:#fffbeb;color:#b45309">⏳ بانتظار التفريغ: ${pendingCnt}</span>`:''}</span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -2906,15 +2915,90 @@ function saleCompKey(s){
 }
 // رقم المركبة قد يُكتب «19151/21L» بمكان و«19151» بآخر — المقارنة بأول مجموعة أرقام
 function saleCarKey(v){var m=String(v==null?'':v).replace(/\.0$/,'').match(/\d+/);return m?m[0]:normTxtKey(v);}
-// سجل مبيعات قائم لنفس المعمل+السيارة+تاريخ التحميل: أولاً بنفس كمية التحميل، ثم سجل قديم بلا
-// كمية تحميل وكبانه يساوي كمية التفريغ بالملف، ثم سجل قديم بلا كمية تحميل وبلا كبان
+// سجل مبيعات قائم لنفس المعمل+السيارة+تاريخ التحميل، بالأولوية:
+// 1) نفس كمية التحميل  2) سجل قديم بلا كمية تحميل وكبانه = كمية التحميل (أُدخل وقت التحميل —
+// وهو الغالب بالسجلات القديمة)  3) سجل قديم كبانه = كمية التفريغ  4) سجل بلا تحميل وبلا كبان
 function findSaleForStage(sales,factory,carNo,date,loadQty,unloadQty,used){
   const ck=saleCarKey(carNo);
   const c=sales.filter(s=>!used.has(s.id)&&sameFactory(s.factory,factory)&&s.date===date&&saleCarKey(s.car_no)===ck);
   const num=v=>parseFloat(v)||0;
   return c.find(s=>num(s.load_qty)===loadQty)
+    ||c.find(s=>!num(s.load_qty)&&num(s.kaban)===loadQty)
     ||(unloadQty?c.find(s=>!num(s.load_qty)&&num(s.kaban)===unloadQty):null)
     ||c.find(s=>!num(s.load_qty)&&!num(s.kaban))||null;
+}
+// سجل قديم كبانه هو كمية التحميل: انقل الكبان إلى load_qty قبل الإكمال كي تُكتب كمية التفريغ مكانه
+function legacyLoadToStage(s,loadQty,unloadQty){
+  const num=v=>parseFloat(v)||0;
+  if(!num(s.load_qty)&&num(s.kaban)===loadQty&&unloadQty!==loadQty){s.load_qty=loadQty;s.kaban=0;s.unload_date='';return true;}
+  return false;
+}
+// ===== دمج السجلات المكررة الناتجة عن استيراد «تحميل وتفريغ» =====
+// سجل قديم (بلا كمية تحميل) + سجل مستورد لنفس المعمل/السيارة/التاريخ كمية تحميله أو تفريغه = كبان القديم.
+// يُحتفظ بالقديم (قد يحمل صور البوجر والمبالغ) وتُنقل إليه بيانات التحميل/التفريغ ثم يُحذف المستورد.
+function findStageDuplicates(){
+  const sales=DB.get('sales',[]),num=v=>parseFloat(v)||0,usedN=new Set(),pairs=[];
+  sales.forEach(o=>{
+    if(num(o.load_qty)||!num(o.kaban))return;
+    const k=saleCarKey(o.car_no);
+    const n=sales.find(x=>x.id!==o.id&&!usedN.has(x.id)&&num(x.load_qty)&&sameFactory(x.factory,o.factory)&&x.date===o.date&&saleCarKey(x.car_no)===k&&(num(x.load_qty)===num(o.kaban)||num(x.kaban)===num(o.kaban)));
+    if(n){usedN.add(n.id);pairs.push({old:o,dup:n});}
+  });
+  return pairs;
+}
+async function mergeStageDuplicates(){
+  if(!canEdit('sales')){showToast('لا تملك صلاحية تعديل المبيعات','error');return;}
+  const pairs=findStageDuplicates();
+  if(!pairs.length){showToast('لا توجد سجلات مكررة','info');renderContent();return;}
+  if(!confirm('سيتم دمج '+pairs.length+' سجل مكرر:\n- يبقى السجل القديم (مع صور البوجر والمبالغ) وتُنقل إليه كمية التحميل والتفريغ وتاريخ التفريغ وجهة التسويق\n- ويُحذف السجل المستورد المكرر\n\nمتابعة؟'))return;
+  let sales=DB.get('sales',[]);const byId={};sales.forEach(x=>byId[x.id]=x);
+  const dupIds=new Set(),changed=[];
+  pairs.forEach(({old,dup})=>{
+    const o=byId[old.id],d=byId[dup.id];if(!o||!d)return;
+    o.load_qty=parseFloat(d.load_qty)||0;
+    o.kaban=parseFloat(d.kaban)||0;
+    o.unload_date=o.kaban?(d.unload_date||o.unload_date||''):'';
+    if(d.market&&!o.market)o.market=d.market;
+    if(!o.product_type&&d.product_type)o.product_type=d.product_type;
+    if(!o.has_load_scan&&d.has_load_scan)o.has_load_scan=true;
+    if(!o.has_unload_scan&&d.has_unload_scan)o.has_unload_scan=true;
+    if(o.sale_price)o.sale_total=(parseFloat(o.sale_price)||0)*o.kaban;
+    o.time=Date.now();
+    changed.push(o);dupIds.add(d.id);
+  });
+  sales=sales.filter(x=>!dupIds.has(x.id));
+  DB.set('sales',sales);
+  auditLog('دمج مبيعات مكررة',`${changed.length} سجل (تحميل/تفريغ)`);
+  let fail=0;
+  for(const o of changed){if(!(await FDB.save('sales',o.id,o)))fail++;}
+  for(const id of dupIds){if(!(await FDB.delete('sales',id)))fail++;}
+  showToast(fail?`⚠️ دُمج ${changed.length} سجل لكن ${fail} عملية لم تصل السحابة`:`✅ دُمج ${changed.length} سجل وحُذفت النسخ المكررة`,fail?'warning':'success',7000);
+  renderContent();
+}
+// ===== «العنوان» الذي يحوي جهة تسويق (مثل «شركة لؤلؤة الدار») بدل ميناء =====
+// العنوان مخصص للميناء (الخور/الحرة) وعليه يُبنى «موقف مبيعات الموانئ»؛ أي نص آخر هو جهة التسويق
+function isPortAddress(a){a=(a||'').toString();return /الخور|الحرة|ميناء/.test(a);}
+function findAddressAsMarket(){
+  return DB.get('sales',[]).filter(s=>{const a=(s.address||'').toString().trim();return a&&!isPortAddress(a);});
+}
+async function moveAddressToMarket(){
+  if(!canEdit('sales')){showToast('لا تملك صلاحية تعديل المبيعات','error');return;}
+  const ids=new Set(findAddressAsMarket().map(s=>s.id));
+  if(!ids.size){showToast('لا توجد سجلات بحاجة لنقل','info');renderContent();return;}
+  if(!confirm('سيُنقل نص «العنوان» إلى «جهة التسويق» في '+ids.size+' سجل ويُترك العنوان فارغاً.\n(إن كانت جهة التسويق مملوءة مسبقاً بنص آخر تبقى كما هي ويُفرَّغ العنوان فقط)\n\nمتابعة؟'))return;
+  const sales=DB.get('sales',[]),changed=[];
+  sales.forEach(s=>{
+    if(!ids.has(s.id))return;
+    const a=(s.address||'').toString().trim();
+    if(!(s.market||'').toString().trim())s.market=a;
+    s.address='';s.time=Date.now();changed.push(s);
+  });
+  DB.set('sales',sales);
+  auditLog('نقل العنوان إلى جهة التسويق',`${changed.length} سجل مبيعات`);
+  let fail=0;
+  for(const s of changed){if(!(await FDB.save('sales',s.id,s)))fail++;}
+  showToast(fail?`⚠️ نُقل ${changed.length} سجل لكن ${fail} لم تصل السحابة`:`✅ نُقل العنوان إلى جهة التسويق في ${changed.length} سجل`,fail?'warning':'success',7000);
+  renderContent();
 }
 // إكمال الخانات الفارغة فقط — لا يُكتب فوق قيمة موجودة. يُرجع true إن تغيّر شيء
 function fillSaleStage(s,v){
@@ -3066,8 +3150,9 @@ async function doImport(){
         const m=findSaleForStage(sales,factory,carNo,xlDate,loadQty,unloadQty,used);
         if(m){
           used.add(m.id);
+          const mv=legacyLoadToStage(m,loadQty,unloadQty);
           const ch=fillSaleStage(m,{load_qty:loadQty,kaban:unloadQty,unload_date:unloadQty?unloadDate:'',market:market,product_type:(row.product_type||'').toString().trim(),location:loc});
-          if(ch){touched.push(m);updated++;}else skippedDup++;
+          if(ch||mv){touched.push(m);updated++;}else skippedDup++;
           return;
         }
       }else{

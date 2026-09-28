@@ -1199,6 +1199,7 @@ function buildNav(isM) {
   let nav = '';
   nav += ni('dashboard','🏠 اللوحة الرئيسية','');
   nav += isM ? ni('whatsapp','📊 الموقف الإجمالي','color:#34d399') : '';
+  nav += isM ? ni('profits','💹 الأرباح','color:#4ade80') : '';
   // موقف الموانئ محذوف
   nav += '<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#475569;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">المشتريات</p>';
   nav += ni('form','مشتريات منتوج','');
@@ -1231,6 +1232,7 @@ function renderContent() {
   if(v==='dashboard')          c.innerHTML = viewDashboard();
   else if(v==='ports')         c.innerHTML = viewPorts();
   else if(v==='whatsapp')      c.innerHTML = viewWhatsapp();
+  else if(v==='profits')       c.innerHTML = isManager() ? viewProfits() : '<div style="padding:40px;text-align:center;color:#ef4444;font-weight:900">غير مصرح</div>';
   else if(v==='form')          c.innerHTML = viewForm();
   else if(v==='table')         c.innerHTML = viewTable();
   else if(v==='sale_form')     c.innerHTML = viewSaleForm();
@@ -1510,6 +1512,101 @@ function viewWhatsapp() {
 
 function setThisWeek(){const r=ovWeekRange();S.wFrom=r[0];S.wTo=r[1];renderContent();}
 function setThisMonth(){const r=ovMonthRange();S.wFrom=r[0];S.wTo=r[1];renderContent();}
+
+// ===== 💹 الأرباح لكل معمل =====
+// الربح = إجمالي المبيعات − كلفة المشتريات (سعر المصفى) − المصاريف (دينار + دولار × سعر الصرف).
+// المصروف يُنسب لمعمل إن كانت جهته معرَّفة مربوطة بالمعمل، أو كان اسم الجهة هو اسم المعمل
+// (مع تجاهل كلمتي «معمل/مصاريف»). ما لا يُنسب لأي معمل يظهر «مصاريف عامة» ويُطرح من الإجمالي العام فقط.
+function profitNameKey(x){return normFactory(x).replace(/(^|\s)(مصاريف|مصروفات|معمل)(?=\s|$)/g,' ').replace(/\s+/g,' ').trim();}
+function expenseFactoryOf(entity,facts){
+  const ent=DB.get('expense_entities',[]).find(e=>sameExpEntity(e.name,entity));
+  if(ent&&ent.factory_assoc&&!sameFactory(ent.factory_assoc,'الكل')){
+    const f=facts.find(x=>sameFactory(x,ent.factory_assoc)||profitNameKey(x)===profitNameKey(ent.factory_assoc));
+    if(f)return f;
+  }
+  const k=profitNameKey(entity);
+  return (k&&facts.find(x=>profitNameKey(x)===k))||'';
+}
+function profitMonths(){
+  const set=new Set();
+  loadSales().forEach(e=>{const m=(e.date||'').slice(0,7);if(/^\d{4}-\d{2}$/.test(m))set.add(m);});
+  loadEntries().forEach(e=>{const m=(e.date||'').slice(0,7);if(/^\d{4}-\d{2}$/.test(m))set.add(m);});
+  getExpenseList('').forEach(e=>{const m=expDateToYM(e.date);if(m)set.add(m);});
+  return [...set].sort().reverse();
+}
+function viewProfits(){
+  const months=profitMonths();
+  if(S.profMonth===undefined)S.profMonth=months.includes(today().slice(0,7))?today().slice(0,7):(months[0]||'');
+  const m=S.profMonth;
+  const from=m?m+'-01':'',to=m?m+'-31':'';
+  const facts=allFactoryNames().filter(x=>!sameFactory(x,'الكل'));
+  const an=getAnalysis(from,to),san=getSaleAnalysis(from,to);
+  const usd=saleRates().usd;
+  const exps=getExpenseList('').filter(e=>!m||expDateMatchesMonth(e.date,m));
+  const E={},G={d:0,u:0,n:0};
+  facts.forEach(f=>{E[f]={d:0,u:0,n:0};});
+  exps.forEach(e=>{
+    const f=expenseFactoryOf(e.factory,facts),t=f?E[f]:G;
+    t.d+=parseFloat(e.amount_dinar)||0;t.u+=parseFloat(e.amount_dollar)||0;t.n++;
+  });
+  const rows=facts.map(f=>{
+    const sale=anOf(san,f).total.sale||0,buy=anOf(an,f).total.money||0,ex=E[f];
+    const exAll=ex.d+ex.u*usd;
+    return {f,sale,buy,exD:ex.d,exU:ex.u,exN:ex.n,exAll,profit:sale-buy-exAll};
+  }).filter(r=>r.sale||r.buy||r.exN);
+  const T=rows.reduce((a,r)=>{a.sale+=r.sale;a.buy+=r.buy;a.exD+=r.exD;a.exU+=r.exU;a.exAll+=r.exAll;a.profit+=r.profit;return a;},{sale:0,buy:0,exD:0,exU:0,exAll:0,profit:0});
+  const gAll=G.d+G.u*usd,net=T.profit-gAll;
+  const anyUsd=T.exU+G.u>0;
+  const mn={'01':'كانون الثاني','02':'شباط','03':'آذار','04':'نيسان','05':'أيار','06':'حزيران','07':'تموز','08':'آب','09':'أيلول','10':'تشرين الأول','11':'تشرين الثاني','12':'كانون الأول'};
+  const mLabel=x=>x?(mn[x.slice(5,7)]||x.slice(5,7))+' '+x.slice(0,4):'كل الفترات';
+  const pc=v=>v<0?'#dc2626':'#059669';
+  const td='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700';
+  const body=rows.map((r,i)=>`<tr>
+    <td style="${td};color:#94a3b8">${i+1}</td>
+    <td style="${td};text-align:right;font-weight:900">${esc(r.f)}</td>
+    <td style="${td};color:#1e3a8a">${fmtM(r.sale)}</td>
+    <td style="${td};color:#b45309">${fmtM(r.buy)}</td>
+    <td style="${td};color:#b91c1c">${fmtM(r.exD)}${r.exU?`<div style="font-size:10px;color:#64748b">+ $${fmtM(r.exU)}</div>`:''}<div style="font-size:10px;color:#94a3b8">${r.exN} مصروف</div></td>
+    <td style="${td};font-size:14px;font-weight:900;color:${pc(r.profit)}">${fmtM(r.profit)}</td></tr>`).join('');
+  const card=(t,v,c)=>`<div class="card" style="text-align:center;padding:14px"><div style="font-size:11px;color:#64748b;font-weight:900">${t}</div><div style="font-size:18px;font-weight:900;color:${c};margin-top:6px">${v}</div></div>`;
+  return `<div class="card" style="margin-bottom:14px;display:flex;gap:12px;align-items:end;flex-wrap:wrap">
+    <div><label class="lbl" for="prof_month">الشهر</label><select class="inp" id="prof_month" style="width:200px" onchange="S.profMonth=this.value;renderContent()">
+      <option value="" ${!m?'selected':''}>كل الفترات</option>${months.map(x=>`<option value="${x}" ${x===m?'selected':''}>${mLabel(x)}</option>`).join('')}</select></div>
+    <div><label class="lbl" for="prof_usd">سعر صرف الدولار (دينار)</label><div style="display:flex;gap:6px"><input class="inp" id="prof_usd" type="number" step="any" value="${usd||''}" placeholder="مثلاً 1500" style="width:140px"><button class="btn btn-blue" style="padding:8px 14px;font-size:12px" onclick="saveProfitUsd()">حفظ</button></div></div>
+    <div style="flex:1;font-size:11px;color:#64748b;font-weight:700;line-height:1.8">الربح = إجمالي المبيعات − كلفة المشتريات (سعر المصفى) − المصاريف.<br>المبيعات والمشتريات حسب تاريخ التحميل، والمصاريف حسب تاريخ المصروف.</div>
+  </div>
+  ${anyUsd&&!usd?`<div class="card" style="margin-bottom:14px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:12px;font-weight:700">⚠️ توجد مصاريف بالدولار ($${fmtM(T.exU+G.u)}) ولم يُحدَّد سعر الصرف — لن تُطرح من الأرباح حتى تُدخله.</div>`:''}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px">
+    ${card('إجمالي المبيعات',fmtM(T.sale),'#1e3a8a')}
+    ${card('كلفة المشتريات',fmtM(T.buy),'#b45309')}
+    ${card('مصاريف المعامل',fmtM(T.exAll),'#b91c1c')}
+    ${card('مصاريف عامة',fmtM(gAll),'#7f1d1d')}
+    ${card('صافي الربح',fmtM(net),pc(net))}
+  </div>
+  <div class="card" style="overflow:hidden;padding:0">
+    <div style="padding:14px 18px;background:#052e16;color:#fff;font-weight:900;font-size:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><span>💹 أرباح المعامل — ${mLabel(m)}</span><button class="btn btn-gray no-print" style="font-size:11px;padding:6px 12px" onclick="window.print()">🖨️ طباعة</button></div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:720px">
+      <thead><tr style="background:#f0fdf4">${['ت','المعمل','إجمالي المبيعات','كلفة المشتريات','المصاريف','الربح'].map(h=>`<th style="padding:10px 8px;font-size:12px;font-weight:900;color:#14532d;border-bottom:2px solid #86efac${h==='المعمل'?';text-align:right':''}">${h}</th>`).join('')}</tr></thead>
+      <tbody>${body||'<tr><td colspan="6" style="padding:26px;text-align:center;color:#94a3b8">لا توجد بيانات لهذه الفترة</td></tr>'}</tbody>
+      <tfoot>
+        <tr style="background:#0f172a;color:#fff"><td style="${td};color:#fff;text-align:right" colspan="2">مجموع المعامل</td><td style="${td};color:#93c5fd">${fmtM(T.sale)}</td><td style="${td};color:#fcd34d">${fmtM(T.buy)}</td><td style="${td};color:#fca5a5">${fmtM(T.exAll)}</td><td style="${td};color:${T.profit<0?'#fca5a5':'#86efac'}">${fmtM(T.profit)}</td></tr>
+        <tr style="background:#1e293b;color:#fff"><td style="${td};color:#fff;text-align:right" colspan="4">مصاريف عامة غير مرتبطة بمعمل (${G.n} مصروف${G.u?` — منها $${fmtM(G.u)}`:''})</td><td style="${td};color:#fca5a5">${fmtM(gAll)}</td><td style="${td};color:#fca5a5">− ${fmtM(gAll)}</td></tr>
+        <tr style="background:#052e16;color:#fff"><td style="${td};color:#fff;text-align:right;font-size:14px" colspan="5">صافي الربح</td><td style="${td};font-size:16px;color:${net<0?'#fca5a5':'#86efac'}">${fmtM(net)}</td></tr>
+      </tfoot>
+    </table></div>
+  </div>`;
+}
+function saveProfitUsd(){
+  if(!isManager()){showToast('غير مصرّح','error');return;}
+  const v=parseFloat(gv('prof_usd'));
+  if(isNaN(v)||v<0){showToast('أدخل سعر صرف صحيح','warning');return;}
+  const r=Object.assign({},saleRates(),{usd:v});
+  DB.set('sale_rates',r);
+  FDB.save('settings','sale_rates',{id:'sale_rates',map:r});
+  auditLog('سعر صرف الأرباح',fmtM(v)+' دينار للدولار');
+  showToast('حُفظ سعر الصرف','success');
+  renderContent();
+}
 
 // ===== طباعة الموقف الإجمالي (A4 عمودي) =====
 function printOverall(){
@@ -1792,7 +1889,7 @@ const SALE_RATES_DEFAULT={fare:16000,price:350,tip:50000};
 function saleRates(){
   const r=DB.get('sale_rates',null)||{};
   const n=(v,d)=>{const x=parseFloat(v);return isNaN(x)?d:x;};
-  return {fare:n(r.fare,SALE_RATES_DEFAULT.fare),price:n(r.price,SALE_RATES_DEFAULT.price),tip:n(r.tip,SALE_RATES_DEFAULT.tip)};
+  return {fare:n(r.fare,SALE_RATES_DEFAULT.fare),price:n(r.price,SALE_RATES_DEFAULT.price),tip:n(r.tip,SALE_RATES_DEFAULT.tip),usd:n(r.usd,0)};
 }
 function saleKg(e){return parseFloat(e&&e.kaban)||0;}
 function saleFare(e){return saleKg(e)/1000*saleRates().fare;}
@@ -1816,7 +1913,7 @@ function saveSaleRates(){
   if(!isManager()){ showToast('غير مصرّح','error'); return; }
   const fare=parseFloat(gv('sr_fare')),price=parseFloat(gv('sr_price')),tip=parseFloat(gv('sr_tip'));
   if([fare,price,tip].some(x=>isNaN(x)||x<0)){ showToast('أدخل مبالغ صحيحة','warning'); return; }
-  const old=saleRates(),r={fare:fare,price:price,tip:tip};
+  const old=saleRates(),r={fare:fare,price:price,tip:tip,usd:old.usd};
   DB.set('sale_rates',r);
   FDB.save('settings','sale_rates',{id:'sale_rates',map:r});
   auditLog('مبالغ المبيعات',`أجرة النقل ${fmtM(old.fare)}←${fmtM(fare)} | سعر البيع ${fmtM(old.price)}←${fmtM(price)} | الإكرامية ${fmtM(old.tip)}←${fmtM(tip)}`);

@@ -1537,12 +1537,14 @@ function profitMonths(){
 function viewProfits(){
   const months=profitMonths();
   if(S.profMonth===undefined)S.profMonth=months.includes(today().slice(0,7))?today().slice(0,7):(months[0]||'');
-  const m=S.profMonth;
-  const from=m?m+'-01':'',to=m?m+'-31':'';
+  // من/إلى يتقدّم على الشهر: إن حُدِّد أحدهما تُهمَل قائمة الشهر
+  const df=S.profFrom||'',dt=S.profTo||'',useRange=!!(df||dt);
+  const m=useRange?'':S.profMonth;
+  const from=useRange?df:(m?m+'-01':''),to=useRange?dt:(m?m+'-31':'');
   const facts=allFactoryNames().filter(x=>!sameFactory(x,'الكل'));
   const an=getAnalysis(from,to),san=getSaleAnalysis(from,to);
   const usd=saleRates().usd;
-  const exps=getExpenseList('').filter(e=>!m||expDateMatchesMonth(e.date,m));
+  const exps=getExpenseList('').filter(e=>useRange?expInRange(e.date,df,dt):(!m||expDateMatchesMonth(e.date,m)));
   const E={},G={d:0,u:0,n:0};
   facts.forEach(f=>{E[f]={d:0,u:0,n:0};});
   exps.forEach(e=>{
@@ -1559,6 +1561,7 @@ function viewProfits(){
   const anyUsd=T.exU+G.u>0;
   const mn={'01':'كانون الثاني','02':'شباط','03':'آذار','04':'نيسان','05':'أيار','06':'حزيران','07':'تموز','08':'آب','09':'أيلول','10':'تشرين الأول','11':'تشرين الثاني','12':'كانون الأول'};
   const mLabel=x=>x?(mn[x.slice(5,7)]||x.slice(5,7))+' '+x.slice(0,4):'كل الفترات';
+  const periodLabel=useRange?('من '+(df||'البداية')+' إلى '+(dt||'اليوم')):mLabel(m);
   const pc=v=>v<0?'#dc2626':'#059669';
   const td='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700';
   const body=rows.map((r,i)=>`<tr>
@@ -1570,8 +1573,11 @@ function viewProfits(){
     <td style="${td};font-size:14px;font-weight:900;color:${pc(r.profit)}">${fmtM(r.profit)}</td></tr>`).join('');
   const card=(t,v,c)=>`<div class="card" style="text-align:center;padding:14px"><div style="font-size:11px;color:#64748b;font-weight:900">${t}</div><div style="font-size:18px;font-weight:900;color:${c};margin-top:6px">${v}</div></div>`;
   return `<div class="card" style="margin-bottom:14px;display:flex;gap:12px;align-items:end;flex-wrap:wrap">
-    <div><label class="lbl" for="prof_month">الشهر</label><select class="inp" id="prof_month" style="width:200px" onchange="S.profMonth=this.value;renderContent()">
-      <option value="" ${!m?'selected':''}>كل الفترات</option>${months.map(x=>`<option value="${x}" ${x===m?'selected':''}>${mLabel(x)}</option>`).join('')}</select></div>
+    <div><label class="lbl" for="prof_month">الشهر</label><select class="inp" id="prof_month" style="width:200px${useRange?';opacity:.5':''}" onchange="S.profMonth=this.value;S.profFrom='';S.profTo='';renderContent()">
+      ${useRange?'<option value="" selected>— فترة مخصّصة —</option>':''}<option value="" ${!m&&!useRange?'selected':''}>كل الفترات</option>${months.map(x=>`<option value="${x}" ${x===m?'selected':''}>${mLabel(x)}</option>`).join('')}</select></div>
+    <div><label class="lbl" for="prof_from">من تاريخ</label><input class="inp" id="prof_from" type="date" value="${df}" style="width:150px" onchange="S.profFrom=this.value;renderContent()"></div>
+    <div><label class="lbl" for="prof_to">إلى تاريخ</label><input class="inp" id="prof_to" type="date" value="${dt}" style="width:150px" onchange="S.profTo=this.value;renderContent()"></div>
+    ${useRange?`<button class="btn btn-gray" style="padding:8px 12px;font-size:11px" onclick="S.profFrom='';S.profTo='';renderContent()">✕ مسح التاريخ</button>`:''}
     <div><label class="lbl" for="prof_usd">سعر صرف الدولار (دينار)</label><div style="display:flex;gap:6px"><input class="inp" id="prof_usd" type="number" step="any" value="${usd||''}" placeholder="مثلاً 1500" style="width:140px"><button class="btn btn-blue" style="padding:8px 14px;font-size:12px" onclick="saveProfitUsd()">حفظ</button></div></div>
     <div style="flex:1;font-size:11px;color:#64748b;font-weight:700;line-height:1.8">الربح = إجمالي المبيعات − كلفة المشتريات (سعر المصفى) − المصاريف.<br>المبيعات والمشتريات حسب تاريخ التحميل، والمصاريف حسب تاريخ المصروف.</div>
   </div>
@@ -1584,7 +1590,7 @@ function viewProfits(){
     ${card('صافي الربح',fmtM(net),pc(net))}
   </div>
   <div class="card" style="overflow:hidden;padding:0">
-    <div style="padding:14px 18px;background:#052e16;color:#fff;font-weight:900;font-size:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><span>💹 أرباح المعامل — ${mLabel(m)}</span><button class="btn btn-gray no-print" style="font-size:11px;padding:6px 12px" onclick="window.print()">🖨️ طباعة</button></div>
+    <div style="padding:14px 18px;background:#052e16;color:#fff;font-weight:900;font-size:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><span>💹 أرباح المعامل — ${esc(periodLabel)}</span><button class="btn btn-gray no-print" style="font-size:11px;padding:6px 12px" onclick="window.print()">🖨️ طباعة</button></div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:720px">
       <thead><tr style="background:#f0fdf4">${['ت','المعمل','إجمالي المبيعات','كلفة المشتريات','المصاريف','الربح'].map(h=>`<th style="padding:10px 8px;font-size:12px;font-weight:900;color:#14532d;border-bottom:2px solid #86efac${h==='المعمل'?';text-align:right':''}">${h}</th>`).join('')}</tr></thead>
       <tbody>${body||'<tr><td colspan="6" style="padding:26px;text-align:center;color:#94a3b8">لا توجد بيانات لهذه الفترة</td></tr>'}</tbody>
@@ -1595,6 +1601,19 @@ function viewProfits(){
       </tfoot>
     </table></div>
   </div>`;
+}
+// تاريخ المصروف قد يكون يوماً (2026-09-15) أو شهراً نصياً فقط («أيلول 2026»):
+// اليوم يُقارَن بالمدى مباشرة، والشهر وحده يُحسب إن وقع شهره ضمن أشهر المدى.
+function expInRange(d,from,to){
+  const x=(d||'').toString().trim();
+  const iso=/^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(x);
+  if(iso){
+    const day=iso[1]+'-'+iso[2].padStart(2,'0')+'-'+iso[3].padStart(2,'0');
+    return (!from||day>=from)&&(!to||day<=to);
+  }
+  const ym=expDateToYM(x);
+  if(!ym)return false;
+  return (!from||ym>=from.slice(0,7))&&(!to||ym<=to.slice(0,7));
 }
 function saveProfitUsd(){
   if(!isManager()){showToast('غير مصرّح','error');return;}

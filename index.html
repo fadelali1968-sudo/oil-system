@@ -671,6 +671,8 @@ const _scanSel={purchases:new Set(), sales:new Set()};
 function updateScanSelCount(kind){
   const c=document.getElementById('cnt_scans_'+kind);
   if(c) c.textContent=_scanSel[kind].size;
+  const d=document.getElementById('cnt_del_'+kind);
+  if(d) d.textContent=_scanSel[kind].size;
 }
 function toggleScanSel(kind,id,on){
   if(on) _scanSel[kind].add(id); else _scanSel[kind].delete(id);
@@ -692,8 +694,8 @@ function clearScanSel(kind){
 async function printSelectedScans(kind){
   if(!_scanSel[kind].size){ showToast('لم تحدّد أي بوجر — أشّر على المربعات بعمود التحديد','error',4000); return; }
   const base = kind==='purchases' ? getList() : getSaleList();
-  const chosen = base.filter(e=>_scanSel[kind].has(e.id));
-  if(!chosen.length){ showToast('السجلات المحددة لم تعد موجودة','error'); return; }
+  const chosen = base.filter(e=>_scanSel[kind].has(e.id)&&(kind==='purchases'||e.has_load_scan||e.has_unload_scan));
+  if(!chosen.length){ showToast(kind==='sales'?'السجلات المحددة ليس فيها بوجرات للطباعة':'السجلات المحددة لم تعد موجودة','error'); return; }
   showToast('جاري تحميل صور '+chosen.length+' سجل للطباعة...','info',4000);
   const imgs=[]; let failed=0;
   for(const e of chosen){
@@ -2662,7 +2664,7 @@ function viewSaleTable(){
   const stageDup=canEdit('sales')?findStageDuplicates().filter(p=>sf==='الكل'||sameFactory(p.old.factory,sf)||sameFactory(p.dup.factory,sf)).length:0;
   const addrMkt=canEdit('sales')?findAddressAsMarket().filter(x=>sf==='الكل'||sameFactory(x.factory,sf)).length:0;
   const rows=list.map((e,i)=>{const sh=saleShortage(e),pend=!(parseFloat(e.kaban)||0);return `<tr${pend?' style="background:#fffbeb"':''}>
-    <td class="td-p no-print" style="padding:4px">${(e.has_load_scan||e.has_unload_scan)?`<input type="checkbox" class="scan-chk-sales" data-id="${e.id}" ${_scanSel.sales.has(e.id)?'checked':''} onchange="toggleScanSel('sales','${e.id}',this.checked)" title="تحديد بوجري التحميل/التفريغ للطباعة" style="width:16px;height:16px;cursor:pointer">`:''}</td>
+    <td class="td-p no-print" style="padding:4px"><input type="checkbox" class="scan-chk-sales" data-id="${e.id}" ${_scanSel.sales.has(e.id)?'checked':''} onchange="toggleScanSel('sales','${e.id}',this.checked)" title="تحديد السجل (للحذف أو طباعة البوجرات)" style="width:16px;height:16px;cursor:pointer"></td>
     <td class="td-p" style="color:#64748b">${i+1}</td><td class="td-p">${esc(e.driver_name)}${e.has_load_scan?` <button title="عرض بوجر التحميل" onclick="viewSaleScan('${e.id}','img_load')" style="border:none;background:none;cursor:pointer;font-size:11px;padding:6px;line-height:1">🚚📷</button>`:''}${e.has_unload_scan?` <button title="عرض بوجر التفريغ" onclick="viewSaleScan('${e.id}','img_unload')" style="border:none;background:none;cursor:pointer;font-size:11px;padding:6px;line-height:1">📥📷</button>`:''}</td><td class="td-p">${esc(e.car_no)}</td>
     <td class="td-p" style="font-size:11px">${esc(e.location)}</td><td class="td-p" style="color:#64748b;font-size:11px">${e.date}</td>
     <td class="td-p" style="font-weight:700">${e.load_qty?fmtKaban(e.load_qty):'—'}</td>
@@ -2690,7 +2692,8 @@ function viewSaleTable(){
       <span style="font-weight:900;font-size:14px;color:#6d28d9">سجل بيانات المبيعات — ${sf} <span class="badge" style="background:#f5f3ff;color:#7c3aed">${list.length} سجل</span> <span class="badge" style="background:#f5f3ff;color:#7c3aed">التحميل: ${fmtKaban(totLoad)}</span> <span class="badge" style="background:#f5f3ff;color:#7c3aed">التفريغ (الكبان): ${fmtKaban(totKaban)}</span> <span class="badge" style="background:${totShort<0?'#fef2f2;color:#dc2626':'#ecfdf5;color:#059669'}">النقص: ${fmtKaban(totShort)}</span>${pendingCnt?` <span class="badge" style="background:#fffbeb;color:#b45309">⏳ بانتظار التفريغ: ${pendingCnt}</span>`:''}</span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-blue no-print" style="font-size:11px;padding:7px 12px" onclick="printSelectedScans('sales')" title="طباعة بوجرات التحميل والتفريغ للسجلات المحددة — كل بوجر بصفحة">🖨️ طباعة البوجرات (<span id="cnt_scans_sales">${_scanSel.sales.size}</span>)</button>
-        <button class="btn btn-gray no-print" style="font-size:11px;padding:7px 12px" onclick="clearScanSel('sales')" title="إلغاء تحديد البوجرات">✕ إلغاء التحديد</button>
+        <button class="btn btn-gray no-print" style="font-size:11px;padding:7px 12px" onclick="clearScanSel('sales')" title="إلغاء تحديد السجلات">✕ إلغاء التحديد</button>
+        ${canEdit('sales')?`<button class="btn btn-red no-print" style="font-size:11px;padding:7px 12px" onclick="deleteSelectedSales()" title="حذف كل السجلات المحددة">🗑️ حذف المحدد (<span id="cnt_del_sales">${_scanSel.sales.size}</span>)</button>`:''}
         <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="bulkScanOpen('sales')" title="رفع ملف PDF يحوي عدة بوجرات وتوزيع كل صفحة على سجلها (تحميل/تفريغ)">📚 توزيع بوجرات من ملف</button>
         <button class="btn btn-green no-print" style="font-size:11px;padding:7px 12px" onclick="exportXLSX('sales')">📊 Excel</button>
         <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="window.print()">🖨️</button>
@@ -2712,7 +2715,7 @@ function viewSaleTable(){
     </div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:1400px">
       <thead style="position:sticky;top:0;z-index:1"><tr>
-        <th class="th-p no-print" style="padding:4px"><input type="checkbox" id="chk_all_sales" onclick="toggleAllScanSel('sales',this.checked)" title="تحديد كل السجلات المعروضة التي فيها بوجر" style="width:16px;height:16px;cursor:pointer"></th>
+        <th class="th-p no-print" style="padding:4px"><input type="checkbox" id="chk_all_sales" onclick="toggleAllScanSel('sales',this.checked)" title="تحديد كل السجلات المعروضة — للتحديد حسب سيارة: ابحث برقمها أولاً" style="width:16px;height:16px;cursor:pointer"></th>
         <th class="th-p">ت</th><th class="th-p">اسم السائق</th><th class="th-p">رقم المركبة</th><th class="th-p">العائدية</th>
         <th class="th-p">تاريخ التحميل</th><th class="th-p">كمية التحميل</th><th class="th-p">كمية التفريغ</th><th class="th-p">تاريخ التفريغ</th>
         <th class="th-p">النقص</th><th class="th-p">جهة التسويق</th><th class="th-p">نوع المنتوج</th>
@@ -2725,6 +2728,23 @@ function viewSaleTable(){
   </div>`;
 }
 function editSale(id){const s=DB.get('sales',[]);S.editSale=s.find(x=>x.id===id)||null;S.view='sale_form';pendingLoadScanFile=null;pendingUnloadScanFile=null;render();}
+async function deleteSelectedSales(){
+  if(!canEdit('sales'))return;
+  const ids=new Set(_scanSel.sales);
+  const all=DB.get('sales',[]);
+  const chosen=all.filter(x=>ids.has(x.id));
+  if(!chosen.length){showToast('لم تحدّد أي سجل — أشّر على المربعات بعمود التحديد','error',4000);return;}
+  const cars=[...new Set(chosen.map(x=>x.car_no).filter(Boolean))];
+  if(!confirm('حذف '+chosen.length+' سجل مبيعات'+(cars.length<=3?' (سيارة: '+cars.join('، ')+')':' لـ '+cars.length+' سيارة')+'؟\n\nلا يمكن التراجع عن الحذف.'))return;
+  auditLog('حذف مبيعات جماعي',`${chosen.length} سجل | سيارات: ${cars.slice(0,20).join('، ')}${cars.length>20?' …':''}`);
+  DB.set('sales',all.filter(x=>!ids.has(x.id)));
+  _scanSel.sales.clear();
+  renderContent();
+  const res=await Promise.all(chosen.map(x=>FDB.delete('sales',x.id)));
+  const failed=res.filter(r=>!r).length;
+  if(failed)showToast('حُذف '+chosen.length+' سجل محلياً، وتعذّر حذف '+failed+' من السحابة — تحقق من الاتصال','error',6000);
+  else showToast('تم حذف '+chosen.length+' سجل','success');
+}
 function deleteSale(id){if(!confirm('حذف هذه العملية؟'))return;const sale=DB.get('sales',[]).find(x=>x.id===id);auditLog('حذف مبيعات',`سائق: ${sale?.driver_name||id} | ${sale?.factory||''}`);let s=DB.get('sales',[]);DB.set('sales',s.filter(x=>x.id!==id));FDB.delete('sales',id);renderContent();}
 
 // ===== التقارير والطباعة =====
@@ -2855,7 +2875,7 @@ const COL_MAP_S={
   'نوع المنتوج':'product_type',
   'العائدية':'location','العائدیة':'location','المحافظة':'location','الموقع':'location',
   'العنوان':'address',
-  'النوع':'product_type','نوع المنتج':'product_type','نوع البضاعة':'product_type',
+  'النوع':'product_type','نوع المنتج':'product_type','نوع البضاعة':'product_type','نوع المادة':'product_type',
   'الكبان':'kaban','البان':'kaban',
   'كمية اللتر':'qty_liters','الكمية بالليتر':'qty_liters','الكمية/ لتر':'qty_liters','الكمية/لتر':'qty_liters','كمية/ لتر':'qty_liters','كمية/لتر':'qty_liters','الكميه/لتر':'qty_liters','الكمية لتر':'qty_liters','اللتر':'qty_liters','الكمية':'qty_liters',
   'السلفة':'advance','سلفة':'advance','المبلغ المسلف':'advance',
@@ -2868,10 +2888,14 @@ function normalizeCol(col,map){
   const c=(col||'').toString().trim().replace(/\s+/g,' ').replace(/\u200f|\u200e|\u202a|\u202c/g,'');
   // Try exact match first
   if(map[c])return map[c];
+  // توحيد الإملاء: «كميه/كمية» و«أسم/اسم» — كي لا يُهمَل عمود لاختلاف ه/ة أو الهمزة
+  const nz=x=>x.replace(/ة/g,'ه').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي');
+  const cn=nz(c);
+  const keys=Object.keys(map).sort((a,b)=>b.length-a.length);
+  for(const k of keys){if(nz(k)===cn)return map[k];}
   // Then includes match (longer keys first to avoid false positives)
   // المفاتيح القصيرة (مثل «ت») مطابقة تامة فقط — وإلا طابقت أي عنوان فيه حرف التاء
-  const keys=Object.keys(map).filter(k=>k.length>1).sort((a,b)=>b.length-a.length);
-  for(const k of keys){if(c.includes(k))return map[k];}
+  for(const k of keys){if(k.length>1&&cn.includes(nz(k)))return map[k];}
   return null;
 }
 // كشف صف الرأس تلقائياً: الصف (ضمن أول 10) الذي يطابق أكبر عدد من الحقول المعروفة

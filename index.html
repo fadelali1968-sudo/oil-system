@@ -1022,7 +1022,7 @@ function normFactory(x){
     .trim();
 }
 function sameFactory(a,b){ return normFactory(a)===normFactory(b); }
-const EMPTY_AN={today:{cars:0,tons:0,liters:0,kg:0,money:0,kaban:0},total:{cars:0,tons:0,liters:0,kg:0,money:0,kaban:0}};
+const EMPTY_AN={today:{cars:0,tons:0,liters:0,kg:0,money:0,kaban:0,tips:0,sale:0},total:{cars:0,tons:0,liters:0,kg:0,money:0,kaban:0,tips:0,sale:0}};
 function anOf(an,f){ return (an&&an[f])||EMPTY_AN; }
 // معامل موجودة فعلياً بالبيانات لكنها غير مسجَّلة بقائمة المعامل
 function unregisteredFactories(){
@@ -1097,7 +1097,7 @@ function getSaleAnalysis(fromDate,toDate){
   for(const f of allFactoryNames()){
     const ft=sales.filter(s=>sameFactory(s.factory,f)),fd=ft.filter(s=>s.date===t);
     // السيارة التي لم تفرّغ بعد (كبان فارغ) لا تدخل المجاميع — الكبان = كمية التفريغ
-    const agg=arr=>({cars:arr.filter(e=>(parseFloat(e.kaban)||0)>0).length,kaban:arr.reduce((s,e)=>s+parseFloat(e.kaban||0),0),liters:arr.reduce((s,e)=>s+parseFloat(e.qty_liters||0),0),money:arr.reduce((s,e)=>s+saleFare(e),0)});
+    const agg=arr=>({cars:arr.filter(e=>(parseFloat(e.kaban)||0)>0).length,kaban:arr.reduce((s,e)=>s+parseFloat(e.kaban||0),0),liters:arr.reduce((s,e)=>s+parseFloat(e.qty_liters||0),0),money:arr.reduce((s,e)=>s+saleFare(e),0),tips:arr.reduce((s,e)=>s+saleTip(e),0),sale:arr.reduce((s,e)=>s+saleTotalOf(e),0)});
     res[f]={today:agg(fd),total:agg(ft)};
   }
   return res;
@@ -1384,11 +1384,11 @@ function viewWhatsapp() {
   const FC=['#2563eb','#7c3aed','#059669','#d97706','#0891b2','#db2777','#4f46e5','#b45309'];
 
   // ——— إجماليات الفترة ———
-  const P={cars:0,tons:0,liters:0,kg:0,money:0},SL={cars:0,kaban:0,money:0};
+  const P={cars:0,tons:0,liters:0,kg:0,money:0},SL={cars:0,kaban:0,money:0,tips:0,sale:0};
   facts.forEach(f=>{
     const d=anOf(analysis,f).total,s=anOf(saleAn,f).total;
     P.cars+=d.cars;P.tons+=d.tons;P.liters+=d.liters;P.kg+=d.kg;P.money+=d.money;
-    SL.cars+=s.cars;SL.kaban+=s.kaban;SL.money+=s.money;
+    SL.cars+=s.cars;SL.kaban+=s.kaban;SL.money+=s.money;SL.tips+=(s.tips||0);SL.sale+=(s.sale||0);
   });
   const activeP=facts.filter(f=>anOf(analysis,f).total.cars>0).length;
   const activeS=facts.filter(f=>anOf(saleAn,f).total.cars>0).length;
@@ -1441,7 +1441,9 @@ function viewWhatsapp() {
     ${kpi('#34d399,#047857','rgba(5,150,105,.55)','💧','إجمالي اللترات',fmt(P.liters),'لتر طبيعي','')}
     ${kpi('#fbbf24,#b45309','rgba(217,119,6,.55)','⚡','إجمالي الكغم',fmt(P.kg),'كيلوغرام','')}
     ${kpi('#a78bfa,#5b21b6','rgba(124,58,237,.55)','📦','سيارات المبيعات',fmtM(SL.cars),'سيارة',`الكبان: ${fmtKaban(SL.kaban)}`)}
-    ${kpi('#64748b,#0f172a','rgba(15,23,42,.55)','💰','مبالغ المشتريات',fmtM(P.money),'دينار',`المبيعات: ${fmtM(SL.money)}`)}
+    ${kpi('#64748b,#0f172a','rgba(15,23,42,.55)','💰','مبالغ المشتريات',fmtM(P.money),'دينار','')}
+    ${kpi('#f472b6,#be185d','rgba(219,39,119,.55)','🏷️','إجمالي المبيعات',fmtM(SL.sale),'دينار','')}
+    ${kpi('#818cf8,#3730a3','rgba(79,70,229,.55)','👷','أجور السواق',fmtM(SL.money+SL.tips),'دينار',`كراوي ${fmtM(SL.money)} + إكرامية ${fmtM(SL.tips)}`)}
   </div>`;
 
   // ——— جدول المشتريات ———
@@ -1476,19 +1478,23 @@ function viewWhatsapp() {
       <td class="ovtd" style="text-align:right;font-weight:900"><span class="ovdot" style="background:${ac}"></span>${esc(f)}</td>
       <td class="ovtd">${fmtM(d.cars)}</td>
       <td class="ovtd" style="color:#7c3aed">${fmtKaban(d.kaban)}</td>
-      <td class="ovtd" style="color:#1e3a8a">${fmtM(d.money)}</td></tr>`;
+      <td class="ovtd">${fmtM(d.money)}</td>
+      <td class="ovtd">${fmtM(d.tips||0)}</td>
+      <td class="ovtd" style="color:#3730a3">${fmtM(d.money+(d.tips||0))}</td>
+      <td class="ovtd" style="color:#1e3a8a">${fmtM(d.sale||0)}</td></tr>`;
   }).join('');
   const salesTable=`<div class="card ovtable">
     <div class="ovsec" style="--sc:#4c1d95;--sc2:#8b5cf6">
       <span class="ovsec-t">📦 المبيعات</span>
       <span class="ovsec-b">${activeS} معمل نشط · ${fmtM(SL.cars)} سيارة</span>
     </div>
-    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:520px">
-      <thead><tr><th class="ovth">ت</th><th class="ovth" style="text-align:right">المعمل</th><th class="ovth">السيارات</th><th class="ovth">الكبان</th><th class="ovth">إجمالي المبلغ</th></tr></thead>
-      <tbody>${sRows||'<tr><td class="ovtd" colspan="5" style="padding:22px;color:#94a3b8">لا توجد بيانات</td></tr>'}</tbody>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:820px">
+      <thead><tr><th class="ovth">ت</th><th class="ovth" style="text-align:right">المعمل</th><th class="ovth">السيارات</th><th class="ovth">الكبان</th><th class="ovth">كراوي السواق</th><th class="ovth">إكرامية السواق</th><th class="ovth">إجمالي أجور السواق</th><th class="ovth">إجمالي المبيعات</th></tr></thead>
+      <tbody>${sRows||'<tr><td class="ovtd" colspan="8" style="padding:22px;color:#94a3b8">لا توجد بيانات</td></tr>'}</tbody>
       <tfoot><tr class="ovtot"><td class="ovtd" colspan="2" style="text-align:right">الإجمالي العام</td>
         <td class="ovtd">${fmtM(SL.cars)}</td><td class="ovtd" style="color:#c4b5fd">${fmtKaban(SL.kaban)}</td>
-        <td class="ovtd" style="color:#93c5fd">${fmtM(SL.money)}</td></tr></tfoot>
+        <td class="ovtd" style="color:#93c5fd">${fmtM(SL.money)}</td><td class="ovtd" style="color:#93c5fd">${fmtM(SL.tips)}</td>
+        <td class="ovtd" style="color:#a5b4fc">${fmtM(SL.money+SL.tips)}</td><td class="ovtd" style="color:#93c5fd">${fmtM(SL.sale)}</td></tr></tfoot>
     </table></div></div>`;
 
   // كشفا الكروب وسيد رافد — يتبعان نفس فترة الصفحة
@@ -1511,7 +1517,7 @@ function printOverall(){
   if(!d){showToast('افتح صفحة الموقف الإجمالي أولاً','warning');return;}
   const K=window._ovKroobSum,R=window._ovRafidSum;
   const pr=d.pRows.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmt(r.d.tons)}</td><td>${fmt(r.d.liters)}</td><td>${fmt(r.d.kg)}</td><td>${fmtM(r.d.money)}</td></tr>`).join('');
-  const sr2=d.sRows.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmtKaban(r.d.kaban)}</td><td>${fmtM(r.d.money)}</td></tr>`).join('');
+  const sr2=d.sRows.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmtKaban(r.d.kaban)}</td><td>${fmtM(r.d.money)}</td><td>${fmtM(r.d.tips||0)}</td><td>${fmtM(r.d.money+(r.d.tips||0))}</td><td>${fmtM(r.d.sale||0)}</td></tr>`).join('');
   const box=(t,v,c)=>`<div class="box"><div class="bt">${t}</div><div class="bv" style="color:${c}">${v}</div></div>`;
   const acct=(title,s)=>s?`<table class="acct"><thead><tr><th colspan="5">${title} — ${esc(s.label)} (${s.count} حركة)</th></tr>
     <tr><th>الرصيد السابق د.ع</th><th>إجمالي الدائن</th><th>إجمالي المدين</th><th>الرصيد الختامي د.ع</th><th>الرصيد الختامي $</th></tr></thead>
@@ -1551,9 +1557,9 @@ tfoot td{font-weight:900;background:#f0f0f0}
 <tbody>${pr}</tbody>
 <tfoot><tr><td colspan="2">الإجمالي العام</td><td>${fmtM(d.P.cars)}</td><td>${fmt(d.P.tons)}</td><td>${fmt(d.P.liters)}</td><td>${fmt(d.P.kg)}</td><td>${fmtM(d.P.money)}</td></tr></tfoot></table>
 <h2>📦 المبيعات</h2>
-<table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الكبان</th><th>إجمالي المبلغ</th></tr></thead>
+<table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الكبان</th><th>كراوي السواق</th><th>إكرامية السواق</th><th>إجمالي أجور السواق</th><th>إجمالي المبيعات</th></tr></thead>
 <tbody>${sr2}</tbody>
-<tfoot><tr><td colspan="2">الإجمالي العام</td><td>${fmtM(d.SL.cars)}</td><td>${fmtKaban(d.SL.kaban)}</td><td>${fmtM(d.SL.money)}</td></tr></tfoot></table>
+<tfoot><tr><td colspan="2">الإجمالي العام</td><td>${fmtM(d.SL.cars)}</td><td>${fmtKaban(d.SL.kaban)}</td><td>${fmtM(d.SL.money)}</td><td>${fmtM(d.SL.tips)}</td><td>${fmtM(d.SL.money+d.SL.tips)}</td><td>${fmtM(d.SL.sale)}</td></tr></tfoot></table>
 ${K||R?'<h2>🏦 ملخص الحسابات</h2>':''}
 ${acct('كشف الكروب',K)}
 ${acct('كشف حسابات سيد رافد',R)}

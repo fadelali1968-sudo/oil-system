@@ -2766,9 +2766,10 @@ function viewTable(){
     <td class="td" style="color:#1d4ed8;font-weight:900">${fmtM(e.refinery_price)}</td>
     ${showActionCol?`<td class="td" style="white-space:nowrap">${canEditRow(e)?`<button class="btn btn-gray" style="padding:6px 10px;font-size:11px;margin-left:6px" onclick="editEntry('${e.id}')">✏️</button>`:''}${canEdit('purchases')?`<button class="btn btn-red" style="padding:6px 10px;font-size:11px" onclick="deleteEntry('${e.id}')">🗑️</button>`:''}</td>`:''}
   </tr>`).join('');
+  const sumP=f=>list.reduce((s,e)=>s+(f==='refinery_price'?parseFloat(e[f]||0):sc(e[f])),0);
   return `<div class="card" style="overflow:hidden;padding:0">
     <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border-bottom:1px solid #e2e8f0">
-      <span style="font-weight:900;font-size:14px;color:#1e40af">سجل بيانات المشتريات — ${sf} <span class="badge" style="background:#eff6ff;color:#2563eb">${list.length} سجل</span></span>
+      <span style="font-weight:900;font-size:14px;color:#1e40af">سجل بيانات المشتريات — ${sf} <span class="badge" style="background:#eff6ff;color:#2563eb">🚚 عدد السيارات: ${list.length}</span> <span class="badge" style="background:#eff6ff;color:#2563eb">طن: ${fmtTon(sumP('qty_tons'))}</span> <span class="badge" style="background:#eff6ff;color:#2563eb">لتر: ${fmtLiter(sumP('natural_liters'))}</span> <span class="badge" style="background:#eff6ff;color:#2563eb">كغم: ${fmtKg(sumP('weight_kg'))}</span> <span class="badge" style="background:#ecfdf5;color:#059669">إجمالي الشراء: ${fmtM(sumP('refinery_price'))}</span></span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-blue no-print" style="font-size:11px;padding:7px 12px" onclick="printSelectedScans('purchases')" title="طباعة صور البوجرات المحددة — A4 عمودي، بوجر بكل صفحة">🖨️ طباعة البوجرات (<span id="cnt_scans_purchases">${_scanSel.purchases.size}</span>)</button>
         <button class="btn btn-gray no-print" style="font-size:11px;padding:7px 12px" onclick="clearScanSel('purchases')" title="إلغاء تحديد البوجرات">✕ إلغاء التحديد</button>

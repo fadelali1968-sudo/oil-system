@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-set FILE=%~dp0index_v42.html
+set FILE=%~dp0index.html
 set URL=file:///%FILE:\=/%
 
 :: Try Edge first, then Chrome

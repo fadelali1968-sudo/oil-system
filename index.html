@@ -1275,6 +1275,7 @@ function renderContent() {
   else if(v==='refinery_account') c.innerHTML = hasPerm('refinery') ? viewRefineryAccount() : '<div style="padding:40px;text-align:center;color:#ef4444;font-weight:900">غير مصرح</div>';
   else if(v==='rafid_accounts')   c.innerHTML = hasPerm('rafid') ? viewRafidAccounts() : '<div style="padding:40px;text-align:center;color:#ef4444;font-weight:900">غير مصرح</div>';
   else if(v==='rafid_statement')  c.innerHTML = hasPerm('rafid_statement') ? viewRafidStatement() : '<div style="padding:40px;text-align:center;color:#ef4444;font-weight:900">غير مصرح</div>';
+  c.insertAdjacentHTML('afterbegin',backupBannerHtml());
   // تطبيق Enter navigation بعد العرض
   setTimeout(applyEnterNav, 200);
 }
@@ -3265,7 +3266,7 @@ function detectHeaderRow(raw,map){
   return best;
 }
 function autoScale(val){var n=parseFloat(val)||0;if(n>0&&n<1000)return n*1000;return n;}
-function parseXLDate(d){if(!d)return'';d=d.toString().trim();const m1=d.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/);if(m1)return`${m1[1]}-${m1[2].padStart(2,'0')}-${m1[3].padStart(2,'0')}`;const m2=d.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);if(m2)return`${m2[3]}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`;const m3=d.match(/^(\d{1,2})[\/](\d{1,2})[\/](\d{4})$/);if(m3)return`${m3[3]}-${m3[2].padStart(2,'0')}-${m3[1].padStart(2,'0')}`;if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;const n=parseFloat(d);if(!isNaN(n)&&n>40000){const dt=new Date((n-25569)*86400*1000);return dt.toISOString().split('T')[0];}return d;}
+function parseXLDate(d){if(!d)return'';d=d.toString().trim();const m1=d.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/);if(m1)return`${m1[1]}-${m1[2].padStart(2,'0')}-${m1[3].padStart(2,'0')}`;const m2=d.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);if(m2)return`${m2[3]}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`;const m3=d.match(/^(\d{1,2})[\/\\-](\d{1,2})[\/\\-](\d{4})$/);if(m3)return`${m3[3]}-${m3[2].padStart(2,'0')}-${m3[1].padStart(2,'0')}`;if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;const n=parseFloat(d);if(!isNaN(n)&&n>40000){const dt=new Date((n-25569)*86400*1000);return dt.toISOString().split('T')[0];}return d;}
 
 // ===== منع تكرار الاستيراد =====
 // المفتاح الأساسي للمشتريات هو رقم البوجر ضمن نفس المعمل. لكن عند غياب عمود بوجر حقيقي
@@ -7115,6 +7116,7 @@ function viewAdmin(){
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><div><label class="lbl">البريد الإلكتروني *</label><input class="inp" id="new_email" placeholder="user@example.com"></div><div><label class="lbl">كلمة السر *</label><input class="inp" id="new_pass" type="password" placeholder="Password123"></div><div><label class="lbl">الدور *</label><select class="inp" id="new_role"><option value="accountant">محاسب</option><option value="manager">مدير</option></select></div><div style="grid-column:span 3"><label class="lbl">المعمل المسؤول عنه *</label><select class="inp" id="new_factory_sel"><option value="الكل">الكل</option>${FACTORIES.map(f=>`<option value="${f}">${f}</option>`).join('')}</select></div></div><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-blue" onclick="addUser()">إضافة المستخدم</button></div><div id="user-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>
   </div>
   <div class="card" style="overflow:hidden;padding:0;margin-bottom:14px"><div style="padding:12px 16px;background:#0f172a;font-weight:900;font-size:13px;color:#94a3b8">المستخدمون المسجلون</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">الـ ID</th><th class="th">البريد</th><th class="th">الدور</th><th class="th">المعمل</th><th class="th">حذف</th></tr></thead><tbody>${userRows}</tbody></table></div></div>
+  ${renderSaleDateFixCard()}
   ${renderBackupCard()}
   <div class="card" style="border:2px solid #dc2626">
     <h3 style="font-size:14px;font-weight:900;margin-bottom:10px;color:#dc2626">⚠️ خيارات إدارة البيانات</h3>
@@ -7579,9 +7581,24 @@ async function autoBackupCheck(){
     if(bkLastDate()===today()) return;
     if(!await bkPerm(dir,false)){ _bkNeedsPerm=true; if(S.view==='admin')renderContent(); return; }
     _bkNeedsPerm=false;
-    await runBackup(false);
+    var r=await runBackup(false);
+    if(r&&r.ok){ var b=el('bk-banner'); if(b) b.remove(); }
     if(S.view==='admin') renderContent();
   }catch(e){ console.warn('autoBackupCheck:',e); }
+}
+// تذكير النسخة اليومية بأعلى كل صفحة (للمدير): المتصفح يطلب إذن الكتابة بالمجلّد مرة بكل جلسة فلا تُؤخذ
+// النسخة التلقائية دون نقرة، وكان التذكير بصفحة الإدارة فقط فمضت أسابيع بلا نسخة.
+function bkDaysSince(){ var d=bkLastDate(); if(!d) return null; return Math.round((new Date(today())-new Date(d))/86400000); }
+function backupBannerHtml(){
+  if(!isManager()||S.view==='admin') return '';
+  var days=bkDaysSince(); if(days===0) return '';
+  var dir=bkDirName()&&bkSupported();
+  if(!dir&&days!==null&&days<2) return ''; // بلا مجلّد النسخ تنزيل يدوي، فالتذكير بعد يومين
+  var late=days!==null&&days>=2;
+  var msg=days===null?'⚠️ لم تُؤخذ أي نسخة احتياطية على هذا الجهاز':late?('⚠️ آخر نسخة احتياطية قبل '+(days===2?'يومين':days+(days<=10?' أيام':' يوماً'))):'💾 نسخة اليوم الاحتياطية لم تُؤخذ بعد';
+  return '<div id="bk-banner" class="no-print" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:'+(late||days===null?'#fef2f2;border:1px solid #fca5a5':'#fffbeb;border:1px solid #fcd34d')+';border-radius:10px;padding:8px 12px;margin-bottom:12px">'+
+    '<span style="font-size:12px;font-weight:900;color:'+(late||days===null?'#991b1b':'#92400e')+'">'+msg+'</span>'+
+    '<button class="btn btn-blue" style="font-size:11px;padding:5px 12px" onclick="'+(dir?'grantAndBackup()':'exportBackup()')+'">💾 خذ النسخة الآن</button></div>';
 }
 async function grantAndBackup(){ _bkNeedsPerm=false; var r=await runBackup(true); renderContent(); return r; }
 
@@ -7656,6 +7673,38 @@ async function restoreFromFolder(){
     var txt=await (await fh.getFile()).text();
     await applyRestore(JSON.parse(txt),name);
   }catch(e){ showToast('تعذّرت قراءة الملف: '+(e.message||e),'error'); }
+}
+
+// ===== تصحيح تواريخ المبيعات =====
+// مبيعات استُوردت قبل أن يفهم الاستيراد صيغة 25\9\2026 فحُفظ تاريخها كنص، فلا تعمل معه فلاتر التاريخ ولا الترتيب
+const ISO_DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
+function saleDateFix(v){ return v&&!ISO_DATE_RE.test(v)&&ISO_DATE_RE.test(parseXLDate(v))?parseXLDate(v):null; }
+function badSaleDates(){ return DB.get('sales',[]).filter(function(s){ return saleDateFix(s.date)||saleDateFix(s.unload_date); }); }
+async function fixSaleDates(){
+  var bad=badSaleDates();
+  if(!bad.length){ showToast('لا توجد تواريخ مبيعات تحتاج تصحيحاً','info'); return; }
+  var ex=bad.slice(0,8).map(function(s){ var f=saleDateFix(s.date); return '• '+(s.driver_name||'')+': '+(f?s.date+' ← '+f:s.unload_date+' ← '+saleDateFix(s.unload_date)+' (التفريغ)'); }).join('\n');
+  if(!confirm('تصحيح تاريخ '+bad.length+' مبيعة إلى صيغة البرنامج:\n\n'+ex+(bad.length>8?'\n…':'')+'\n\nمتابعة؟')) return;
+  var ids={}; bad.forEach(function(s){ ids[s.id]=1; });
+  var sales=DB.get('sales',[]),changed=[];
+  sales.forEach(function(s){
+    if(!ids[s.id]) return;
+    var a=saleDateFix(s.date),b=saleDateFix(s.unload_date);
+    if(a) s.date=a; if(b) s.unload_date=b;
+    changed.push(s);
+  });
+  DB.set('sales',sales);
+  for(var i=0;i<changed.length;i++) await FDB.save('sales',changed[i].id,changed[i]);
+  auditLog('تصحيح تواريخ المبيعات',changed.length+' مبيعة');
+  showToast('✅ صُحّح تاريخ '+changed.length+' مبيعة','success',4000);
+  renderContent();
+}
+function renderSaleDateFixCard(){
+  var n=badSaleDates().length; if(!n) return '';
+  return '<div class="card" style="margin-bottom:14px;border:2px solid #f59e0b">'+
+    '<h3 style="font-size:14px;font-weight:900;color:#92400e;margin-bottom:8px">📅 تواريخ مبيعات بصيغة غير صحيحة</h3>'+
+    '<p style="font-size:12px;font-weight:700;color:#475569;margin-bottom:10px">'+n+' مبيعة تاريخها مكتوب مثل 25\\9\\2026 بدل 2026-09-25، فلا تظهر صحيحة في فلاتر التاريخ والترتيب.</p>'+
+    '<button class="btn btn-amber" onclick="fixSaleDates()">📅 تصحيح التواريخ ('+n+')</button></div>';
 }
 
 // ===== بطاقة النسخ بصفحة الإدارة =====

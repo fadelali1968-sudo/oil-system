@@ -6930,7 +6930,7 @@ function exportRefineryXLSX(){
     const recByRef=receptions[ref]||{};
     Object.keys(byDate).sort().forEach(date=>{const d=byDate[date];const amount=Math.round(d.kg*REFINERY_PRICE_PER_KG);const received=parseFloat((recByRef[date]||{}).amount||0);rows.push([ref,date,d.cars,d.kg,d.liters,amount,received,amount-received]);});
   });
-  const ws=xlsxSheet(rows,{title:'حساب المصفى — '+today(),sum:['عدد السيارات','الكغم','اللتر','المبلغ المستحق','المستلم','المتبقي']});
+  const ws=xlsxSheet(rows,{title:'حساب المصفى — '+today(),cars:rows.slice(1).reduce((s,r)=>s+r[2],0),sum:['عدد السيارات','الكغم','اللتر','المبلغ المستحق','المستلم','المتبقي']});
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'حساب المصفى');xlsxSave(wb,'حساب_المصفى_'+today()+'.xlsx');
 }
 

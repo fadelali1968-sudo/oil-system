@@ -1103,6 +1103,26 @@ function getSaleAnalysis(fromDate,toDate){
   }
   return res;
 }
+// البحث في المشتريات والمبيعات: يوحّد الكتابة (أ إ آ ← ا، ة ← ه، ى ← ي، الأرقام الهندية ← عربية)
+// ويتجاهل المسافات، فيجد «22J» عند كتابة «22 J» و«احمد» عند كتابة «أحمد».
+function normSearch(x){
+  return String(x==null?'':x).normalize('NFC').replace(/[\u064B-\u0652\u0640]/g,'')
+    .replace(/[أإآٱ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي')
+    .replace(/[٠-٩]/g,d=>String(d.charCodeAt(0)-1632)).replace(/[۰-۹]/g,d=>String(d.charCodeAt(0)-1776))
+    .toLowerCase().replace(/\s+/g,'');
+}
+function matchSearch(e,q,fields){
+  const n=normSearch(q);if(!n)return true;
+  return fields.some(f=>normSearch(e[f]).includes(n));
+}
+const P_SEARCH_FIELDS=['driver_name','car_no','location','voucher_no','po_no','date','refinery'];
+const S_SEARCH_FIELDS=['driver_name','car_no','location','market','address','date','unload_date','product_type'];
+// إعادة الرسم بعد توقف الكتابة قليلاً، ثم إرجاع المؤشر إلى خانة البحث (كان يضيع بعد كل حرف)
+let _searchTimer=null;
+function setListSearch(key,inputId,val,pos){
+  S[key]=val;clearTimeout(_searchTimer);
+  _searchTimer=setTimeout(()=>{renderContent();const i=document.getElementById(inputId);if(i){i.focus();try{i.setSelectionRange(pos,pos);}catch(_){}}},250);
+}
 function getList(){
   const sf=S.selectedFactory;
   let list=loadEntries();
@@ -1840,6 +1860,8 @@ async function saveEntry(){
   const dupVoucher=allEntries.find(x=>x.voucher_no==v&&x.id!==(e.id||''));
   if(dupVoucher){showToast('رقم البوجر '+v+' موجود مسبقاً!','error');return;}
   if(!v||!date||!ref||!driver||!car||!loc||!po||!liters){showToast('يرجى ملء جميع الحقول (*)','error');return;}
+  const not5=[['الطن',tons],['طبيعي / لتر',liters],['وزن كغم',kg]].filter(([,x])=>x&&Math.floor(Math.abs(x)).toString().length!==5).map(([n])=>n);
+  if(not5.length){showToast('⚠️ الكمية يجب أن تكون 5 أرقام: '+not5.join('، ')+' — صحّحها ثم احفظ','error',7000);return;}
   const fac = sf==='الكل' ? gv('f_factory') : sf;
   if(!fac || sameFactory(fac,'الكل')){showToast('اختر المعمل الذي يخصّه هذا القيد من حقل «المعمل»','error',4000);return;}
   const qw=qtyCheck(tons,liters,kg,pt,e.id);
@@ -2771,7 +2793,7 @@ function viewTable(){
   const sf=S.selectedFactory,isM=isManager();
   let list=getList();
   const pSearch=(S.pSearch||'').toLowerCase(),pRefinery=S.pRefinery||'',pType=S.pType||'',pDateFrom=S.pDateFrom||'',pDateTo=S.pDateTo||'';
-  if(pSearch)list=list.filter(e=>(e.driver_name||'').toLowerCase().includes(pSearch)||(e.car_no||'').toString().toLowerCase().includes(pSearch)||(e.location||'').toLowerCase().includes(pSearch)||(e.voucher_no||'').toString().toLowerCase().includes(pSearch));
+  if(pSearch)list=list.filter(e=>matchSearch(e,pSearch,P_SEARCH_FIELDS));
   if(pRefinery)list=list.filter(e=>e.refinery===pRefinery);
   if(pType)list=list.filter(e=>e.product_type===pType);
   if(pDateFrom)list=list.filter(e=>e.date>=pDateFrom);
@@ -2802,7 +2824,7 @@ function viewTable(){
       </div>
     </div>
     <div style="padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <input class="inp" id="p_search" placeholder="🔍 بحث..." value="${S.pSearch||''}" style="flex:1;min-width:200px;max-width:300px" oninput="S.pSearch=this.value;renderContent()">
+      <input class="inp" id="p_search" placeholder="🔍 بحث: سائق، سيارة، بوجر، تاريخ..." value="${esc(S.pSearch||'')}" style="flex:1;min-width:200px;max-width:300px" oninput="setListSearch('pSearch','p_search',this.value,this.selectionStart)">
       <select class="inp" style="width:160px" onchange="S.pRefinery=this.value;renderContent()"><option value="" ${!S.pRefinery?'selected':''}>كل المصافي</option><option value="مصفى كربلاء" ${S.pRefinery==='مصفى كربلاء'?'selected':''}>مصفى كربلاء</option><option value="مصفى صلاح الدين" ${S.pRefinery==='مصفى صلاح الدين'?'selected':''}>مصفى صلاح الدين</option></select>
       <select class="inp" style="width:120px" onchange="S.pType=this.value;renderContent()"><option value="" ${!S.pType?'selected':''}>كل الأنواع</option><option value="HFO" ${S.pType==='HFO'?'selected':''}>HFO</option><option value="VR" ${S.pType==='VR'?'selected':''}>VR</option></select>
       <div style="display:flex;align-items:center;gap:4px">
@@ -2838,7 +2860,7 @@ function viewSaleTable(){
   const sf=S.selectedFactory,isM=isManager();
   let list=getSaleList();
   const sSearch=(S.sSearch||'').toLowerCase(),sTypeFilter=S.sTypeFilter||'',sDateFrom=S.sDateFrom||'',sDateTo=S.sDateTo||'';
-  if(sSearch)list=list.filter(e=>(e.driver_name||'').toLowerCase().includes(sSearch)||(e.car_no||'').toString().toLowerCase().includes(sSearch)||(e.location||'').toLowerCase().includes(sSearch));
+  if(sSearch)list=list.filter(e=>matchSearch(e,sSearch,S_SEARCH_FIELDS));
   if(sTypeFilter)list=list.filter(e=>e.product_type===sTypeFilter);
   if(sDateFrom)list=list.filter(e=>e.date>=sDateFrom);
   if(sDateTo)list=list.filter(e=>e.date<=sDateTo);
@@ -2887,7 +2909,7 @@ function viewSaleTable(){
       </div>
     </div>
     <div style="padding:10px 14px;background:#faf5ff;border-bottom:1px solid #e9d5ff;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <input class="inp" placeholder="🔍 بحث..." value="${S.sSearch||''}" style="flex:1;min-width:200px;max-width:300px" oninput="S.sSearch=this.value;renderContent()">
+      <input class="inp" id="s_search" placeholder="🔍 بحث: سائق، سيارة، جهة التسويق، تاريخ..." value="${esc(S.sSearch||'')}" style="flex:1;min-width:200px;max-width:300px" oninput="setListSearch('sSearch','s_search',this.value,this.selectionStart)">
       <select class="inp" style="width:150px" onchange="S.sTypeFilter=this.value;renderContent()"><option value="" ${!S.sTypeFilter?'selected':''}>كل الأنواع</option><option value="فلانكوت" ${S.sTypeFilter==='فلانكوت'?'selected':''}>فلانكوت</option><option value="HFO" ${S.sTypeFilter==='HFO'?'selected':''}>HFO</option><option value="VR" ${S.sTypeFilter==='VR'?'selected':''}>VR</option></select>
       <div style="display:flex;align-items:center;gap:4px">
         <label style="font-size:11px;color:#64748b;white-space:nowrap">من:</label>
@@ -3080,14 +3102,14 @@ function exportList(type){
   let list=type==='purchases'?getList():getSaleList();
   if(type==='purchases'){
     const pSearch=(S.pSearch||'').toLowerCase(),pRefinery=S.pRefinery||'',pType=S.pType||'',pDateFrom=S.pDateFrom||'',pDateTo=S.pDateTo||'';
-    if(pSearch)list=list.filter(e=>(e.driver_name||'').toLowerCase().includes(pSearch)||(e.car_no||'').toString().toLowerCase().includes(pSearch)||(e.location||'').toLowerCase().includes(pSearch)||(e.voucher_no||'').toString().toLowerCase().includes(pSearch));
+    if(pSearch)list=list.filter(e=>matchSearch(e,pSearch,P_SEARCH_FIELDS));
     if(pRefinery)list=list.filter(e=>e.refinery===pRefinery);
     if(pType)list=list.filter(e=>e.product_type===pType);
     if(pDateFrom)list=list.filter(e=>e.date>=pDateFrom);
     if(pDateTo)list=list.filter(e=>e.date<=pDateTo);
   }else{
     const sSearch=(S.sSearch||'').toLowerCase(),sTypeFilter=S.sTypeFilter||'',sDateFrom=S.sDateFrom||'',sDateTo=S.sDateTo||'';
-    if(sSearch)list=list.filter(e=>(e.driver_name||'').toLowerCase().includes(sSearch)||(e.car_no||'').toString().toLowerCase().includes(sSearch)||(e.location||'').toLowerCase().includes(sSearch));
+    if(sSearch)list=list.filter(e=>matchSearch(e,sSearch,S_SEARCH_FIELDS));
     if(sTypeFilter)list=list.filter(e=>e.product_type===sTypeFilter);
     if(sDateFrom)list=list.filter(e=>e.date>=sDateFrom);
     if(sDateTo)list=list.filter(e=>e.date<=sDateTo);

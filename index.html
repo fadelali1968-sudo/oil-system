@@ -8,7 +8,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script type="module">
@@ -2946,12 +2947,110 @@ function applyFilter(){S.wFrom=gv('r_from');S.wTo=gv('r_to');renderContent();}
 function clearFilter(){S.wFrom='';S.wTo='';renderContent();}
 
 // ===== Export Excel =====
+// xlsxSheet(rows,opt): rows[0] صف العناوين. opt.title عنوان مدمج فوق الجدول،
+// opt.sum أعمدة (بأسماء العناوين) يُضاف لها صف «المجموع»، opt.num أعمدة أخرى بفواصل الآلاف،
+// opt.hasTotal الصف الأخير مجموع جاهز فيُنسَّق كمجموع، opt.cars يُظهر «عدد السيارات» بجانب العنوان،
+// opt.topSum أعمدة يظهر مجموعها في صف العنوان فوق العمود.
+function xlsxSheet(rows,opt){
+  opt=opt||{};
+  const head=rows[0],nc=head.length,top=opt.title?1:0,numIdx=new Set(),sumIdx=[];
+  (opt.sum||[]).forEach(function(h){const i=head.indexOf(h);if(i>=0){sumIdx.push(i);numIdx.add(i);}});
+  (opt.num||[]).forEach(function(h){const i=head.indexOf(h);if(i>=0)numIdx.add(i);});
+  const body=rows.slice(1),aoa=[];
+  if(top)aoa.push([opt.title]);
+  aoa.push(head);
+  body.forEach(function(r){aoa.push(r);});
+  let totalRow=opt.hasTotal&&body.length?aoa.length-1:-1;
+  if(sumIdx.length&&body.length){
+    const r0=top+2,r1=top+1+body.length,tr=new Array(nc).fill('');
+    tr[sumIdx.indexOf(0)<0?0:1]='المجموع';
+    sumIdx.forEach(function(c){
+      const col=XLSX.utils.encode_col(c);
+      const v=body.reduce(function(s,r){const x=r[c];return s+(typeof x==='number'&&isFinite(x)?x:0);},0);
+      tr[c]={t:'n',v:v,f:'SUM('+col+r0+':'+col+r1+')'};
+    });
+    aoa.push(tr);totalRow=aoa.length-1;
+  }
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  // تنسيق الأرقام: عشري إن وُجد كسر في العمود
+  const dec={};numIdx.forEach(function(c){dec[c]=body.some(function(r){return typeof r[c]==='number'&&r[c]%1!==0;});});
+  const B={style:'thin',color:{rgb:'A6A6A6'}},border={top:B,bottom:B,left:B,right:B};
+  const widths=new Array(nc).fill(4);
+  for(let R=top;R<aoa.length;R++){
+    for(let C=0;C<nc;C++){
+      const ref=XLSX.utils.encode_cell({r:R,c:C});
+      let cell=ws[ref];if(!cell)cell=ws[ref]={t:'s',v:''};
+      const s={border:border,alignment:{horizontal:'center',vertical:'center'},font:{name:'Arial',sz:11}};
+      if(R===top){
+        s.fill={fgColor:{rgb:'1E3A5F'}};s.font={name:'Arial',sz:11,bold:true,color:{rgb:'FFFFFF'}};s.alignment.wrapText=true;
+      }else if(R===totalRow){
+        s.fill={fgColor:{rgb:'FFF2CC'}};s.font={name:'Arial',sz:11,bold:true};
+        s.border={top:{style:'medium',color:{rgb:'1E3A5F'}},bottom:B,left:B,right:B};
+      }else if((R-top)%2===0){
+        s.fill={fgColor:{rgb:'EEF3F9'}};
+      }
+      if(cell.t==='n'&&numIdx.has(C)&&R!==top)s.numFmt=dec[C]?'#,##0.00':'#,##0';
+      cell.s=s;
+      const txt=cell.t==='n'&&numIdx.has(C)?Number(cell.v).toLocaleString('en-US',{maximumFractionDigits:2}):String(cell.v==null?'':cell.v);
+      const w=R===top?Math.min(txt.length,16):txt.length;
+      if(w>widths[C])widths[C]=w;
+    }
+  }
+  ws['!cols']=widths.map(function(w){return {wch:Math.min(Math.max(w+3,6),45)};});
+  ws['!rows']=[];ws['!rows'][top]={hpt:30};
+  if(top){
+    const extra=opt.cars!=null||(opt.topSum||[]).length;
+    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:extra?Math.min(2,nc-1):nc-1}}];
+    ws.A1.s={font:{name:'Arial',sz:14,bold:true,color:{rgb:'1E3A5F'}},alignment:{horizontal:'center',vertical:'center'}};
+    ws['!rows'][0]={hpt:26};
+    const lbl={font:{name:'Arial',sz:11,bold:true,color:{rgb:'1E3A5F'}},alignment:{horizontal:'center',vertical:'center'}};
+    const val={font:{name:'Arial',sz:12,bold:true},fill:{fgColor:{rgb:'FFF2CC'}},border:border,alignment:{horizontal:'center',vertical:'center'},numFmt:'#,##0'};
+    const put=function(c,cell,st){if(c<0||c>=nc)return;ws[XLSX.utils.encode_cell({r:0,c:c})]=Object.assign(cell,{s:st});};
+    if(opt.cars!=null){put(3,{t:'s',v:'عدد السيارات'},lbl);put(4,{t:'n',v:opt.cars},val);}
+    (opt.topSum||[]).forEach(function(h){
+      const c=head.indexOf(h);if(c<0)return;
+      const col=XLSX.utils.encode_col(c),v=body.reduce(function(s,r){const x=r[c];return s+(typeof x==='number'&&isFinite(x)?x:0);},0);
+      put(c,{t:'n',v:v,f:'SUM('+col+(top+2)+':'+col+(top+1+body.length)+')'},Object.assign({},val,{numFmt:dec[c]?'#,##0.00':'#,##0'}));
+      if(c-1>4&&!ws[XLSX.utils.encode_cell({r:0,c:c-1})])put(c-1,{t:'s',v:'المجموع'},lbl);
+    });
+  }
+  ws['!margins']={left:0.3,right:0.3,top:0.5,bottom:0.5,header:0.3,footer:0.3};
+  ws['!xhead']=top+1; // عدد صفوف الرأس: تُجمَّد وتتكرر في الطباعة
+  ws['!xwide']=ws['!cols'].reduce(function(s,c){return s+c.wch;},0)>110;
+  return ws;
+}
+// يحفظ المصنف: من اليمين لليسار، تكرار الرأس عند الطباعة، تجميد الرأس، A4 بعرض صفحة واحدة
+function xlsxSave(wb,fname){
+  wb.Workbook=wb.Workbook||{};wb.Workbook.Views=[{RTL:true}];
+  wb.Workbook.Names=[];
+  wb.SheetNames.forEach(function(n,i){const h=wb.Sheets[n]['!xhead'];if(h)wb.Workbook.Names.push({Name:'_xlnm.Print_Titles',Sheet:i,Ref:"'"+n.replace(/'/g,"''")+"'!$1:$"+h});});
+  // التجميد وإعداد الصفحة لا تكتبهما المكتبة، فيُضافان إلى XML الأوراق عبر JSZip
+  if(typeof JSZip==='undefined'){XLSX.writeFile(wb,fname);return Promise.resolve();}
+  const zip=new JSZip();
+  return zip.loadAsync(XLSX.write(wb,{bookType:'xlsx',type:'array'})).then(function(){
+    return Promise.all(wb.SheetNames.map(function(n,i){
+      const ws=wb.Sheets[n],h=ws['!xhead'],p='xl/worksheets/sheet'+(i+1)+'.xml';
+      if(!h||!zip.file(p))return null;
+      return zip.file(p).async('string').then(function(x){
+        x=x.replace(/(<worksheet[^>]*>)/,'$1<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>')
+           .replace(/<sheetView ([^>]*?)\/>/,'<sheetView $1><pane ySplit="'+h+'" topLeftCell="A'+(h+1)+'" activePane="bottomLeft" state="frozen"/></sheetView>')
+           .replace(/(<pageMargins[^>]*\/>)/,'$1<pageSetup paperSize="9" orientation="'+(ws['!xwide']?'landscape':'portrait')+'" fitToWidth="1" fitToHeight="0"/>');
+        zip.file(p,x);
+      });
+    }));
+  }).then(function(){
+    return zip.generateAsync({type:'blob',compression:'DEFLATE',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  }).then(function(blob){
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;
+    document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+  }).catch(function(e){console.warn('xlsxSave',e);XLSX.writeFile(wb,fname);});
+}
 function exportXLSX(type){
   if(typeof XLSX==='undefined'){showToast('مكتبة Excel غير محملة','error');return;}
   let list,sheetName,fname,rows=[];
   if(type==='purchases'){
     list=getList();sheetName='المشتريات';fname='مشتريات_'+today()+'.xlsx';
-    rows.push(['ت','المعمل','البوجر','المصفى','التاريخ','النوع','السائق','السيارة','العائدية','طن','لتر','كغم','PO','السعر','نقل','الإجمالي']);
+    rows.push(['ت','المعمل','البوجر','المصفى','التاريخ','النوع','السائق','السيارة','العائدية','كمية /طن','طبيعي /لتر','وزن /كغم','PO','السعر','نقل','الإجمالي']);
     list.forEach((e,i)=>rows.push([i+1,e.factory,e.voucher_no,e.refinery,e.date,e.product_type,e.driver_name,e.car_no,e.location,sc(e.qty_tons),sc(e.natural_liters),sc(e.weight_kg),e.po_no,e.price||pricingFor(e.date).price,e.transport_fee||pricingFor(e.date).transport,parseFloat(e.refinery_price)||0]));
   }else{
     list=getSaleList();sheetName='المبيعات';fname='مبيعات_'+today()+'.xlsx';
@@ -2959,8 +3058,16 @@ function exportXLSX(type){
     const rt=saleRates();
     list.forEach((e,i)=>rows.push([i+1,e.driver_name,e.car_no,e.location,e.date,parseFloat(e.load_qty)||'',parseFloat(e.kaban)||'',e.unload_date||'',saleShortage(e)==null?'':saleShortage(e),e.market||'',e.product_type,e.factory,e.address||'',rt.fare,saleFare(e),rt.price,saleTotalOf(e),saleTip(e),e.car_source||'']));
   }
-  const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=rows[0].map(()=>({wch:18}));
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,sheetName);XLSX.writeFile(wb,fname);
+  let opt;
+  if(type==='purchases'){
+    // معمل واحد: اسمه في العنوان ولا حاجة لعمود المعمل؛ «الكل»: يبقى العمود للتمييز
+    const sf=S.selectedFactory,one=sf&&sf!=='الكل';
+    if(one)rows.forEach(r=>r.splice(1,1));
+    opt={title:'مشتريات '+(one?sf:'جميع المعامل'),cars:list.length,topSum:['كمية /طن'],sum:['كمية /طن','طبيعي /لتر','وزن /كغم'],num:['السعر','نقل','الإجمالي']};
+  }else{
+    opt={title:sheetName+' — '+today(),sum:['كمية التحميل','كمية التفريغ','النقص','إجمالي كراوي السواق','إجمالي البيع','إكرامية السائق'],num:['أجرة النقل','سعر البيع']};
+  }
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,xlsxSheet(rows,opt),sheetName);xlsxSave(wb,fname);
 }
 
 // ===== PDF =====
@@ -3611,7 +3718,7 @@ function saveSalaf(){
 }
 function deleteSalaf(id){if(!confirm('حذف هذه السلفة؟'))return;const sl=DB.get('salaf',[]).find(s=>s.id===id);auditLog('حذف سلفة',`${sl?.person||id} | دينار: ${sl?.amount_dinar||0}`);let salaf=DB.get('salaf',[]).filter(s=>s.id!==id);DB.set('salaf',salaf);FDB.delete('salaf',id);renderContent();}
 async function clearAllSalaf(){if(!confirm('مسح جميع بيانات السلف؟'))return;if(!confirm('تأكيد نهائي!'))return;const salaf=DB.get('salaf',[]);DB.set('salaf',[]);try{await Promise.all(salaf.map(s=>FDB.delete('salaf',s.id)));}catch(e){console.warn(e);}renderContent();}
-function exportSalafXLSX(){if(typeof XLSX==='undefined')return;const salafMonthFilter=S.salafMonthFilter||'';const personFilter=(S.salafPersonFilter||'').trim();let list=DB.get('salaf',[]);if(salafMonthFilter)list=list.filter(e=>(e.date||'').startsWith(salafMonthFilter));if(personFilter)list=list.filter(e=>(e.person||'').includes(personFilter));const rows=[['ت','الشخص','التاريخ','المبلغ دينار','المبلغ دولار','البيان']];list.forEach((e,i)=>rows.push([i+1,e.person,e.date,e.amount_dinar||0,e.amount_dollar||0,e.note||'']));const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:5},{wch:15},{wch:14},{wch:16},{wch:16},{wch:30}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'السلف');XLSX.writeFile(wb,'السلف_'+today()+'.xlsx');}
+function exportSalafXLSX(){if(typeof XLSX==='undefined')return;const salafMonthFilter=S.salafMonthFilter||'';const personFilter=(S.salafPersonFilter||'').trim();let list=DB.get('salaf',[]);if(salafMonthFilter)list=list.filter(e=>(e.date||'').startsWith(salafMonthFilter));if(personFilter)list=list.filter(e=>(e.person||'').includes(personFilter));const rows=[['ت','الشخص','التاريخ','المبلغ دينار','المبلغ دولار','البيان']];list.forEach((e,i)=>rows.push([i+1,e.person,e.date,e.amount_dinar||0,e.amount_dollar||0,e.note||'']));const ws=xlsxSheet(rows,{title:'السلف'+(salafMonthFilter?' — '+salafMonthFilter:''),sum:['المبلغ دينار','المبلغ دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'السلف');xlsxSave(wb,'السلف_'+today()+'.xlsx');}
 
 // ===== سلف خاصة (سيد رافد / فايق رويمي) =====
 const PRIV_SALAF_PERSONS=['سيد رافد','فايق رويمي'];
@@ -3748,14 +3855,13 @@ function exportPrivateSalafXLSX(){
   PRIV_SALAF_PERSONS.forEach(function(p){
     let list=privSalafByPerson(p);
     if(month)list=list.filter(e=>(e.date||'').startsWith(month));
-    const rows=[['سلف '+p,'','','','',''],['ت','التاريخ','المبلغ دينار','المبلغ دولار','المستلم','البيان']];
+    const rows=[['ت','التاريخ','المبلغ دينار','المبلغ دولار','المستلم','البيان']];
     list.forEach(function(e,i){rows.push([i+1,e.date||'',safeNum(e.amount_dinar)||'',safeNum(e.amount_dollar)||'',e.receiver||'',e.note||'']);});
     rows.push(['','الإجمالي',list.reduce(function(s,e){return s+safeNum(e.amount_dinar);},0),list.reduce(function(s,e){return s+safeNum(e.amount_dollar);},0),'','']);
-    const ws=XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols']=[{wch:5},{wch:13},{wch:16},{wch:14},{wch:22},{wch:32}];
+    const ws=xlsxSheet(rows,{title:'سلف '+p+(month?' — '+month:''),num:['المبلغ دينار','المبلغ دولار'],hasTotal:true});
     XLSX.utils.book_append_sheet(wb,ws,p);
   });
-  XLSX.writeFile(wb,'سلف_خاصة_'+(month||today())+'.xlsx');
+  xlsxSave(wb,'سلف_خاصة_'+(month||today())+'.xlsx');
 }
 
 // --- استيراد Excel ---
@@ -4228,7 +4334,7 @@ function removeExpSplitFactory(i){S.expSplitFactories.forEach((v,j)=>{const el=d
 function cancelExpSplit(){S.expSplitFactories=null;renderContent();}
 function addExpenseTombstones(ids){var t=DB.get('deleted_expense_ids',[]);var combined=Array.from(new Set(t.concat(ids)));DB.set('deleted_expense_ids',combined);}
 function deleteExpense(id){if(!confirm('حذف هذا المصروف؟'))return;const exp=DB.get('expenses',[]).find(e=>e.id===id);auditLog('حذف مصروف',`جهة: ${exp?.factory||id} | دينار: ${exp?.amount_dinar||0}`);addExpenseTombstones([id]);let expenses=DB.get('expenses',[]).filter(e=>e.id!==id);DB.set('expenses',expenses);FDB.delete('expenses',id);renderContent();}
-function exportExpensesXLSX(factory,month){var list=getExpenseList(factory);if(month)list=list.filter(function(e){return expDateMatchesMonth(e.date,month);});if(typeof XLSX==='undefined')return;const rows=[['ت','المعمل','التاريخ','المبلغ دينار','المبلغ دولار','التفاصيل']];list.forEach((e,i)=>rows.push([i+1,e.factory,e.date,e.amount_dinar||0,e.amount_dollar||0,e.details||'']));const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'مصاريف '+factory);XLSX.writeFile(wb,'مصاريف_'+factory+(month?'_'+month:'')+'_'+today()+'.xlsx');}
+function exportExpensesXLSX(factory,month){var list=getExpenseList(factory);if(month)list=list.filter(function(e){return expDateMatchesMonth(e.date,month);});if(typeof XLSX==='undefined')return;const rows=[['ت','المعمل','التاريخ','المبلغ دينار','المبلغ دولار','التفاصيل']];list.forEach((e,i)=>rows.push([i+1,e.factory,e.date,e.amount_dinar||0,e.amount_dollar||0,e.details||'']));const ws=xlsxSheet(rows,{title:'مصاريف '+factory+(month?' — '+month:''),sum:['المبلغ دينار','المبلغ دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'مصاريف '+factory);xlsxSave(wb,'مصاريف_'+factory+(month?'_'+month:'')+'_'+today()+'.xlsx');}
 
 function expEntityTitle(name){
   var n=String(name||'').trim();
@@ -5607,7 +5713,7 @@ async function clearKroobData(){
   renderContent();
 }
 
-function exportKroobXLSX(){if(typeof XLSX==='undefined')return;const list=getKroobList(),withBal=calcKroobBalance(list),opening=DB.get('kroob_opening',{dinar:0,dollar:0});const rows=[['ت','التاريخ','البيان','الجهة المستفيدة','المستلم','دائن دينار','مدين دينار','دائن دولار','مدين دولار','نوع العملية','عمولة دينار','عمولة دولار','رصيد دينار','رصيد دولار']];rows.push(['رصيد مدور','','','','','','','','','','','',(opening.dinar||0),(opening.dollar||0)]);withBal.forEach((e,i)=>{const tdD=kroobDir(e,'dinar'),tdDol=kroobDir(e,'dollar');rows.push([i+1,e.date,e.description,e.beneficiary||'',e.receiver||'',tdD==='دائن'?e.amount_dinar||0:'',tdD==='مدين'?e.amount_dinar||0:'',tdDol==='دائن'?e.amount_dollar||0:'',tdDol==='مدين'?e.amount_dollar||0:'',e.operation_type||'',e.commission||0,e.commission_dollar||0,e.bal_dinar,e.bal_dollar]);});const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:5},{wch:14},{wch:35},{wch:20},{wch:20},{wch:16},{wch:16},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:18},{wch:16}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'كروب رافد فيصل');XLSX.writeFile(wb,'كروب_'+today()+'.xlsx');}
+function exportKroobXLSX(){if(typeof XLSX==='undefined')return;const list=getKroobList(),withBal=calcKroobBalance(list),opening=DB.get('kroob_opening',{dinar:0,dollar:0});const rows=[['ت','التاريخ','البيان','الجهة المستفيدة','المستلم','دائن دينار','مدين دينار','دائن دولار','مدين دولار','نوع العملية','عمولة دينار','عمولة دولار','رصيد دينار','رصيد دولار']];rows.push(['رصيد مدور','','','','','','','','','','','',(opening.dinar||0),(opening.dollar||0)]);withBal.forEach((e,i)=>{const tdD=kroobDir(e,'dinar'),tdDol=kroobDir(e,'dollar');rows.push([i+1,e.date,e.description,e.beneficiary||'',e.receiver||'',tdD==='دائن'?e.amount_dinar||0:'',tdD==='مدين'?e.amount_dinar||0:'',tdDol==='دائن'?e.amount_dollar||0:'',tdDol==='مدين'?e.amount_dollar||0:'',e.operation_type||'',e.commission||0,e.commission_dollar||0,e.bal_dinar,e.bal_dollar]);});const ws=xlsxSheet(rows,{title:'كروب رافد فيصل — '+today(),sum:['دائن دينار','مدين دينار','دائن دولار','مدين دولار','عمولة دينار','عمولة دولار'],num:['رصيد دينار','رصيد دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'كروب رافد فيصل');xlsxSave(wb,'كروب_'+today()+'.xlsx');}
 
 function importKroobXLSX(input){
   const file=input.files[0];if(!file||typeof XLSX==='undefined')return;
@@ -5988,7 +6094,7 @@ function exportRafidXLSX(){
   const list=getRafidList(),withBal=calcRafidBalance(list);
   const rows=[['ت','التاريخ','البيان','الجهة','المستلم','دائن دينار','مدين دينار','دائن دولار','مدين دولار','نوع العملية','عمولة دينار','عمولة دولار','رصيد دينار','رصيد دولار']];
   withBal.forEach((e,i)=>{const isDainD=rafidDir(e,'dinar')==='دائن',isDainDol=rafidDir(e,'dollar')==='دائن';rows.push([i+1,e.date,e.description,e.beneficiary||'',e.receiver||'',isDainD?e.dinar:0,!isDainD?e.dinar:0,isDainDol?e.dollar:0,!isDainDol?e.dollar:0,e.op_type||'',e.commission||0,e.commission_dollar||0,e.bal_dinar,e.bal_dollar]);});
-  const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'حسابات سيد رافد');XLSX.writeFile(wb,'حسابات_سيد_رافد_'+today()+'.xlsx');
+  const ws=xlsxSheet(rows,{title:'حسابات سيد رافد — '+today(),sum:['دائن دينار','مدين دينار','دائن دولار','مدين دولار','عمولة دينار','عمولة دولار'],num:['رصيد دينار','رصيد دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'حسابات سيد رافد');xlsxSave(wb,'حسابات_سيد_رافد_'+today()+'.xlsx');
 }
 
 
@@ -6786,8 +6892,8 @@ function exportRefineryXLSX(){
     const recByRef=receptions[ref]||{};
     Object.keys(byDate).sort().forEach(date=>{const d=byDate[date];const amount=Math.round(d.kg*REFINERY_PRICE_PER_KG);const received=parseFloat((recByRef[date]||{}).amount||0);rows.push([ref,date,d.cars,d.kg,d.liters,amount,received,amount-received]);});
   });
-  const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:20},{wch:14},{wch:12},{wch:12},{wch:12},{wch:18},{wch:18},{wch:18}];
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'حساب المصفى');XLSX.writeFile(wb,'حساب_المصفى_'+today()+'.xlsx');
+  const ws=xlsxSheet(rows,{title:'حساب المصفى — '+today(),sum:['عدد السيارات','الكغم','اللتر','المبلغ المستحق','المستلم','المتبقي']});
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'حساب المصفى');xlsxSave(wb,'حساب_المصفى_'+today()+'.xlsx');
 }
 
 function generateRefineryPDF(refineryName){

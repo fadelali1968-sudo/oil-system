@@ -3045,31 +3045,8 @@ function xlsxSave(wb,fname){
     document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
   }).catch(function(e){console.warn('xlsxSave',e);XLSX.writeFile(wb,fname);});
 }
-function exportXLSX(type){
-  if(typeof XLSX==='undefined'){showToast('مكتبة Excel غير محملة','error');return;}
-  let list,sheetName,fname,rows=[];
-  if(type==='purchases'){
-    list=getList();sheetName='المشتريات';fname='مشتريات_'+today()+'.xlsx';
-    rows.push(['ت','المعمل','البوجر','المصفى','التاريخ','النوع','السائق','السيارة','العائدية','كمية /طن','طبيعي /لتر','وزن /كغم','PO','السعر','نقل','الإجمالي']);
-    list.forEach((e,i)=>rows.push([i+1,e.factory,e.voucher_no,e.refinery,e.date,e.product_type,e.driver_name,e.car_no,e.location,sc(e.qty_tons),sc(e.natural_liters),sc(e.weight_kg),e.po_no,e.price||pricingFor(e.date).price,e.transport_fee||pricingFor(e.date).transport,parseFloat(e.refinery_price)||0]));
-  }else{
-    list=getSaleList();sheetName='المبيعات';fname='مبيعات_'+today()+'.xlsx';
-    rows.push(['ت','اسم السائق','رقم المركبة','العائدية','تاريخ التحميل','كمية التحميل','كمية التفريغ','تاريخ التفريغ','النقص','جهة التسويق','نوع المنتوج','المعمل','العنوان','أجرة النقل','إجمالي كراوي السواق','سعر البيع','إجمالي البيع','إكرامية السائق','المصدر']);
-    const rt=saleRates();
-    list.forEach((e,i)=>rows.push([i+1,e.driver_name,e.car_no,e.location,e.date,parseFloat(e.load_qty)||'',parseFloat(e.kaban)||'',e.unload_date||'',saleShortage(e)==null?'':saleShortage(e),e.market||'',e.product_type,e.factory,e.address||'',rt.fare,saleFare(e),rt.price,saleTotalOf(e),saleTip(e),e.car_source||'']));
-  }
-  // معمل واحد: اسمه في العنوان ولا حاجة لعمود المعمل؛ «الكل»: يبقى العمود للتمييز
-  const sf=S.selectedFactory,one=sf&&sf!=='الكل',fcol=rows[0].indexOf('المعمل');
-  if(one&&fcol>=0)rows.forEach(r=>r.splice(fcol,1));
-  const opt=type==='purchases'
-    ?{title:'مشتريات '+(one?sf:'جميع المعامل'),cars:list.length,topSum:['كمية /طن'],sum:['كمية /طن','طبيعي /لتر','وزن /كغم'],num:['السعر','نقل','الإجمالي']}
-    :{title:'مبيعات '+(one?sf:'جميع المعامل'),cars:list.length,topSum:['كمية التفريغ'],sum:['كمية التحميل','كمية التفريغ','النقص'],num:['أجرة النقل','إجمالي كراوي السواق','سعر البيع','إجمالي البيع','إكرامية السائق']};
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,xlsxSheet(rows,opt),sheetName);xlsxSave(wb,fname);
-}
-
-// ===== PDF =====
-function generatePDF(type){
-  const sf=S.selectedFactory;
+// القائمة المصدَّرة (Excel وPDF) = ما يظهر في الجدول بعد فلاتر الصفحة
+function exportList(type){
   let list=type==='purchases'?getList():getSaleList();
   if(type==='purchases'){
     const pSearch=(S.pSearch||'').toLowerCase(),pRefinery=S.pRefinery||'',pType=S.pType||'',pDateFrom=S.pDateFrom||'',pDateTo=S.pDateTo||'';
@@ -3078,34 +3055,90 @@ function generatePDF(type){
     if(pType)list=list.filter(e=>e.product_type===pType);
     if(pDateFrom)list=list.filter(e=>e.date>=pDateFrom);
     if(pDateTo)list=list.filter(e=>e.date<=pDateTo);
-  }
-  if(type==='sales'){
+  }else{
     const sSearch=(S.sSearch||'').toLowerCase(),sTypeFilter=S.sTypeFilter||'',sDateFrom=S.sDateFrom||'',sDateTo=S.sDateTo||'';
     if(sSearch)list=list.filter(e=>(e.driver_name||'').toLowerCase().includes(sSearch)||(e.car_no||'').toString().toLowerCase().includes(sSearch)||(e.location||'').toLowerCase().includes(sSearch));
     if(sTypeFilter)list=list.filter(e=>e.product_type===sTypeFilter);
     if(sDateFrom)list=list.filter(e=>e.date>=sDateFrom);
     if(sDateTo)list=list.filter(e=>e.date<=sDateTo);
   }
-  const pDateFrom=type==='purchases'?S.pDateFrom||'':S.sDateFrom||'';
-  const pDateTo=type==='purchases'?S.pDateTo||'':S.sDateTo||'';
-  const dateRangeText=(pDateFrom||pDateTo)?` | الفترة: ${pDateFrom||'---'} إلى ${pDateTo||'---'}`:'';
-  const color=type==='purchases'?'#1e3a8a':'#6d28d9';
-  const title=type==='purchases'?'تقرير المشتريات':'تقرير المبيعات';
-  const headers=type==='purchases'?['ت','المعمل','البوجر','المصفى','التاريخ','النوع','السائق','السيارة','العائدية','طن','لتر','PO','الإجمالي']:['ت','اسم السائق','رقم المركبة','العائدية','تاريخ التحميل','كمية التحميل','كمية التفريغ','تاريخ التفريغ','النقص','جهة التسويق','نوع المنتوج'];
-  const rows=list.map((e,i)=>type==='purchases'?`<tr><td>${i+1}</td><td>${e.factory}</td><td>${e.voucher_no}</td><td>${e.refinery}</td><td>${e.date}</td><td>${e.product_type}</td><td>${e.driver_name}</td><td>${e.car_no}</td><td>${e.location}</td><td>${fmtM(sc(e.qty_tons))}</td><td>${fmtM(sc(e.natural_liters))}</td><td>${e.po_no}</td><td style="color:${color};font-weight:900">${fmtM(e.refinery_price)}</td></tr>`:`<tr><td>${i+1}</td><td>${esc(e.driver_name)}</td><td>${esc(e.car_no)}</td><td>${esc(e.location)}</td><td>${e.date}</td><td>${e.load_qty?fmtKaban(e.load_qty):'—'}</td><td style="color:#7c3aed;font-weight:900">${e.kaban?fmtKaban(e.kaban):'بانتظار التفريغ'}</td><td>${esc(e.unload_date||'')}</td><td>${saleShortage(e)==null?'—':fmtKaban(saleShortage(e))}</td><td>${esc(e.market||'')}</td><td>${esc(e.product_type)}</td></tr>`).join('');
+  return list;
+}
+function exportTitle(type){
+  const sf=S.selectedFactory,one=sf&&sf!=='الكل';
+  return {one:one,title:(type==='purchases'?'مشتريات ':'مبيعات ')+(one?sf:'جميع المعامل')};
+}
+function exportXLSX(type){
+  if(typeof XLSX==='undefined'){showToast('مكتبة Excel غير محملة','error');return;}
+  let sheetName,fname,rows=[];
+  const list=exportList(type);
+  if(type==='purchases'){
+    sheetName='المشتريات';fname='مشتريات_'+today()+'.xlsx';
+    rows.push(['ت','المعمل','البوجر','المصفى','التاريخ','النوع','السائق','السيارة','العائدية','كمية /طن','طبيعي /لتر','وزن /كغم','PO','السعر','نقل','الإجمالي']);
+    list.forEach((e,i)=>rows.push([i+1,e.factory,e.voucher_no,e.refinery,e.date,e.product_type,e.driver_name,e.car_no,e.location,sc(e.qty_tons),sc(e.natural_liters),sc(e.weight_kg),e.po_no,e.price||pricingFor(e.date).price,e.transport_fee||pricingFor(e.date).transport,parseFloat(e.refinery_price)||0]));
+  }else{
+    sheetName='المبيعات';fname='مبيعات_'+today()+'.xlsx';
+    rows.push(['ت','اسم السائق','رقم المركبة','العائدية','تاريخ التحميل','كمية التحميل','كمية التفريغ','تاريخ التفريغ','النقص','جهة التسويق','نوع المنتوج','المعمل','العنوان','أجرة النقل','إجمالي كراوي السواق','سعر البيع','إجمالي البيع','إكرامية السائق','المصدر']);
+    const rt=saleRates();
+    list.forEach((e,i)=>rows.push([i+1,e.driver_name,e.car_no,e.location,e.date,parseFloat(e.load_qty)||'',parseFloat(e.kaban)||'',e.unload_date||'',saleShortage(e)==null?'':saleShortage(e),e.market||'',e.product_type,e.factory,e.address||'',rt.fare,saleFare(e),rt.price,saleTotalOf(e),saleTip(e),e.car_source||'']));
+  }
+  // معمل واحد: اسمه في العنوان ولا حاجة لعمود المعمل؛ «الكل»: يبقى العمود للتمييز
+  const t=exportTitle(type),fcol=rows[0].indexOf('المعمل');
+  if(t.one&&fcol>=0)rows.forEach(r=>r.splice(fcol,1));
+  const opt=type==='purchases'
+    ?{title:t.title,cars:list.length,topSum:['كمية /طن'],sum:['كمية /طن','طبيعي /لتر','وزن /كغم'],num:['السعر','نقل','الإجمالي']}
+    :{title:t.title,cars:list.length,topSum:['كمية التفريغ'],sum:['كمية التحميل','كمية التفريغ','النقص'],num:['أجرة النقل','إجمالي كراوي السواق','سعر البيع','إجمالي البيع','إكرامية السائق']};
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,xlsxSheet(rows,opt),sheetName);xlsxSave(wb,fname);
+}
+
+// ===== PDF =====
+// بنفس تنسيق Excel: عنوان مع عدد السيارات ومجموع الكمية الرئيسية، رأس كحلي، صفوف متناوبة، صف مجموع أصفر
+function generatePDF(type){
+  const list=exportList(type),t=exportTitle(type),P=type==='purchases';
+  const q=v=>{const n=parseFloat(v);return n?fmtKaban(n):'';};
+  // كل عمود: [العنوان، القيمة، هل يُجمع]
+  const cols=P?[
+    ['ت',(e,i)=>i+1],['المعمل',e=>esc(e.factory)],['البوجر',e=>esc(e.voucher_no)],['المصفى',e=>esc(e.refinery)],['التاريخ',e=>esc(e.date)],['النوع',e=>esc(e.product_type)],
+    ['السائق',e=>esc(e.driver_name)],['السيارة',e=>esc(e.car_no)],['العائدية',e=>esc(e.location)],
+    ['كمية /طن',e=>sc(e.qty_tons),1],['طبيعي /لتر',e=>sc(e.natural_liters),1],['وزن /كغم',e=>sc(e.weight_kg),1],
+    ['PO',e=>esc(e.po_no)],['الإجمالي',e=>fmtM(e.refinery_price)]
+  ]:[
+    ['ت',(e,i)=>i+1],['اسم السائق',e=>esc(e.driver_name)],['رقم المركبة',e=>esc(e.car_no)],['العائدية',e=>esc(e.location)],['تاريخ التحميل',e=>esc(e.date)],
+    ['كمية التحميل',e=>parseFloat(e.load_qty)||0,1],['كمية التفريغ',e=>parseFloat(e.kaban)||0,1],['تاريخ التفريغ',e=>esc(e.unload_date||'')],
+    ['النقص',e=>saleShortage(e)==null?0:saleShortage(e),1],['جهة التسويق',e=>esc(e.market||'')],['نوع المنتوج',e=>esc(e.product_type)],['المعمل',e=>esc(e.factory)]
+  ];
+  const C=t.one?cols.filter(c=>c[0]!=='المعمل'):cols;
+  const sums=C.map(c=>c[2]?list.reduce((s,e,i)=>s+(parseFloat(c[1](e,i))||0),0):null);
+  const mainIdx=C.findIndex(c=>c[0]===(P?'كمية /طن':'كمية التفريغ'));
+  const cell=(c,e,i)=>{const v=c[1](e,i);return c[2]?(P||c[0]!=='كمية التفريغ'||v?q(v):'<span style="color:#b45309">بانتظار التفريغ</span>'):v;};
+  const body=list.map((e,i)=>'<tr>'+C.map(c=>'<td>'+cell(c,e,i)+'</td>').join('')+'</tr>').join('');
+  const foot='<tr class="tot">'+C.map((c,k)=>'<td>'+(k===0?'المجموع':sums[k]!=null?q(sums[k])||'0':'')+'</td>').join('')+'</tr>';
+  const from=P?S.pDateFrom:S.sDateFrom,to=P?S.pDateTo:S.sDateTo;
+  const period=(from||to)?'الفترة: '+(from||'—')+' إلى '+(to||'—')+' · ':'';
+  const html=`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>${esc(t.title)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>
+@page{size:A4 landscape;margin:10mm}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Cairo',Arial,sans-serif;direction:rtl;color:#1e293b;padding:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.top{display:flex;align-items:center;gap:14px;margin-bottom:4px}
+.top h1{font-size:20px;font-weight:900;color:#1E3A5F;margin-left:auto}
+.box{display:flex;align-items:center;gap:8px;font-weight:700;color:#1E3A5F;font-size:13px}
+.box b{background:#FFF2CC;border:1px solid #A6A6A6;padding:2px 14px;font-size:15px;color:#1e293b}
+.sub{font-size:11px;color:#64748b;margin-bottom:8px}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{background:#1E3A5F;color:#fff;font-weight:900;padding:6px 4px;border:1px solid #A6A6A6}
+td{padding:4px;text-align:center;border:1px solid #A6A6A6}
+tbody tr:nth-child(even) td{background:#EEF3F9}
+tbody tr.tot td{background:#FFF2CC;font-weight:900;border-top:2px solid #1E3A5F}
+thead{display:table-header-group}tr{page-break-inside:avoid}
+</style></head><body>
+<div class="top"><h1>${esc(t.title)}</h1><div class="box">عدد السيارات <b>${list.length}</b></div>${mainIdx>=0?`<div class="box">مجموع ${C[mainIdx][0]} <b>${q(sums[mainIdx])||'0'}</b></div>`:''}</div>
+<div class="sub">${period}${new Date().toLocaleString('ar-IQ')}</div>
+<table><thead><tr>${C.map(c=>'<th>'+c[0]+'</th>').join('')}</tr></thead><tbody>${body}${list.length?foot:''}</tbody></table>
+<script>window.onload=()=>{setTimeout(()=>window.print(),300);}<\/script></body></html>`;
   const printWin=window.open('','_blank');
-  printWin.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>${title}</title><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Cairo',sans-serif;direction:rtl;padding:20px;color:#1e293b;}.header{text-align:center;border-bottom:3px solid ${color};padding-bottom:16px;margin-bottom:20px;}h1{font-size:22px;font-weight:900;color:${color};}p{font-size:13px;color:#64748b;margin-top:6px;}table{width:100%;border-collapse:collapse;font-size:11px;}th{background:${color};color:#fff;padding:8px 6px;text-align:center;font-weight:900;}td{padding:6px;text-align:center;border-bottom:1px solid #f1f5f9;}@media print{body{padding:10px;}}
-  /* ===== Toast Notifications ===== */
-  #toast-container{position:fixed;bottom:24px;left:24px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
-  .toast{display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:12px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;color:#fff;min-width:260px;max-width:380px;box-shadow:0 8px 24px rgba(0,0,0,.2);animation:toastIn .3s ease;pointer-events:all;}
-  .toast.success{background:#059669;}
-  .toast.error{background:#dc2626;}
-  .toast.warning{background:#d97706;}
-  .toast.info{background:#2563eb;}
-  .toast.hiding{animation:toastOut .3s ease forwards;}
-  @keyframes toastIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
-  @keyframes toastOut{from{opacity:1;transform:translateY(0);}to{opacity:0;transform:translateY(20px);}}
-</style></head><body><div class="header"><h1>شركة المنتجات النفطية — ${title}</h1><p>المعمل: ${sf} | عدد: ${list.length}${dateRangeText} | ${new Date().toLocaleString('ar-IQ')}</p></div><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table><script>window.onload=()=>{window.print();}<\/script></body></html>`);
+  if(!printWin){showToast('اسمح بالنوافذ المنبثقة لطباعة PDF','warning');return;}
+  printWin.document.write(html);
   printWin.document.close();
 }
 

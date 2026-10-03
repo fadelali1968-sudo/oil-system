@@ -3058,15 +3058,12 @@ function exportXLSX(type){
     const rt=saleRates();
     list.forEach((e,i)=>rows.push([i+1,e.driver_name,e.car_no,e.location,e.date,parseFloat(e.load_qty)||'',parseFloat(e.kaban)||'',e.unload_date||'',saleShortage(e)==null?'':saleShortage(e),e.market||'',e.product_type,e.factory,e.address||'',rt.fare,saleFare(e),rt.price,saleTotalOf(e),saleTip(e),e.car_source||'']));
   }
-  let opt;
-  if(type==='purchases'){
-    // معمل واحد: اسمه في العنوان ولا حاجة لعمود المعمل؛ «الكل»: يبقى العمود للتمييز
-    const sf=S.selectedFactory,one=sf&&sf!=='الكل';
-    if(one)rows.forEach(r=>r.splice(1,1));
-    opt={title:'مشتريات '+(one?sf:'جميع المعامل'),cars:list.length,topSum:['كمية /طن'],sum:['كمية /طن','طبيعي /لتر','وزن /كغم'],num:['السعر','نقل','الإجمالي']};
-  }else{
-    opt={title:sheetName+' — '+today(),sum:['كمية التحميل','كمية التفريغ','النقص','إجمالي كراوي السواق','إجمالي البيع','إكرامية السائق'],num:['أجرة النقل','سعر البيع']};
-  }
+  // معمل واحد: اسمه في العنوان ولا حاجة لعمود المعمل؛ «الكل»: يبقى العمود للتمييز
+  const sf=S.selectedFactory,one=sf&&sf!=='الكل',fcol=rows[0].indexOf('المعمل');
+  if(one&&fcol>=0)rows.forEach(r=>r.splice(fcol,1));
+  const opt=type==='purchases'
+    ?{title:'مشتريات '+(one?sf:'جميع المعامل'),cars:list.length,topSum:['كمية /طن'],sum:['كمية /طن','طبيعي /لتر','وزن /كغم'],num:['السعر','نقل','الإجمالي']}
+    :{title:'مبيعات '+(one?sf:'جميع المعامل'),cars:list.length,topSum:['كمية التفريغ'],sum:['كمية التحميل','كمية التفريغ','النقص'],num:['أجرة النقل','إجمالي كراوي السواق','سعر البيع','إجمالي البيع','إكرامية السائق']};
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,xlsxSheet(rows,opt),sheetName);xlsxSave(wb,fname);
 }
 

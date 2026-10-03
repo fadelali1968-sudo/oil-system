@@ -2319,7 +2319,7 @@ function bulkParseLines(lines){
   return out;
 }
 // درجة تطابق صفحة مع سجل — تُعرض للمستخدم كترشيح ولا تحفظ شيئاً من نفسها
-function bulkScore(p,r,kind){
+function bulkScore(p,r,kind,slot){
   let s=0; const why=[];
   if(!p) return {s:0,why};
   // رقم السيارة بالسجل قد يكون مركّباً مع العائدية (19151/21L) — تُقارَن أول مجموعة أرقام
@@ -2338,7 +2338,8 @@ function bulkScore(p,r,kind){
     if(a&&b&&(a.indexOf(b)>=0||b.indexOf(a)>=0)){ s+=20; why.push('السائق'); }
   }
   if(p.net>0){
-    const q=kind==='sales'?parseFloat(r.kaban||0):(parseFloat(r.weight_kg||0)||parseFloat(r.qty_tons||0));
+    // بوجر التحميل يُقارَن بكمية التحميل (أو الكبان بالسجلات القديمة بلا تحميل)، وبوجر التفريغ بالكبان
+    const q=kind==='sales'?(slot==='unload'?parseFloat(r.kaban||0):(parseFloat(r.load_qty||0)||parseFloat(r.kaban||0))):(parseFloat(r.weight_kg||0)||parseFloat(r.qty_tons||0));
     if(q>0&&[q,q*1000].some(c=>Math.abs(c-p.net)<=Math.max(5,c*0.002))){ s+=20; why.push('الوزن'); }
   }
   if(p.loc&&r.location&&p.loc.replace(/\s+/g,'').toLowerCase()===(r.location||'').replace(/\s+/g,'').toLowerCase()){ s+=10; why.push('العائدية'); }
@@ -2627,7 +2628,7 @@ function bulkAutoSuggest(){
   const taken=new Set();
   _bulk.pages.forEach(p=>{
     if(!p.lines.length) return;
-    const scored=_bulk.recs.map(r=>({r,...bulkScore(p.parsed,r,_bulk.kind)})).filter(x=>x.s>=75).sort((a,b)=>b.s-a.s);
+    const scored=_bulk.recs.map(r=>({r,...bulkScore(p.parsed,r,_bulk.kind,p.slot)})).filter(x=>x.s>=75).sort((a,b)=>b.s-a.s);
     if(!scored.length) return;
     const best=scored[0];
     if(scored.length>1&&scored[1].s===best.s) return;   // تعادل ⇐ لا ترشيح
@@ -2666,10 +2667,16 @@ function bulkAssign(recId){
   if(next>=0) _bulk.idx=next;
   bulkRender();
 }
-function bulkRecLine(r,kind){
-  if(kind==='sales')
+function bulkRecLine(r,kind,slot){
+  if(kind==='sales'){
+    // الكمية الخاصة بنوع الصفحة المختار (تحميل/تفريغ) تُبرَز
+    const hi='background:#ede9fe;color:#5b21b6;border-radius:4px;padding:1px 6px;font-size:12px;font-weight:900',lo='color:#475569;font-weight:700';
+    const ld=parseFloat(r.load_qty)||0, ul=parseFloat(r.kaban)||0;
     return '<b style="color:#6d28d9">'+esc(r.driver_name||'—')+'</b> · سيارة '+esc(r.car_no||'—')+' · '+esc(r.date||'—')
-      +'<br><span style="color:#64748b">العائدية: '+esc(r.location||'—')+' · كبان: '+fmtKaban(r.kaban)+' · '+esc(r.factory||'')+'</span>';
+      +'<br><span style="color:#64748b">العائدية: '+esc(r.location||'—')+' · '+esc(r.factory||'')+'</span>'
+      +'<br><span style="'+(slot==='unload'?lo:hi)+'">🚚 تحميل: '+(ld?fmtKaban(ld):'—')+'</span> &nbsp;'
+      +'<span style="'+(slot==='unload'?hi:lo)+'">📥 تفريغ: '+(ul?fmtKaban(ul):'—')+(r.unload_date?' ('+esc(r.unload_date)+')':'')+'</span>';
+  }
   return '<b style="color:#1e3a8a">بوجر '+esc(r.voucher_no||'—')+'</b> · '+esc(r.driver_name||'—')+' · سيارة '+esc(r.car_no||'—')
     +'<br><span style="color:#64748b">'+esc(r.date||'—')+' · العائدية: '+esc(r.location||'—')+' · '+fmtM(r.weight_kg||0)+' كغم · '+esc(r.factory||'')+'</span>';
 }
@@ -2695,7 +2702,7 @@ function bulkListHTML(){
   let recs=_bulk.recs.slice();
   if(_bulk.onlyNoImg) recs=recs.filter(r=>k==='sales'?!(p.slot==='unload'?r.has_unload_scan:r.has_load_scan):!r.has_scan);
   if(q) recs=recs.filter(r=>((r.driver_name||'')+' '+(r.car_no||'')+' '+(r.voucher_no||'')+' '+(r.location||'')).toString().toLowerCase().includes(q));
-  const scored=recs.map(r=>({r,...bulkScore(pr,r,k)})).sort((a,b)=>b.s-a.s);
+  const scored=recs.map(r=>({r,...bulkScore(pr,r,k,p.slot)})).sort((a,b)=>b.s-a.s);
   const cards=scored.slice(0,80).map(x=>{
     const r=x.r, isCur=p.recId===r.id;
     const otherIdx=_bulk.pages.findIndex((pg,i)=>i!==_bulk.idx&&pg.recId===r.id&&(k!=='sales'||pg.slot===p.slot));
@@ -2703,7 +2710,7 @@ function bulkListHTML(){
     const bg=isCur?'#ecfdf5':(x.s>=50?'#f0f9ff':'#fff');
     const bd=isCur?'#059669':(x.s>=50?'#60a5fa':'#e2e8f0');
     return '<div style="border:1px solid '+bd+';background:'+bg+';border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px">'
-      +'<div style="font-size:11px;line-height:1.7;flex:1">'+bulkRecLine(r,k)
+      +'<div style="font-size:11px;line-height:1.7;flex:1">'+bulkRecLine(r,k,p.slot)
       +(x.s>=50?'<br><span style="background:#1d4ed8;color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:900">🎯 مرشّح — '+esc(x.why.join(' + '))+'</span>':'')
       +(hasImg?'<br><span style="color:#b45309;font-size:9px;font-weight:900">⚠️ توجد صورة محفوظة — ستُستبدل</span>':'')
       +(otherIdx>=0?'<br><span style="color:#7c3aed;font-size:9px;font-weight:900">مُسند للصفحة '+(otherIdx+1)+'</span>':'')

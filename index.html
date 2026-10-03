@@ -1913,8 +1913,8 @@ function viewSaleForm(){
           <option value="ميناء الحرة" ${(e.address||'')==='ميناء الحرة'?'selected':''}>ميناء الحرة</option>
         </select></div>
       <div><label class="lbl" for="s_type">النوع *</label><input class="inp" id="s_type" list="s_types" value="${e.product_type||'فلانكوت'}"><datalist id="s_types"><option value="فلانكوت"><option value="HFO"><option value="VR"><option value="زيت خام"></datalist></div>
-      <div><label class="lbl" for="s_load">كمية التحميل</label><input class="inp" id="s_load" type="number" step="0.001" value="${e.load_qty||''}"></div>
-      <div><label class="lbl" for="s_kaban">كمية التفريغ (الكبان)</label><input class="inp" id="s_kaban" type="number" step="0.001" value="${e.kaban||''}" oninput="updateSaleTotal()"></div>
+      <div><label class="lbl" for="s_load">كمية التحميل</label><input class="inp" id="s_load" type="number" step="0.001" value="${e.load_qty||''}" oninput="validateQty(this)" placeholder="مثال: 36600"></div>
+      <div><label class="lbl" for="s_kaban">كمية التفريغ (الكبان)</label><input class="inp" id="s_kaban" type="number" step="0.001" value="${e.kaban||''}" oninput="updateSaleTotal();validateQty(this)" placeholder="مثال: 36450"></div>
       <div><label class="lbl" for="s_udate">تاريخ التفريغ</label><input class="inp" id="s_udate" type="date" value="${e.unload_date||''}"></div>
       <div><label class="lbl" for="s_market">جهة التسويق</label><input class="inp" id="s_market" value="${esc(e.market||'')}"></div>
       <div><label class="lbl" for="s_source">مصدر السيارة</label><input class="inp" id="s_source" value="${e.car_source||''}"></div>
@@ -2009,6 +2009,8 @@ async function saveSale(){
   const saleTotal=salePrice*kaban;
   if(!driver||!car||!date){showToast('يرجى ملء الحقول الإلزامية (*)','warning');return;}
   if(!kaban&&!loadQty){showToast('أدخل كمية التحميل أو كمية التفريغ','warning');return;}
+  const not5=[['كمية التحميل',loadQty],['كمية التفريغ',kaban]].filter(([,x])=>x&&Math.floor(Math.abs(x)).toString().length!==5).map(([n])=>n);
+  if(not5.length){showToast('⚠️ الكمية يجب أن تكون 5 أرقام: '+not5.join('، ')+' — صحّحها ثم احفظ','error',7000);return;}
   const fac = sf==='الكل' ? gv('s_factory') : sf;
   if(!fac || sameFactory(fac,'الكل')){showToast('اختر المعمل الذي تخصّه هذه العملية من حقل «المعمل»','error',4000);return;}
   const btn=document.querySelector('button.btn-purple[onclick="saveSale()"]');

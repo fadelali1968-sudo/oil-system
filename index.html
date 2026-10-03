@@ -3867,17 +3867,32 @@ thead{display:table-header-group}tr{page-break-inside:avoid}
 }
 function salafExportList(){const m=S.salafMonthFilter||'',pf=(S.salafPersonFilter||'').trim();let list=DB.get('salaf',[]);if(m)list=list.filter(e=>(e.date||'').startsWith(m));if(pf)list=list.filter(e=>(e.person||'').includes(pf));return list.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));}
 function salafExportTitle(){const m=S.salafMonthFilter||'',pf=(S.salafPersonFilter||'').trim();return 'السلف'+(pf?' — '+pf:'')+(m?' — '+m:'');}
-// صفحة لكل شخص بمجموعه (سيد حيدر، محمد خالد، …) بترتيب SALAF_PERSONS ثم أي شخص آخر
+// صفحة/ورقة لكل شخص بمجموعه (سيد حيدر، محمد خالد، …) بترتيب SALAF_PERSONS ثم أي شخص آخر
+function salafExportGroups(){
+  const m=S.salafMonthFilter||'',by={};
+  salafExportList().forEach(e=>{const p=(e.person||'—').trim();(by[p]=by[p]||[]).push(e);});
+  return SALAF_PERSONS.filter(p=>by[p]).concat(Object.keys(by).filter(p=>SALAF_PERSONS.indexOf(p)<0))
+    .map(p=>({person:p,title:'سلف '+p+(m?' — '+m:''),list:by[p]}));
+}
 function generateSalafPDF(){
-  const list=salafExportList(),m=S.salafMonthFilter||'',by={};
-  list.forEach(e=>{const p=(e.person||'—').trim();(by[p]=by[p]||[]).push(e);});
-  const names=SALAF_PERSONS.filter(p=>by[p]).concat(Object.keys(by).filter(p=>SALAF_PERSONS.indexOf(p)<0));
-  if(!names.length){showToast('لا توجد سلف ضمن الفلتر الحالي','warning');return;}
-  printTablePDF(salafExportTitle(),names.map(p=>({title:'سلف '+p+(m?' — '+m:''),list:by[p]})),
+  const groups=salafExportGroups();
+  if(!groups.length){showToast('لا توجد سلف ضمن الفلتر الحالي','warning');return;}
+  printTablePDF(salafExportTitle(),groups,
     [['ت',(e,i)=>i+1],['التاريخ',e=>e.date||''],['المبلغ دينار',e=>safeNum(e.amount_dinar),1],['المبلغ دولار',e=>safeNum(e.amount_dollar),1],['البيان',e=>e.note||'']],
     {countLabel:'عدد السلف'});
 }
-function exportSalafXLSX(){if(typeof XLSX==='undefined')return;const salafMonthFilter=S.salafMonthFilter||'';const personFilter=(S.salafPersonFilter||'').trim();const list=salafExportList();const rows=[['ت','الشخص','التاريخ','المبلغ دينار','المبلغ دولار','البيان']];list.forEach((e,i)=>rows.push([i+1,e.person,e.date,safeNum(e.amount_dinar),safeNum(e.amount_dollar),e.note||'']));const ws=xlsxSheet(rows,{title:salafExportTitle(),infoRow:true,cars:list.length,countLabel:'عدد السلف',sum:['المبلغ دينار','المبلغ دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'السلف');xlsxSave(wb,'السلف_'+today()+'.xlsx');}
+function exportSalafXLSX(){
+  if(typeof XLSX==='undefined')return;
+  const groups=salafExportGroups();
+  if(!groups.length){showToast('لا توجد سلف ضمن الفلتر الحالي','warning');return;}
+  const wb=XLSX.utils.book_new();
+  groups.forEach(g=>{
+    const rows=[['ت','التاريخ','المبلغ دينار','المبلغ دولار','البيان']];
+    g.list.forEach((e,i)=>rows.push([i+1,e.date,safeNum(e.amount_dinar),safeNum(e.amount_dollar),e.note||'']));
+    XLSX.utils.book_append_sheet(wb,xlsxSheet(rows,{title:g.title,infoRow:true,cars:g.list.length,countLabel:'عدد السلف',sum:['المبلغ دينار','المبلغ دولار']}),g.person.replace(/[\\\/?*\[\]:]/g,' ').slice(0,31));
+  });
+  xlsxSave(wb,'السلف_'+(S.salafMonthFilter||today())+'.xlsx');
+}
 
 // ===== سلف خاصة (سيد رافد / فايق رويمي) =====
 const PRIV_SALAF_PERSONS=['سيد رافد','فايق رويمي'];

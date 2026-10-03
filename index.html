@@ -1811,6 +1811,25 @@ function validateQty(inp){
 function autoFillDriver(name){const d=DB.get('drivers',{});if(d[name]){const c=el('f_car'),l=el('f_loc');if(c)c.value=d[name].car_no||'';if(l)l.value=d[name].location||'';}}
 function autoFillSaleDriver(name){const d=DB.get('drivers',{});if(d[name]){const c=el('s_car'),l=el('s_loc');if(c)c.value=d[name].car_no||'';if(l)l.value=d[name].location||'';}}
 
+// فحص الكميات قبل الحفظ:
+// • الطن = الوزن المستلم في المعمل (يُكتب يدوياً في البوجر وهو المعتمد)، ويختلف عن الوزن المجهَّز (كغم)
+//   بنقص أو زيادة لا تتجاوز عادةً بضع مئات من الكيلوغرامات؛ فرق كبير غالباً خطأ كتابة (رقم ناقص أو مبدَّل).
+// • اللتر الطبيعي إلى الوزن نسبة شبه ثابتة لكل نوع منتوج (الكثافة)، فيُقارن بوسيط القيود السابقة من النوع نفسه.
+const QTY_DIFF_MAX=1000,QTY_TOL=0.03;
+function qtyCheck(tons,liters,kg,pt,excludeId){
+  const out=[];
+  if(kg&&tons){
+    const sh=kg-tons;
+    if(Math.abs(sh)>QTY_DIFF_MAX)out.push('• كمية /طن (المستلمة): '+fmt(tons)+' — '+(sh>0?'أقل':'أكثر')+' من الوزن بـ '+fmt(Math.abs(sh))+' كغم، والمعتاد فرق لا يتجاوز '+fmt(QTY_DIFF_MAX));
+  }
+  if(kg&&liters){
+    const a=DB.get('entries',[]).filter(x=>x.id!==excludeId&&x.product_type===pt&&sc(x.weight_kg)>0&&sc(x.natural_liters)>0)
+      .map(x=>sc(x.natural_liters)/sc(x.weight_kg)).sort((p,q)=>p-q);
+    const m=a.length>=5?a[a.length>>1]:null,r=liters/kg;
+    if(m?Math.abs(r/m-1)>QTY_TOL:(r<0.9||r>1.3))out.push('• طبيعي /لتر: '+fmt(liters)+(m?' — المتوقع تقريباً '+fmtM(kg*m):' — لا يتناسب مع الوزن'));
+  }
+  return out;
+}
 async function saveEntry(){
   const sf=S.selectedFactory,e=S.editEntry||{};
   const v=gv('f_voucher'),date=gv('f_date'),ref=gv('f_ref'),pt=gv('f_pt');
@@ -1823,6 +1842,8 @@ async function saveEntry(){
   if(!v||!date||!ref||!driver||!car||!loc||!po||!liters){showToast('يرجى ملء جميع الحقول (*)','error');return;}
   const fac = sf==='الكل' ? gv('f_factory') : sf;
   if(!fac || sameFactory(fac,'الكل')){showToast('اختر المعمل الذي يخصّه هذا القيد من حقل «المعمل»','error',4000);return;}
+  const qw=qtyCheck(tons,liters,kg,pt,e.id);
+  if(qw.length&&!confirm('⚠️ تأكد من الكمية — الوزن '+fmt(kg)+' كغم:\n\n'+qw.join('\n')+'\n\nهل تريد الحفظ رغم ذلك؟'))return;
   const hasScan0=e.has_scan||false;
   const entryId=e.id||('e_'+Date.now());
   let hasScan=hasScan0;
@@ -3476,7 +3497,7 @@ function previewExcel(file){
       for(let r=hrow+1;r<raw.length;r++){
         const row=raw[r];
         if(!row[1]&&!row[2])continue;
-        const obj={};
+        const obj={_row:r+1};
         Object.entries(colMap).forEach(([i,f])=>{obj[f]=row[i];});
         if(!obj.driver_name&&!obj.refinery&&!obj.car_no)continue;
         const hasNums=parseFloat(obj.qty_tons||0)||parseFloat(obj.natural_liters||0)||parseFloat(obj.weight_kg||0)||parseFloat(obj.kaban||0)||parseFloat(obj.qty_liters||0)||parseFloat(obj.load_qty||0);
@@ -3487,17 +3508,41 @@ function previewExcel(file){
       const info=el('imp-info');
       const cols=Object.values(colMap).filter(f=>f[0]!=='_');
       const miss=iType==='sales'&&cols.indexOf('kaban')<0&&cols.indexOf('load_qty')<0?'<br><span style="color:#b91c1c">⚠️ لم يُعثر على عمود كمية التحميل ولا الكبان/كمية التفريغ — تحقق من صف الرأس</span>':'';
-      if(info)info.innerHTML=`✅ الملف: <b>${esc(file.name)}</b> | صف الرأس: <b>${hrow+1}</b> | عدد السجلات: <b>${importedRows.length}</b><br>الأعمدة: <b>${cols.join('، ')}</b>${miss}`;
+      if(info)info.innerHTML=`✅ الملف: <b>${esc(file.name)}</b> | صف الرأس: <b>${hrow+1}</b> | عدد السجلات: <b>${importedRows.length}</b><br>الأعمدة: <b>${cols.join('، ')}</b>${miss}`+importQtyHtml(importQtyIssues(importedRows,iType));
       const prev=el('imp-preview');if(prev)prev.style.display='block';
     }catch(err){showToast('خطأ: '+err.message,'error');}
   };
   reader.readAsArrayBuffer(file);
 }
 
+// الكميات (طن، لتر، كغم، تحميل، تفريغ) دائماً 5 مراتب، كما في الإدخال اليدوي؛ غير ذلك غالباً رقم ناقص أو زائد.
+// وفي المشتريات يُفحص أيضاً فرق الطن (المستلم) عن الكغم (المجهَّز) كما في qtyCheck.
+function importQtyIssues(rows,iType){
+  const F=iType==='sales'?[['load_qty','كمية التحميل'],['kaban','كمية التفريغ']]:[['qty_tons','كمية /طن'],['natural_liters','طبيعي /لتر'],['weight_kg','وزن /كغم']];
+  const out=[];
+  rows.forEach(row=>F.forEach(([f,name])=>{
+    const v=autoScale(row[f]),d=Math.floor(Math.abs(v)).toString().length;
+    if(v&&d!==5)out.push({row:row._row,who:importWho(row),msg:name+' = '+fmt(v)+' — '+d+' مراتب'});
+  }));
+  if(iType!=='sales')rows.forEach(row=>{
+    const t=autoScale(row.qty_tons),k=autoScale(row.weight_kg),df=k-t;
+    if(t>=10000&&t<100000&&k>=10000&&k<100000&&Math.abs(df)>QTY_DIFF_MAX)out.push({row:row._row,who:importWho(row),msg:'كمية /طن = '+fmt(t)+' '+(df>0?'أقل':'أكثر')+' من الوزن '+fmt(k)+' بـ '+fmt(Math.abs(df))+' كغم'});
+  });
+  return out.sort((a,b)=>a.row-b.row);
+}
+function importWho(row){return (row.driver_name||'').toString().trim()||(row.voucher_no||'');}
+function importQtyLine(q){return 'سطر '+q.row+(q.who?' ('+q.who+')':'')+': '+q.msg;}
+function importQtyHtml(issues){
+  if(!issues.length)return '';
+  const shown=issues.slice(0,15).map(q=>'• '+esc(importQtyLine(q))).join('<br>');
+  return `<div style="margin-top:10px;background:#fef2f2;border:2px solid #dc2626;border-radius:8px;padding:10px;color:#991b1b">⚠️ يوجد خطأ في الكميات: ${issues.length} — صحّحها في ملف Excel ثم أعد اختياره<br>${shown}${issues.length>15?'<br>… و'+(issues.length-15)+' أخرى':''}</div>`;
+}
 async function doImport(){
   window._importing=true;
   if(!importedRows.length){window._importing=false;return;}
   const factory=gv('imp_factory'),iType=gv('imp_type')||'purchases';
+  const qi=importQtyIssues(importedRows,iType);
+  if(qi.length&&!confirm('⚠️ يوجد خطأ في الكميات — '+qi.length+' قيمة:\n\n'+qi.slice(0,10).map(importQtyLine).join('\n')+(qi.length>10?'\n… و'+(qi.length-10)+' أخرى':'')+'\n\nالأفضل تصحيح ملف Excel أولاً. هل تريد الاستيراد رغم ذلك؟')){window._importing=false;return;}
   let drivers=DB.get('drivers',{}),added=0,skippedDup=0;
   if(iType==='purchases'){
     let entries=DB.get('entries',[]);

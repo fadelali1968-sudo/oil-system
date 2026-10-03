@@ -3729,7 +3729,7 @@ function viewSalafForm(){
   const totalRow=`<tr style="background:#92400e;color:#fff;font-weight:900"><td class="td" style="color:#fff" colspan="3">الإجمالي</td><td class="td" style="color:#fde68a;font-weight:900;font-size:13px">${fmtM(filteredDinar)} د.ع</td><td class="td" style="color:#fff;font-weight:900;font-size:13px">${fmtM(filteredDollar)} $</td><td class="td" style="color:#fff" colspan="${canEdit('salaf')?2:1}">${filteredList.length} سلفة</td></tr>`;
   const manualContent=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px"><div class="card" style="text-align:center;border-top:4px solid #f59e0b"><div style="font-size:11px;color:#64748b">عدد السلف</div><div style="font-size:26px;font-weight:900;color:#f59e0b">${filteredList.length}</div></div><div class="card" style="text-align:center;border-top:4px solid #ca8a04;background:#fffbeb"><div style="font-size:11px;color:#92400e;font-weight:700">💛 إجمالي الدينار</div><div style="font-size:20px;font-weight:900;color:#ca8a04">${fmtM(filteredDinar)}</div></div><div class="card" style="text-align:center;border-top:4px solid #0f172a;background:#f8fafc"><div style="font-size:11px;color:#0f172a;font-weight:700">🖤 إجمالي الدولار</div><div style="font-size:20px;font-weight:900;color:#0f172a">${fmtM(filteredDollar)}</div></div></div>
   <div class="card" style="margin-bottom:14px;border-right:5px solid #f59e0b">${personDatalist}<h3 style="font-size:13px;font-weight:900;margin-bottom:14px;color:#92400e">${editId?'✏️ تعديل':'➕ إضافة'} سلفة</h3><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px"><div><label class="lbl">التاريخ *</label><input class="inp" id="sf_date" type="date" value="${editData?editData.date:today()}"></div><div><label class="lbl">👤 الشخص *</label><input class="inp" id="sf_person" list="salaf-persons-list" placeholder="اسم الشخص..." value="${editData?esc(editData.person||''):''}"></div><div><label class="lbl">💛 مبلغ دينار</label><input class="inp" id="sf_dinar" type="number" placeholder="0" value="${editData?editData.amount_dinar||'':''}"></div><div><label class="lbl">🖤 مبلغ دولار</label><input class="inp" id="sf_dollar" type="number" placeholder="0" value="${editData?editData.amount_dollar||'':''}"></div><div style="grid-column:span 2"><label class="lbl">البيان / الغرض *</label><input class="inp" id="sf_note" placeholder="وصف السلفة..." value="${editData?esc(editData.note||''):''}"></div></div><div style="display:flex;justify-content:flex-end;margin-top:12px;gap:8px">${editId?`<button class="btn btn-gray" style="padding:10px 20px;font-size:13px" onclick="S.salafEditId='';renderContent()">إلغاء</button>`:''}<button class="btn btn-amber" style="padding:10px 28px;font-size:14px" onclick="saveSalaf()">💾 حفظ السلفة</button></div><div id="salaf-msg" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div></div>
-  <div class="card" style="overflow:hidden;padding:0"><div style="padding:12px 16px;background:#fffbeb;border-bottom:1px solid #fde68a"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><span style="font-weight:900;font-size:13px;color:#92400e">السلف <span class="badge" style="background:#fef3c7;color:#b45309">${filteredList.length} سلفة</span></span><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input class="inp" list="salaf-persons-list" placeholder="🔍 فلترة بالشخص..." value="${esc(personFilter)}" style="padding:4px 8px;font-size:11px;width:150px" onchange="S.salafPersonFilter=this.value;renderContent()"><input type="month" value="${salafMonthFilter}" class="inp" style="padding:4px 8px;font-size:11px;width:145px;cursor:pointer" onchange="S.salafMonthFilter=this.value;renderContent()" title="فلتر بالشهر">${(salafMonthFilter||personFilter)?`<button class="btn btn-gray" style="font-size:11px;padding:4px 10px" onclick="S.salafMonthFilter='';S.salafPersonFilter='';renderContent()">✕ الكل</button>`:''}<button class="btn btn-amber" style="font-size:11px;padding:6px 12px" onclick="exportSalafXLSX()">📊 Excel</button></div></div>${(salafMonthFilter||personFilter)?`<div style="margin-top:10px;padding:10px 14px;background:#92400e;border-radius:8px;display:flex;gap:20px;align-items:center;flex-wrap:wrap">${salafMonthFilter?`<span style="font-size:11px;font-weight:900;color:#fde68a">📅 ${salafMonthLabel} ${salafMonthFilter.slice(0,4)}</span>`:''}${personFilter?`<span style="font-size:11px;font-weight:900;color:#fde68a">👤 ${esc(personFilter)}</span>`:''}<div style="display:flex;flex-direction:column;align-items:center"><span style="font-size:10px;color:#fef3c7;opacity:.8">إجمالي المستلم</span><span style="font-size:15px;font-weight:900;color:#fde68a">${fmtM(filteredDinar)} <span style="font-size:10px;opacity:.7">د.ع</span></span><span style="font-size:15px;font-weight:900;color:#fff">${fmtM(filteredDollar)} <span style="font-size:10px;opacity:.7">$</span></span></div><span style="font-size:11px;color:#fef3c7;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:2px 8px">${filteredList.length} سلفة</span></div>`:''}</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:600px"><thead><tr><th class="th" style="background:#92400e">ت</th><th class="th" style="background:#92400e">التاريخ</th><th class="th" style="background:#92400e">الشخص</th><th class="th" style="background:#92400e">المبلغ دينار</th><th class="th" style="background:#92400e">المبلغ دولار</th><th class="th" style="background:#92400e">البيان</th>${canEdit('salaf')?'<th class="th" style="background:#92400e">الإجراء</th>':''}</tr></thead><tbody>${rows||`<tr><td colspan="${canEdit('salaf')?7:6}" class="td" style="padding:24px;color:#64748b">لا توجد سلف</td></tr>`}${totalRow}</tbody></table></div></div>`;
+  <div class="card" style="overflow:hidden;padding:0"><div style="padding:12px 16px;background:#fffbeb;border-bottom:1px solid #fde68a"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><span style="font-weight:900;font-size:13px;color:#92400e">السلف <span class="badge" style="background:#fef3c7;color:#b45309">${filteredList.length} سلفة</span></span><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input class="inp" list="salaf-persons-list" placeholder="🔍 فلترة بالشخص..." value="${esc(personFilter)}" style="padding:4px 8px;font-size:11px;width:150px" onchange="S.salafPersonFilter=this.value;renderContent()"><input type="month" value="${salafMonthFilter}" class="inp" style="padding:4px 8px;font-size:11px;width:145px;cursor:pointer" onchange="S.salafMonthFilter=this.value;renderContent()" title="فلتر بالشهر">${(salafMonthFilter||personFilter)?`<button class="btn btn-gray" style="font-size:11px;padding:4px 10px" onclick="S.salafMonthFilter='';S.salafPersonFilter='';renderContent()">✕ الكل</button>`:''}<button class="btn btn-amber" style="font-size:11px;padding:6px 12px" onclick="exportSalafXLSX()">📊 Excel</button><button class="btn btn-purple" style="font-size:11px;padding:6px 12px" onclick="generateSalafPDF()">📄 PDF</button></div></div>${(salafMonthFilter||personFilter)?`<div style="margin-top:10px;padding:10px 14px;background:#92400e;border-radius:8px;display:flex;gap:20px;align-items:center;flex-wrap:wrap">${salafMonthFilter?`<span style="font-size:11px;font-weight:900;color:#fde68a">📅 ${salafMonthLabel} ${salafMonthFilter.slice(0,4)}</span>`:''}${personFilter?`<span style="font-size:11px;font-weight:900;color:#fde68a">👤 ${esc(personFilter)}</span>`:''}<div style="display:flex;flex-direction:column;align-items:center"><span style="font-size:10px;color:#fef3c7;opacity:.8">إجمالي المستلم</span><span style="font-size:15px;font-weight:900;color:#fde68a">${fmtM(filteredDinar)} <span style="font-size:10px;opacity:.7">د.ع</span></span><span style="font-size:15px;font-weight:900;color:#fff">${fmtM(filteredDollar)} <span style="font-size:10px;opacity:.7">$</span></span></div><span style="font-size:11px;color:#fef3c7;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:2px 8px">${filteredList.length} سلفة</span></div>`:''}</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:600px"><thead><tr><th class="th" style="background:#92400e">ت</th><th class="th" style="background:#92400e">التاريخ</th><th class="th" style="background:#92400e">الشخص</th><th class="th" style="background:#92400e">المبلغ دينار</th><th class="th" style="background:#92400e">المبلغ دولار</th><th class="th" style="background:#92400e">البيان</th>${canEdit('salaf')?'<th class="th" style="background:#92400e">الإجراء</th>':''}</tr></thead><tbody>${rows||`<tr><td colspan="${canEdit('salaf')?7:6}" class="td" style="padding:24px;color:#64748b">لا توجد سلف</td></tr>`}${totalRow}</tbody></table></div></div>`;
   const kroobList=getHaidarKroobSalaf();
   const kTotalDinar=kroobList.reduce((s,e)=>s+parseFloat(e.amount_dinar||0),0);
   const kTotalDollar=kroobList.reduce((s,e)=>s+parseFloat(e.amount_dollar||0),0);
@@ -3827,7 +3827,57 @@ function saveSalaf(){
 }
 function deleteSalaf(id){if(!confirm('حذف هذه السلفة؟'))return;const sl=DB.get('salaf',[]).find(s=>s.id===id);auditLog('حذف سلفة',`${sl?.person||id} | دينار: ${sl?.amount_dinar||0}`);let salaf=DB.get('salaf',[]).filter(s=>s.id!==id);DB.set('salaf',salaf);FDB.delete('salaf',id);renderContent();}
 async function clearAllSalaf(){if(!confirm('مسح جميع بيانات السلف؟'))return;if(!confirm('تأكيد نهائي!'))return;const salaf=DB.get('salaf',[]);DB.set('salaf',[]);try{await Promise.all(salaf.map(s=>FDB.delete('salaf',s.id)));}catch(e){console.warn(e);}renderContent();}
-function exportSalafXLSX(){if(typeof XLSX==='undefined')return;const salafMonthFilter=S.salafMonthFilter||'';const personFilter=(S.salafPersonFilter||'').trim();let list=DB.get('salaf',[]);if(salafMonthFilter)list=list.filter(e=>(e.date||'').startsWith(salafMonthFilter));if(personFilter)list=list.filter(e=>(e.person||'').includes(personFilter));const rows=[['ت','الشخص','التاريخ','المبلغ دينار','المبلغ دولار','البيان']];list.forEach((e,i)=>rows.push([i+1,e.person,e.date,safeNum(e.amount_dinar),safeNum(e.amount_dollar),e.note||'']));const ws=xlsxSheet(rows,{title:'السلف'+(personFilter?' — '+personFilter:'')+(salafMonthFilter?' — '+salafMonthFilter:''),infoRow:true,cars:list.length,countLabel:'عدد السلف',sum:['المبلغ دينار','المبلغ دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'السلف');xlsxSave(wb,'السلف_'+today()+'.xlsx');}
+// ===== PDF بتنسيق Excel للجداول البسيطة (السلف والسلف الخاصة) =====
+// sections=[{title,list}] كل قسم بصفحة مستقلة؛ cols=[[العنوان، دالة القيمة (e,i)، يُجمع؟]]
+// opt.countLabel تسمية العدد بجانب العنوان، opt.sub سطر تحت العنوان
+function printTablePDF(docTitle,sections,cols,opt){
+  opt=opt||{};
+  const num=v=>{const n=parseFloat(v);return n?n.toLocaleString('en-US',{maximumFractionDigits:2}):'';};
+  const page=sec=>{
+    const list=sec.list||[];
+    const body=list.map((e,i)=>'<tr>'+cols.map(c=>'<td'+(c[2]?' class="n"':'')+'>'+(c[2]?num(c[1](e,i)):esc(c[1](e,i)))+'</td>').join('')+'</tr>').join('');
+    const foot=list.length&&cols.some(c=>c[2])?'<tr class="tot">'+cols.map((c,k)=>'<td'+(c[2]?' class="n"':'')+'>'+(k===0?'المجموع':c[2]?(num(list.reduce((s,e,i)=>s+(parseFloat(c[1](e,i))||0),0))||'0'):'')+'</td>').join('')+'</tr>':'';
+    return `<section><div class="top"><h1>${esc(sec.title).replace(/(\d[\d\-\/]*\d)/g,'<bdi dir="ltr">$1</bdi>')}</h1><div class="box">${esc(opt.countLabel||'العدد')} <b>${list.length}</b></div></div>
+<div class="sub">${opt.sub?esc(opt.sub)+' · ':''}${new Date().toLocaleString('ar-IQ')}</div>
+<table><thead><tr>${cols.map(c=>'<th>'+c[0]+'</th>').join('')}</tr></thead><tbody>${body||'<tr><td colspan="'+cols.length+'" style="color:#94a3b8">لا توجد حركات</td></tr>'}${foot}</tbody></table></section>`;
+  };
+  const html=`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>${esc(docTitle)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>
+@page{size:A4 ${opt.landscape?'landscape':'portrait'};margin:10mm}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Cairo',Arial,sans-serif;direction:rtl;color:#1e293b;padding:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+section+section{page-break-before:always}
+.top{display:flex;align-items:center;gap:14px;margin-bottom:4px}
+.top h1{font-size:20px;font-weight:900;color:#1E3A5F;margin-left:auto}
+.box{display:flex;align-items:center;gap:8px;font-weight:700;color:#1E3A5F;font-size:13px}
+.box b{background:#FFF2CC;border:1px solid #A6A6A6;padding:2px 14px;font-size:15px;color:#1e293b}
+.sub{font-size:11px;color:#64748b;margin-bottom:8px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#1E3A5F;color:#fff;font-weight:900;padding:6px 4px;border:1px solid #A6A6A6}
+td{padding:5px 4px;text-align:center;border:1px solid #A6A6A6}
+td.n{direction:ltr}
+tbody tr:nth-child(even) td{background:#EEF3F9}
+tbody tr.tot td{background:#FFF2CC;font-weight:900;border-top:2px solid #1E3A5F}
+thead{display:table-header-group}tr{page-break-inside:avoid}
+</style></head><body>${sections.map(page).join('')}
+<script>window.onload=()=>{setTimeout(()=>window.print(),300);}<\/script></body></html>`;
+  const w=window.open('','_blank');
+  if(!w){showToast('اسمح بالنوافذ المنبثقة لطباعة PDF','warning');return;}
+  w.document.write(html);w.document.close();
+}
+function salafExportList(){const m=S.salafMonthFilter||'',pf=(S.salafPersonFilter||'').trim();let list=DB.get('salaf',[]);if(m)list=list.filter(e=>(e.date||'').startsWith(m));if(pf)list=list.filter(e=>(e.person||'').includes(pf));return list.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));}
+function salafExportTitle(){const m=S.salafMonthFilter||'',pf=(S.salafPersonFilter||'').trim();return 'السلف'+(pf?' — '+pf:'')+(m?' — '+m:'');}
+// صفحة لكل شخص بمجموعه (سيد حيدر، محمد خالد، …) بترتيب SALAF_PERSONS ثم أي شخص آخر
+function generateSalafPDF(){
+  const list=salafExportList(),m=S.salafMonthFilter||'',by={};
+  list.forEach(e=>{const p=(e.person||'—').trim();(by[p]=by[p]||[]).push(e);});
+  const names=SALAF_PERSONS.filter(p=>by[p]).concat(Object.keys(by).filter(p=>SALAF_PERSONS.indexOf(p)<0));
+  if(!names.length){showToast('لا توجد سلف ضمن الفلتر الحالي','warning');return;}
+  printTablePDF(salafExportTitle(),names.map(p=>({title:'سلف '+p+(m?' — '+m:''),list:by[p]})),
+    [['ت',(e,i)=>i+1],['التاريخ',e=>e.date||''],['المبلغ دينار',e=>safeNum(e.amount_dinar),1],['المبلغ دولار',e=>safeNum(e.amount_dollar),1],['البيان',e=>e.note||'']],
+    {countLabel:'عدد السلف'});
+}
+function exportSalafXLSX(){if(typeof XLSX==='undefined')return;const salafMonthFilter=S.salafMonthFilter||'';const personFilter=(S.salafPersonFilter||'').trim();const list=salafExportList();const rows=[['ت','الشخص','التاريخ','المبلغ دينار','المبلغ دولار','البيان']];list.forEach((e,i)=>rows.push([i+1,e.person,e.date,safeNum(e.amount_dinar),safeNum(e.amount_dollar),e.note||'']));const ws=xlsxSheet(rows,{title:salafExportTitle(),infoRow:true,cars:list.length,countLabel:'عدد السلف',sum:['المبلغ دينار','المبلغ دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'السلف');xlsxSave(wb,'السلف_'+today()+'.xlsx');}
 
 // ===== سلف خاصة (سيد رافد / فايق رويمي) =====
 const PRIV_SALAF_PERSONS=['سيد رافد','فايق رويمي'];
@@ -3892,6 +3942,7 @@ function viewPrivateSalaf(){
       ${search?`<button class="btn btn-gray" style="font-size:11px;padding:5px 10px" onclick="S.privSalafSearch='';renderContent()">✕</button>`:''}
       ${canEd?`<label class="btn btn-green" style="font-size:12px;padding:8px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">📥 استيراد Excel<input type="file" accept=".xlsx" style="display:none" onchange="importPrivateSalafXLSX(this)"></label>`:''}
       <button class="btn btn-gray" style="font-size:12px;padding:8px 14px" onclick="exportPrivateSalafXLSX()">📤 تصدير Excel</button>
+      <button class="btn btn-purple" style="font-size:12px;padding:8px 14px" onclick="generatePrivateSalafPDF()">📄 PDF</button>
     </div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
@@ -3956,6 +4007,13 @@ function deletePrivateSalaf(id){
   FDB.delete('private_salaf',id);
   if(S.privSalafEditId===id)S.privSalafEditId='';
   renderContent();
+}
+function generatePrivateSalafPDF(){
+  const month=S.privSalafMonth||'';
+  const secs=PRIV_SALAF_PERSONS.map(function(p){let list=privSalafByPerson(p);if(month)list=list.filter(e=>(e.date||'').startsWith(month));return {title:'سلف '+p+(month?' — '+month:''),list:list};});
+  printTablePDF('سلف خاصة'+(month?' — '+month:''),secs,
+    [['ت',(e,i)=>i+1],['التاريخ',e=>e.date||''],['المبلغ دينار',e=>safeNum(e.amount_dinar),1],['المبلغ دولار',e=>safeNum(e.amount_dollar),1],['المستلم',e=>e.receiver||''],['البيان',e=>e.note||'']],
+    {countLabel:'عدد السلف'});
 }
 function exportPrivateSalafXLSX(){
   if(typeof XLSX==='undefined'){showToast('مكتبة Excel غير محملة','error');return;}

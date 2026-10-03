@@ -2950,14 +2950,16 @@ function clearFilter(){S.wFrom='';S.wTo='';renderContent();}
 // xlsxSheet(rows,opt): rows[0] صف العناوين. opt.title عنوان مدمج فوق الجدول،
 // opt.sum أعمدة (بأسماء العناوين) يُضاف لها صف «المجموع»، opt.num أعمدة أخرى بفواصل الآلاف،
 // opt.hasTotal الصف الأخير مجموع جاهز فيُنسَّق كمجموع، opt.cars يُظهر «عدد السيارات» بجانب العنوان،
-// opt.topSum أعمدة يظهر مجموعها في صف العنوان فوق العمود.
+// opt.topSum أعمدة يظهر مجموعها في صف العنوان فوق العمود، opt.countLabel تسمية العدد بدل «عدد السيارات»،
+// opt.infoRow يضع العدد والمجاميع في صف ثانٍ تحت العنوان (للجداول الضيقة التي لا تتسع لها بجانب العنوان).
 function xlsxSheet(rows,opt){
   opt=opt||{};
-  const head=rows[0],nc=head.length,top=opt.title?1:0,numIdx=new Set(),sumIdx=[];
+  const head=rows[0],nc=head.length,top=opt.title?(opt.infoRow?2:1):0,numIdx=new Set(),sumIdx=[];
   (opt.sum||[]).forEach(function(h){const i=head.indexOf(h);if(i>=0){sumIdx.push(i);numIdx.add(i);}});
   (opt.num||[]).forEach(function(h){const i=head.indexOf(h);if(i>=0)numIdx.add(i);});
   const body=rows.slice(1),aoa=[];
   if(top)aoa.push([opt.title]);
+  if(top===2)aoa.push([]);
   aoa.push(head);
   body.forEach(function(r){aoa.push(r);});
   let totalRow=opt.hasTotal&&body.length?aoa.length-1:-1;
@@ -2999,20 +3001,27 @@ function xlsxSheet(rows,opt){
   ws['!cols']=widths.map(function(w){return {wch:Math.min(Math.max(w+3,6),45)};});
   ws['!rows']=[];ws['!rows'][top]={hpt:30};
   if(top){
-    const extra=opt.cars!=null||(opt.topSum||[]).length;
-    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:extra?Math.min(2,nc-1):nc-1}}];
+    const info=top===2,ir=info?1:0,extra=opt.cars!=null||(opt.topSum||[]).length;
+    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:extra&&!info?Math.min(2,nc-1):nc-1}}];
     ws.A1.s={font:{name:'Arial',sz:14,bold:true,color:{rgb:'1E3A5F'}},alignment:{horizontal:'center',vertical:'center'}};
-    ws['!rows'][0]={hpt:26};
+    ws['!rows'][0]={hpt:26};if(info)ws['!rows'][1]={hpt:22};
     const lbl={font:{name:'Arial',sz:11,bold:true,color:{rgb:'1E3A5F'}},alignment:{horizontal:'center',vertical:'center'}};
     const val={font:{name:'Arial',sz:12,bold:true},fill:{fgColor:{rgb:'FFF2CC'}},border:border,alignment:{horizontal:'center',vertical:'center'},numFmt:'#,##0'};
-    const put=function(c,cell,st){if(c<0||c>=nc)return;ws[XLSX.utils.encode_cell({r:0,c:c})]=Object.assign(cell,{s:st});};
-    if(opt.cars!=null){put(3,{t:'s',v:'عدد السيارات'},lbl);put(4,{t:'n',v:opt.cars},val);}
-    (opt.topSum||[]).forEach(function(h){
-      const c=head.indexOf(h);if(c<0)return;
+    const at=function(c){return ws[XLSX.utils.encode_cell({r:ir,c:c})];};
+    const put=function(c,cell,st){if(c<0||c>=nc)return;ws[XLSX.utils.encode_cell({r:ir,c:c})]=Object.assign(cell,{s:st});};
+    const cntLbl=opt.countLabel||'عدد السيارات',ts=(opt.topSum||[]).map(function(h){return head.indexOf(h);}).filter(function(c){return c>=0;});
+    if(opt.cars!=null&&!info){put(3,{t:'s',v:cntLbl},lbl);put(4,{t:'n',v:opt.cars},val);}
+    ts.forEach(function(c){
       const col=XLSX.utils.encode_col(c),v=body.reduce(function(s,r){const x=r[c];return s+(typeof x==='number'&&isFinite(x)?x:0);},0);
-      put(c,{t:'n',v:v,f:'SUM('+col+(top+2)+':'+col+(top+1+body.length)+')'},Object.assign({},val,{numFmt:dec[c]?'#,##0.00':'#,##0'}));
-      if(c-1>4&&!ws[XLSX.utils.encode_cell({r:0,c:c-1})])put(c-1,{t:'s',v:'المجموع'},lbl);
+      put(c,body.length?{t:'n',v:v,f:'SUM('+col+(top+2)+':'+col+(top+1+body.length)+')'}:{t:'n',v:0},Object.assign({},val,{numFmt:dec[c]?'#,##0.00':'#,##0'}));
+      if(!info&&c-1>4&&!at(c-1))put(c-1,{t:'s',v:'المجموع'},lbl);
     });
+    if(info){
+      const first=Math.min.apply(null,ts.concat([nc]));
+      if(ts.length&&first-1>=0&&ts.indexOf(first-1)<0)put(first-1,{t:'s',v:'المجموع'},lbl);
+      // العدد في آخر عمود فارغ (عادةً عمود البيان العريض)
+      if(opt.cars!=null){let c=nc-1;while(c>=0&&at(c))c--;if(c>=0){const t=cntLbl+': '+opt.cars,st=Object.assign({},val);delete st.numFmt;put(c,{t:'s',v:t},st);ws['!cols'][c].wch=Math.max(ws['!cols'][c].wch,t.length+4);}}
+    }
   }
   ws['!margins']={left:0.3,right:0.3,top:0.5,bottom:0.5,header:0.3,footer:0.3};
   ws['!xhead']=top+1; // عدد صفوف الرأس: تُجمَّد وتتكرر في الطباعة
@@ -3748,7 +3757,7 @@ function saveSalaf(){
 }
 function deleteSalaf(id){if(!confirm('حذف هذه السلفة؟'))return;const sl=DB.get('salaf',[]).find(s=>s.id===id);auditLog('حذف سلفة',`${sl?.person||id} | دينار: ${sl?.amount_dinar||0}`);let salaf=DB.get('salaf',[]).filter(s=>s.id!==id);DB.set('salaf',salaf);FDB.delete('salaf',id);renderContent();}
 async function clearAllSalaf(){if(!confirm('مسح جميع بيانات السلف؟'))return;if(!confirm('تأكيد نهائي!'))return;const salaf=DB.get('salaf',[]);DB.set('salaf',[]);try{await Promise.all(salaf.map(s=>FDB.delete('salaf',s.id)));}catch(e){console.warn(e);}renderContent();}
-function exportSalafXLSX(){if(typeof XLSX==='undefined')return;const salafMonthFilter=S.salafMonthFilter||'';const personFilter=(S.salafPersonFilter||'').trim();let list=DB.get('salaf',[]);if(salafMonthFilter)list=list.filter(e=>(e.date||'').startsWith(salafMonthFilter));if(personFilter)list=list.filter(e=>(e.person||'').includes(personFilter));const rows=[['ت','الشخص','التاريخ','المبلغ دينار','المبلغ دولار','البيان']];list.forEach((e,i)=>rows.push([i+1,e.person,e.date,e.amount_dinar||0,e.amount_dollar||0,e.note||'']));const ws=xlsxSheet(rows,{title:'السلف'+(salafMonthFilter?' — '+salafMonthFilter:''),sum:['المبلغ دينار','المبلغ دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'السلف');xlsxSave(wb,'السلف_'+today()+'.xlsx');}
+function exportSalafXLSX(){if(typeof XLSX==='undefined')return;const salafMonthFilter=S.salafMonthFilter||'';const personFilter=(S.salafPersonFilter||'').trim();let list=DB.get('salaf',[]);if(salafMonthFilter)list=list.filter(e=>(e.date||'').startsWith(salafMonthFilter));if(personFilter)list=list.filter(e=>(e.person||'').includes(personFilter));const rows=[['ت','الشخص','التاريخ','المبلغ دينار','المبلغ دولار','البيان']];list.forEach((e,i)=>rows.push([i+1,e.person,e.date,safeNum(e.amount_dinar),safeNum(e.amount_dollar),e.note||'']));const ws=xlsxSheet(rows,{title:'السلف'+(personFilter?' — '+personFilter:'')+(salafMonthFilter?' — '+salafMonthFilter:''),infoRow:true,cars:list.length,countLabel:'عدد السلف',sum:['المبلغ دينار','المبلغ دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'السلف');xlsxSave(wb,'السلف_'+today()+'.xlsx');}
 
 // ===== سلف خاصة (سيد رافد / فايق رويمي) =====
 const PRIV_SALAF_PERSONS=['سيد رافد','فايق رويمي'];
@@ -3887,8 +3896,7 @@ function exportPrivateSalafXLSX(){
     if(month)list=list.filter(e=>(e.date||'').startsWith(month));
     const rows=[['ت','التاريخ','المبلغ دينار','المبلغ دولار','المستلم','البيان']];
     list.forEach(function(e,i){rows.push([i+1,e.date||'',safeNum(e.amount_dinar)||'',safeNum(e.amount_dollar)||'',e.receiver||'',e.note||'']);});
-    rows.push(['','الإجمالي',list.reduce(function(s,e){return s+safeNum(e.amount_dinar);},0),list.reduce(function(s,e){return s+safeNum(e.amount_dollar);},0),'','']);
-    const ws=xlsxSheet(rows,{title:'سلف '+p+(month?' — '+month:''),num:['المبلغ دينار','المبلغ دولار'],hasTotal:true});
+    const ws=xlsxSheet(rows,{title:'سلف '+p+(month?' — '+month:''),infoRow:true,cars:list.length,countLabel:'عدد السلف',sum:['المبلغ دينار','المبلغ دولار']});
     XLSX.utils.book_append_sheet(wb,ws,p);
   });
   xlsxSave(wb,'سلف_خاصة_'+(month||today())+'.xlsx');
@@ -4364,7 +4372,7 @@ function removeExpSplitFactory(i){S.expSplitFactories.forEach((v,j)=>{const el=d
 function cancelExpSplit(){S.expSplitFactories=null;renderContent();}
 function addExpenseTombstones(ids){var t=DB.get('deleted_expense_ids',[]);var combined=Array.from(new Set(t.concat(ids)));DB.set('deleted_expense_ids',combined);}
 function deleteExpense(id){if(!confirm('حذف هذا المصروف؟'))return;const exp=DB.get('expenses',[]).find(e=>e.id===id);auditLog('حذف مصروف',`جهة: ${exp?.factory||id} | دينار: ${exp?.amount_dinar||0}`);addExpenseTombstones([id]);let expenses=DB.get('expenses',[]).filter(e=>e.id!==id);DB.set('expenses',expenses);FDB.delete('expenses',id);renderContent();}
-function exportExpensesXLSX(factory,month){var list=getExpenseList(factory);if(month)list=list.filter(function(e){return expDateMatchesMonth(e.date,month);});if(typeof XLSX==='undefined')return;const rows=[['ت','المعمل','التاريخ','المبلغ دينار','المبلغ دولار','التفاصيل']];list.forEach((e,i)=>rows.push([i+1,e.factory,e.date,e.amount_dinar||0,e.amount_dollar||0,e.details||'']));const ws=xlsxSheet(rows,{title:'مصاريف '+factory+(month?' — '+month:''),sum:['المبلغ دينار','المبلغ دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'مصاريف '+factory);xlsxSave(wb,'مصاريف_'+factory+(month?'_'+month:'')+'_'+today()+'.xlsx');}
+function exportExpensesXLSX(factory,month){var list=getExpenseList(factory);if(month)list=list.filter(function(e){return expDateMatchesMonth(e.date,month);});if(typeof XLSX==='undefined')return;const rows=[['ت','المعمل','التاريخ','المبلغ دينار','المبلغ دولار','التفاصيل']];list.forEach((e,i)=>rows.push([i+1,e.factory,e.date,safeNum(e.amount_dinar),safeNum(e.amount_dollar),e.details||'']));if(factory)rows.forEach(r=>r.splice(1,1));const ws=xlsxSheet(rows,{title:'مصاريف '+expEntityTitle(factory)+(month?' — '+month:''),infoRow:true,cars:list.length,countLabel:'عدد المصاريف',sum:['المبلغ دينار','المبلغ دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'مصاريف '+factory);xlsxSave(wb,'مصاريف_'+factory+(month?'_'+month:'')+'_'+today()+'.xlsx');}
 
 function expEntityTitle(name){
   var n=String(name||'').trim();

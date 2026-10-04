@@ -876,7 +876,7 @@ let S = {
   expFactory:'', expEditId:'', expDate:'', expDinar:0, expDollar:0, expDetails:'', expMonth:'', expHiddenOnly:false, dupReviewIds:null, expSearch:'', expPersonTab:'all',
   kroobEditId:'', kroobSearch:'', kroobSearchAll:false,
   rafidEditId:'', rafidSearch:'', rafidSearchAll:false,
-  kroobPdfData:null, rafidPdfData:null,
+  kroobPdfData:null, rafidPdfData:null, kroobPdfFiles:{}, rafidPdfFiles:{},
   kroobPdfFrom:'', kroobPdfTo:'',
   rafidPdfFrom:'', rafidPdfTo:'',
   rsFrom:'', rsTo:'',
@@ -5457,23 +5457,37 @@ function matchSysWithPDF(sysRows,pdfRows,amtField,dirFn){
   const sysOnly=sysRows.map((s,i)=>({s,i})).filter(({i,s})=>!used.has(i)&&parseFloat(s[amtField]||0)>0).map(({s})=>({sys:s}));
   return{matched,pdfOnly,sysOnly};
 }
-function pdfBalanceBox(pdfData,sysList,currency){
-  const f=currency==='dollar'?'bal_dollar':'bal_dinar',u=currency==='dollar'?'$':'د.ع';
-  const lastSys=sysList.filter(e=>e[f]!=null).slice(-1)[0];
-  const sBal=lastSys?safeNum(lastSys[f]):null;
-  const pRows=pdfData?pdfData.rows.filter(r=>r.balance!=null):[];
-  const pBal=pRows.length?pRows[pRows.length-1].balance:null;
-  const diff=sBal!=null&&pBal!=null?sBal-pBal:null;
-  const ok=diff!=null&&Math.abs(diff)<1;
-  const cell=(t,v,c,sub)=>`<div style="flex:1;min-width:120px;text-align:center;padding:8px 6px"><div style="font-size:10.5px;font-weight:800;color:#64748b">${t}</div><div style="font-size:16px;font-weight:900;color:${c};direction:ltr">${v}</div>${sub?`<div style="font-size:9.5px;color:#94a3b8;font-weight:700">${sub}</div>`:''}</div>`;
+function pdfBalanceBox(files,sysList){
   const col=v=>v==null?'#94a3b8':v>=0?'#0f172a':'#dc2626';
-  return`<div style="flex:1;min-width:300px;display:flex;align-items:stretch;background:#fff;border:2px solid ${diff==null?'#e2e8f0':ok?'#34d399':'#fca5a5'};border-radius:10px;overflow:hidden">
-    ${cell('💻 رصيد النظام',sBal!=null?fmtM(sBal):'—',col(sBal),lastSys?'حتى '+esc(lastSys.date||''):'')}
-    <div style="width:1px;background:#e2e8f0"></div>
-    ${cell('📄 رصيد ملف PDF',pBal!=null?fmtM(pBal):'—',col(pBal),pRows.length?'حتى '+esc(pRows[pRows.length-1].date||''):'لم يُرفَع ملف')}
-    <div style="width:1px;background:#e2e8f0"></div>
-    <div style="flex:1;min-width:120px;text-align:center;padding:8px 6px;background:${diff==null?'#f8fafc':ok?'#f0fdf4':'#fef2f2'}"><div style="font-size:10.5px;font-weight:800;color:#64748b">⚖️ الفرق</div><div style="font-size:16px;font-weight:900;color:${diff==null?'#94a3b8':ok?'#059669':'#dc2626'};direction:ltr">${diff==null?'—':ok?'0':fmtM(diff)}</div><div style="font-size:9.5px;font-weight:800;color:${ok?'#059669':'#94a3b8'}">${diff==null?'':ok?'✅ متطابق':u+' (النظام − PDF)'}</div></div>
+  const line=cur=>{
+    const f=cur==='dollar'?'bal_dollar':'bal_dinar',u=cur==='dollar'?'$':'د.ع';
+    const lastSys=sysList.filter(e=>e[f]!=null).slice(-1)[0];
+    const sBal=lastSys?safeNum(lastSys[f]):null;
+    const pd=files&&files[cur];
+    const pRows=pd?pd.rows.filter(r=>r.balance!=null):[];
+    const pBal=pRows.length?pRows[pRows.length-1].balance:null;
+    const diff=sBal!=null&&pBal!=null?sBal-pBal:null;
+    const ok=diff!=null&&Math.abs(diff)<1;
+    const cell=(v,c,sub)=>`<div style="flex:1;min-width:110px;text-align:center;padding:6px"><div style="font-size:15px;font-weight:900;color:${c};direction:ltr">${v}</div>${sub?`<div style="font-size:9.5px;color:#94a3b8;font-weight:700">${sub}</div>`:''}</div>`;
+    return`<div style="display:flex;align-items:stretch;border-top:1px solid #e2e8f0">
+      <div style="width:62px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:${cur==='dollar'?'#1d4ed8':'#b45309'};background:${cur==='dollar'?'#eff6ff':'#fffbeb'}">${cur==='dollar'?'💵 دولار':'💛 دينار'}</div>
+      ${cell(sBal!=null?fmtM(sBal):'—',col(sBal),lastSys?'حتى '+esc(lastSys.date||''):'')}
+      ${cell(pBal!=null?fmtM(pBal):'—',col(pBal),pRows.length?'حتى '+esc(pRows[pRows.length-1].date||''):'لم يُرفَع ملف')}
+      <div style="flex:1;min-width:110px;text-align:center;padding:6px;background:${diff==null?'#f8fafc':ok?'#f0fdf4':'#fef2f2'}"><div style="font-size:15px;font-weight:900;color:${diff==null?'#94a3b8':ok?'#059669':'#dc2626'};direction:ltr">${diff==null?'—':ok?'0':fmtM(diff)}</div><div style="font-size:9.5px;font-weight:800;color:${ok?'#059669':'#94a3b8'}">${diff==null?'':ok?'✅ متطابق':u+' (النظام − PDF)'}</div></div>
+    </div>`;
+  };
+  const head=t=>`<div style="flex:1;min-width:110px;text-align:center;padding:5px;font-size:10.5px;font-weight:800;color:#64748b">${t}</div>`;
+  return`<div style="flex:1;min-width:340px;background:#fff;border:2px solid #e2e8f0;border-radius:10px;overflow:hidden">
+    <div style="display:flex;background:#f8fafc"><div style="width:62px"></div>${head('💻 رصيد النظام')}${head('📄 رصيد ملف PDF')}${head('⚖️ الفرق')}</div>
+    ${line('dinar')}${line('dollar')}
   </div>`;
+}
+// شارات الملفات المرفوعة (دينار/دولار) — الضغط يبدّل الجدول المعروض
+function pdfFileChips(files,active,key){
+  const chip=cur=>{const d=files&&files[cur];if(!d)return'';const on=active&&active.currency===cur;
+    return`<button class="ovsec-b" style="cursor:pointer;border:${on?'2px solid #fff':'1px solid rgba(255,255,255,.3)'};opacity:${on?1:.75}" onclick="S.${key}Data=S.${key}Files.${cur};renderContent()">📄 ${esc(d.fileName)} · ${cur==='dinar'?'دينار':'دولار'} · ${d.rows.length} حركة</button>`;};
+  const any=files&&(files.dinar||files.dollar);
+  return any?chip('dinar')+chip('dollar')+`<button class="btn" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.32);font-size:11px;padding:6px 12px" onclick="S.${key}Data=null;S.${key}Files={};renderContent()">✕ مسح</button>`:'<span class="ovsec-b">لم يُرفَع ملف بعد</span>';
 }
 function renderPDFMatchResult(pdfData,sysRows,amtField,dirFn,descField,currency){
   const{rows:pdfRows,fileName}=pdfData;
@@ -5565,9 +5579,11 @@ async function importKroobPDF(input,currency){
     const dates=pdfRows.map(r=>r.date).filter(Boolean).sort();
     if(dates.length){S.kroobPdfFrom=dates[0];S.kroobPdfTo=dates[dates.length-1];}
     S.kroobPdfData={rows:pdfRows,fileName:file.name,currency:currency||'dinar'};
+    S.kroobPdfFiles=S.kroobPdfFiles||{};S.kroobPdfFiles[currency||'dinar']=S.kroobPdfData;
     showToast('تم استيراد '+pdfRows.length+' حركة من PDF','success');
     renderContent();
   }catch(e){showToast('خطأ: '+(e.message||'فشل قراءة PDF'),'error');}
+  finally{input.value='';}
 }
 async function importRafidPDF(input,currency){
   const file=input.files[0];if(!file)return;
@@ -5580,9 +5596,11 @@ async function importRafidPDF(input,currency){
     const dates=pdfRows.map(r=>r.date).filter(Boolean).sort();
     if(dates.length){S.rafidPdfFrom=dates[0];S.rafidPdfTo=dates[dates.length-1];}
     S.rafidPdfData={rows:pdfRows,fileName:file.name,currency:currency||'dinar'};
+    S.rafidPdfFiles=S.rafidPdfFiles||{};S.rafidPdfFiles[currency||'dinar']=S.rafidPdfData;
     showToast('تم استيراد '+pdfRows.length+' حركة من PDF','success');
     renderContent();
   }catch(e){showToast('خطأ: '+(e.message||'فشل قراءة PDF'),'error');}
+  finally{input.value='';}
 }
 
 function clearKsFilter(){S.ksFrom='';S.ksTo='';renderContent();}
@@ -5767,14 +5785,14 @@ function viewKroobStatement(){
     <div class="ovsec" style="--sc:#0e7490;--sc2:#22d3ee">
       <span class="ovsec-t">🔄 مطابقة كشف الصيرفة</span>
       <span style="display:flex;align-items:center;gap:8px">
-        ${S.kroobPdfData?`<span class="ovsec-b">📄 ${esc(S.kroobPdfData.fileName)} · ${S.kroobPdfData.currency==='dinar'?'دينار':'دولار'} · ${S.kroobPdfData.rows.length} حركة</span><button class="btn" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.32);font-size:11px;padding:6px 12px" onclick="S.kroobPdfData=null;renderContent()">✕ مسح</button>`:'<span class="ovsec-b">لم يُرفَع ملف بعد</span>'}
+        ${pdfFileChips(S.kroobPdfFiles,S.kroobPdfData,'kroobPdf')}
       </span>
     </div>
     <div style="padding:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0">
       <div class="ovfilter-row">
         <div class="ovfield"><label class="lbl">📅 من تاريخ</label><input class="inp" type="date" value="${_kpFrom}" onchange="S.kroobPdfFrom=this.value;renderContent()"></div>
         <div class="ovfield"><label class="lbl">📅 إلى تاريخ</label><input class="inp" type="date" value="${_kpTo}" onchange="S.kroobPdfTo=this.value;renderContent()"></div>
-        ${pdfBalanceBox(S.kroobPdfData,pdfFilteredList,_kCur)}
+        ${pdfBalanceBox(S.kroobPdfFiles,pdfFilteredList)}
         <div class="ovchips">
           <input type="file" accept=".pdf" id="kpdf_d" style="display:none" onchange="importKroobPDF(this,'dinar')">
           <input type="file" accept=".pdf" id="kpdf_dl" style="display:none" onchange="importKroobPDF(this,'dollar')">
@@ -6657,14 +6675,14 @@ function viewRafidStatement(){
     <div class="ovsec" style="--sc:#b45309;--sc2:#fbbf24">
       <span class="ovsec-t">🔄 مطابقة كشف الصيرفة</span>
       <span style="display:flex;align-items:center;gap:8px">
-        ${S.rafidPdfData?`<span class="ovsec-b">📄 ${esc(S.rafidPdfData.fileName)} · ${S.rafidPdfData.currency==='dinar'?'دينار':'دولار'} · ${S.rafidPdfData.rows.length} حركة</span><button class="btn" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.32);font-size:11px;padding:6px 12px" onclick="S.rafidPdfData=null;renderContent()">✕ مسح</button>`:'<span class="ovsec-b">لم يُرفَع ملف بعد</span>'}
+        ${pdfFileChips(S.rafidPdfFiles,S.rafidPdfData,'rafidPdf')}
       </span>
     </div>
     <div style="padding:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0">
       <div class="ovfilter-row">
         <div class="ovfield"><label class="lbl">📅 من تاريخ</label><input class="inp" type="date" value="${_rpFrom}" onchange="S.rafidPdfFrom=this.value;renderContent()"></div>
         <div class="ovfield"><label class="lbl">📅 إلى تاريخ</label><input class="inp" type="date" value="${_rpTo}" onchange="S.rafidPdfTo=this.value;renderContent()"></div>
-        ${pdfBalanceBox(S.rafidPdfData,rafidPdfFilteredList,_rCur)}
+        ${pdfBalanceBox(S.rafidPdfFiles,rafidPdfFilteredList)}
         <div class="ovchips">
           <input type="file" accept=".pdf" id="rpdf_d" style="display:none" onchange="importRafidPDF(this,'dinar')">
           <input type="file" accept=".pdf" id="rpdf_dl" style="display:none" onchange="importRafidPDF(this,'dollar')">
@@ -8288,7 +8306,7 @@ function logout(){
   // Firebase Auth signOut
   if(window._auth){try{window._auth.signOut(window._auth.auth);}catch(e){}}
   currentUser=null;DB.set('last_user',null);
-  S={view:'dashboard',selectedFactory:'الكل',filterFrom:'',filterTo:'',editEntry:null,editSale:null,wFrom:'',wTo:'',pSearch:'',pRefinery:'',pType:'',sSearch:'',sTypeFilter:'',salafPerson:'',salafEditId:'',salafTab:'manual',salafMonthFilter:'',salafSettlementMonth:'',expFactory:'',expEditId:'',expDate:'',expDinar:0,expDollar:0,expDetails:'',expMonth:'',kroobEditId:'',kroobSearch:'',kroobSearchAll:false,rafidEditId:'',rafidSearch:'',rafidSearchAll:false,kroobPdfData:null,rafidPdfData:null,kroobPdfFrom:'',kroobPdfTo:'',rafidPdfFrom:'',rafidPdfTo:''};
+  S={view:'dashboard',selectedFactory:'الكل',filterFrom:'',filterTo:'',editEntry:null,editSale:null,wFrom:'',wTo:'',pSearch:'',pRefinery:'',pType:'',sSearch:'',sTypeFilter:'',salafPerson:'',salafEditId:'',salafTab:'manual',salafMonthFilter:'',salafSettlementMonth:'',expFactory:'',expEditId:'',expDate:'',expDinar:0,expDollar:0,expDetails:'',expMonth:'',kroobEditId:'',kroobSearch:'',kroobSearchAll:false,rafidEditId:'',rafidSearch:'',rafidSearchAll:false,kroobPdfData:null,rafidPdfData:null,kroobPdfFiles:{},rafidPdfFiles:{},kroobPdfFrom:'',kroobPdfTo:'',rafidPdfFrom:'',rafidPdfTo:''};
   renderLogin();
 }
 

@@ -5410,9 +5410,14 @@ function parseSairafaPDF(rawText,currency='dinar'){
       balance=(type==='دائن'?1:-1)*rawBal;
     }
     prevBal=balance;
+    // إشارة الرصيد كما هي مكتوبة في PDF (ناقص ملاصق للرقم)
+    const balNeg=isMinusChar(line[amPositions[0].start-1]||'');
 
-    if(mainAmt>0)rows.push({date,docNo,txType,desc,amount:mainAmt,commission,type,balance});
+    if(mainAmt>0)rows.push({date,docNo,txType,desc,amount:mainAmt,commission,type,balance,_raw:rawBal,_neg:balNeg});
   }
+  // إذا كان الملف يكتب إشارة الناقص للأرصدة السالبة فهي المرجع (غيابها = موجب)
+  const hasSign=rows.some(r=>r._neg);
+  rows.forEach(r=>{if(hasSign)r.balance=(r._neg?-1:1)*r._raw;delete r._raw;delete r._neg;});
   return rows;
 }
 async function extractPDFText(file){

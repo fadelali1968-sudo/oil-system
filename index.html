@@ -5094,7 +5094,7 @@ function viewKroob(){
       <h4 style="font-size:12px;font-weight:900;color:#065f46;white-space:nowrap">💰 الرصيد الافتتاحي للشهر:</h4>
       <span style="background:#fff;border:1px solid #6ee7b7;border-radius:8px;padding:5px 14px;font-size:13px;font-weight:900;color:${carry.dinar>=0?'#ca8a04':'#dc2626'}">${fmtM(carry.dinar)} د.ع</span>
       <span style="background:#fff;border:1px solid #6ee7b7;border-radius:8px;padding:5px 14px;font-size:13px;font-weight:900;color:${carry.dollar>=0?'#0f172a':'#dc2626'}">${fmtM(carry.dollar)} $</span>
-      <div style="display:flex;gap:8px;margin-right:auto"><label class="btn btn-green" style="font-size:11px;padding:6px 12px;cursor:pointer">📥 استيراد Excel<input type="file" accept=".xlsx" style="display:none" onchange="importKroobXLSX(this)"></label><button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="exportKroobXLSX()">📊 تصدير</button><button class="btn btn-amber" style="font-size:11px;padding:6px 12px" onclick="clearKroobMonth()">🗑️ مسح الشهر</button><button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="clearKroobData()">🗑️ مسح الكل</button></div>
+      <div style="display:flex;gap:8px;margin-right:auto"><label class="btn btn-green" style="font-size:11px;padding:6px 12px;cursor:pointer">📥 استيراد Excel<input type="file" accept=".xlsx" style="display:none" onchange="importKroobXLSX(this)"></label><button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="exportKroobXLSX()" title="تصدير الشهر المعروض فقط">📊 تصدير الشهر</button><button class="btn btn-amber" style="font-size:11px;padding:6px 12px" onclick="clearKroobMonth()">🗑️ مسح الشهر</button><button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="clearKroobData()">🗑️ مسح الكل</button></div>
     </div>
     <details style="margin-top:8px">
       <summary style="font-size:11px;color:#64748b;cursor:pointer;user-select:none">⚙️ تعديل رصيد بداية النظام (أول حركة)</summary>
@@ -5953,7 +5953,9 @@ async function clearKroobData(){
   renderContent();
 }
 
-function exportKroobXLSX(){if(typeof XLSX==='undefined')return;const list=getKroobList(),withBal=calcKroobBalance(list),opening=DB.get('kroob_opening',{dinar:0,dollar:0});const rows=[['ت','التاريخ','البيان','الجهة المستفيدة','المستلم','دائن دينار','مدين دينار','دائن دولار','مدين دولار','نوع العملية','عمولة دينار','عمولة دولار','رصيد دينار','رصيد دولار']];rows.push(['رصيد مدور','','','','','','','','','','','',(opening.dinar||0),(opening.dollar||0)]);withBal.forEach((e,i)=>{const tdD=kroobDir(e,'dinar'),tdDol=kroobDir(e,'dollar');rows.push([i+1,e.date,e.description,e.beneficiary||'',e.receiver||'',tdD==='دائن'?e.amount_dinar||0:'',tdD==='مدين'?e.amount_dinar||0:'',tdDol==='دائن'?e.amount_dollar||0:'',tdDol==='مدين'?e.amount_dollar||0:'',e.operation_type||'',e.commission||0,e.commission_dollar||0,e.bal_dinar,e.bal_dollar]);});const ws=xlsxSheet(rows,{title:'كروب رافد فيصل — '+today(),cars:withBal.length,countLabel:'عدد الحركات',sum:['دائن دينار','مدين دينار','دائن دولار','مدين دولار','عمولة دينار','عمولة دولار'],num:['رصيد دينار','رصيد دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'كروب رافد فيصل');xlsxSave(wb,'كروب_'+today()+'.xlsx');}
+const _IQMN={'01':'كانون الثاني','02':'شباط','03':'آذار','04':'نيسان','05':'أيار','06':'حزيران','07':'تموز','08':'آب','09':'أيلول','10':'تشرين الأول','11':'تشرين الثاني','12':'كانون الأول'};
+function _iqMonthLabel(m){const[y,n]=m.split('-');return(_IQMN[n]||n)+' '+y;}
+function exportKroobXLSX(){if(typeof XLSX==='undefined')return;const month=S.kroobMonth||today().slice(0,7),mLabel=_iqMonthLabel(month),opening=getKroobCarryForward(month),withBal=calcKroobBalanceFrom(getKroobList().filter(e=>(e.date||'').startsWith(month)),opening.dinar,opening.dollar);const rows=[['ت','التاريخ','البيان','الجهة المستفيدة','المستلم','دائن دينار','مدين دينار','دائن دولار','مدين دولار','نوع العملية','عمولة دينار','عمولة دولار','رصيد دينار','رصيد دولار']];rows.push(['رصيد مرحّل من الشهر السابق','','','','','','','','','','','',(opening.dinar||0),(opening.dollar||0)]);withBal.forEach((e,i)=>{const tdD=kroobDir(e,'dinar'),tdDol=kroobDir(e,'dollar');rows.push([i+1,e.date,e.description,e.beneficiary||'',e.receiver||'',tdD==='دائن'?e.amount_dinar||0:'',tdD==='مدين'?e.amount_dinar||0:'',tdDol==='دائن'?e.amount_dollar||0:'',tdDol==='مدين'?e.amount_dollar||0:'',e.operation_type||'',e.commission||0,e.commission_dollar||0,e.bal_dinar,e.bal_dollar]);});const ws=xlsxSheet(rows,{title:'كروب رافد فيصل — شهر '+mLabel,cars:withBal.length,countLabel:'عدد الحركات',sum:['دائن دينار','مدين دينار','دائن دولار','مدين دولار','عمولة دينار','عمولة دولار'],num:['رصيد دينار','رصيد دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'كروب رافد فيصل');xlsxSave(wb,'كروب_'+mLabel.replace(/ /g,'_')+'.xlsx');}
 
 function importKroobXLSX(input){
   const file=input.files[0];if(!file||typeof XLSX==='undefined')return;
@@ -6184,7 +6186,7 @@ function viewRafidAccounts(){
       <div style="display:flex;gap:8px;margin-right:auto">
         <button class="btn btn-red" style="font-size:11px;padding:6px 12px" onclick="clearRafidData()">🗑️ مسح الكل</button>
         <label class="btn btn-amber" style="font-size:11px;padding:6px 12px;cursor:pointer">📥 استيراد Excel<input type="file" accept=".xlsx" style="display:none" onchange="importRafidXLSX(this)"></label>
-        <button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="exportRafidXLSX()">📊 تصدير</button>
+        <button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="exportRafidXLSX()" title="تصدير الشهر المعروض فقط">📊 تصدير الشهر</button>
       </div>
     </div>
     <details style="margin-top:8px">
@@ -6331,10 +6333,11 @@ async function clearRafidData(){
 }
 function exportRafidXLSX(){
   if(typeof XLSX==='undefined')return;
-  const list=getRafidList(),withBal=calcRafidBalance(list);
+  const month=S.rafidMonth||today().slice(0,7),mLabel=_iqMonthLabel(month),opening=getRafidCarryForward(month),withBal=calcRafidBalanceFrom(getRafidList().filter(e=>(e.date||'').startsWith(month)),opening.dinar,opening.dollar);
   const rows=[['ت','التاريخ','البيان','الجهة','المستلم','دائن دينار','مدين دينار','دائن دولار','مدين دولار','نوع العملية','عمولة دينار','عمولة دولار','رصيد دينار','رصيد دولار']];
+  rows.push(['رصيد مرحّل من الشهر السابق','','','','','','','','','','','',(opening.dinar||0),(opening.dollar||0)]);
   withBal.forEach((e,i)=>{const isDainD=rafidDir(e,'dinar')==='دائن',isDainDol=rafidDir(e,'dollar')==='دائن';rows.push([i+1,e.date,e.description,e.beneficiary||'',e.receiver||'',isDainD?e.dinar:0,!isDainD?e.dinar:0,isDainDol?e.dollar:0,!isDainDol?e.dollar:0,e.op_type||'',e.commission||0,e.commission_dollar||0,e.bal_dinar,e.bal_dollar]);});
-  const ws=xlsxSheet(rows,{title:'حسابات سيد رافد — '+today(),cars:withBal.length,countLabel:'عدد الحركات',sum:['دائن دينار','مدين دينار','دائن دولار','مدين دولار','عمولة دينار','عمولة دولار'],num:['رصيد دينار','رصيد دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'حسابات سيد رافد');xlsxSave(wb,'حسابات_سيد_رافد_'+today()+'.xlsx');
+  const ws=xlsxSheet(rows,{title:'حسابات سيد رافد — شهر '+mLabel,cars:withBal.length,countLabel:'عدد الحركات',sum:['دائن دينار','مدين دينار','دائن دولار','مدين دولار','عمولة دينار','عمولة دولار'],num:['رصيد دينار','رصيد دولار']});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'حسابات سيد رافد');xlsxSave(wb,'حسابات_سيد_رافد_'+mLabel.replace(/ /g,'_')+'.xlsx');
 }
 
 

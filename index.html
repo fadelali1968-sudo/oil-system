@@ -1247,7 +1247,7 @@ function buildNav(isM) {
   // حسابات سيد رافد
   if(hasPerm('rafid')||hasPerm('rafid_statement')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px"><p style="font-size:9px;color:#fbbf24;font-weight:900;padding:1px 4px 3px;letter-spacing:1px">حسابات سيد رافد</p>${hasPerm('rafid')?ni('rafid_accounts','💼 حسابات سيد رافد','color:#fde68a'):''}${hasPerm('rafid_statement')?ni('rafid_statement','📜 كشف الحساب','color:#fde68a'):''}</div>`;
   // حساب المصفى
-  if(hasPerm('refinery')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('refinery_account','🏭 حساب المصفى','color:#fbbf24')}</div>`;
+  if(hasPerm('refinery')) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('refinery_account','🚚 حساب الكراوي','color:#fbbf24')}</div>`;
   if(isM) nav += `<div style="border-top:1px solid #1e293b;margin-top:4px;padding-top:4px">${ni('admin','⚙️ إدارة النظام','color:#93c5fd')}${ni('permissions','🔐 الصلاحيات','color:#c084fc')}${ni('audit_log','🕵️ سجل النشاط','color:#fb923c')}</div>`;
   return nav;
 }
@@ -7150,7 +7150,7 @@ function viewRefineryAccount(){
 
   return`<div style="max-width:1100px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <h2 style="font-size:15px;font-weight:900;color:#92400e">🏭 حساب المصفى</h2>
+      <h2 style="font-size:15px;font-weight:900;color:#92400e">🚚 حساب الكراوي</h2>
       <div style="font-size:12px;color:#64748b;font-weight:700">أجرة الطن الافتراضية: <span style="color:#dc2626;font-weight:900">${fmtM(TRANSPORT_PER_TON_DEFAULT)} د.ع</span></div>
     </div>
 
@@ -7188,7 +7188,7 @@ function sendRefineryWhatsapp(){
   var periodLabel=wf&&wt?(wf+' -> '+wt):wf?('من '+wf):wt?('إلى '+wt):'الكلي';
   var sep='─────────────────────────';
   var lines=[];
-  lines.push('🏭 حساب المصفى');
+  lines.push('🚚 حساب الكراوي');
   lines.push('📅 الفترة: '+periodLabel);
   lines.push(sep);
   var refineries=['مصفى كربلاء','مصفى صلاح الدين'];
@@ -7230,8 +7230,8 @@ function exportRefineryXLSX(){
     const recByRef=receptions[ref]||{};
     Object.keys(byDate).sort().forEach(date=>{const d=byDate[date];const amount=d.amount;const received=parseFloat((recByRef[date]||{}).amount||0);rows.push([ref,date,d.cars,Math.round(d.tons*1000)/1000,d.kg,d.liters,amount,received,amount-received]);});
   });
-  const ws=xlsxSheet(rows,{title:'حساب المصفى — '+today(),cars:rows.slice(1).reduce((s,r)=>s+r[2],0),sum:['عدد السيارات','الطن','الكغم','اللتر','أجور النقل','المستلم','المتبقي']});
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'حساب المصفى');xlsxSave(wb,'حساب_المصفى_'+today()+'.xlsx');
+  const ws=xlsxSheet(rows,{title:'حساب الكراوي — '+today(),cars:rows.slice(1).reduce((s,r)=>s+r[2],0),sum:['عدد السيارات','الطن','الكغم','اللتر','أجور النقل','المستلم','المتبقي']});
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'حساب الكراوي');xlsxSave(wb,'حساب_الكراوي_'+today()+'.xlsx');
 }
 
 function generateRefineryPDF(refineryName){
@@ -7264,7 +7264,7 @@ function generateRefineryPDF(refineryName){
   const totalRow=`<tr style="background:${color};color:#fff;font-weight:900"><td colspan="2">الإجمالي — ${list.length} سيارة</td><td></td><td>${fmt(sumTons(list))} طن</td><td>${fmt(grandKg)} كغم</td><td>${rateLabel(list)}</td><td>${fmtM(grandAmount)}</td><td>${fmtM(grandReceived)}</td><td>${fmtM(Math.abs(grandRemaining))} ${grandRemaining>0?'(غير مسوى)':'(مسوى)'}</td></tr>`;
   const printWin=window.open('','_blank');
   if(!printWin){showToast('يرجى السماح بفتح النوافذ المنبثقة','error');return;}
-  printWin.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>${refineryName}</title><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Cairo',sans-serif;direction:rtl;padding:20px;color:#000;}.header{text-align:center;border-bottom:3px solid ${color};padding-bottom:14px;margin-bottom:18px;}h1{font-size:20px;font-weight:900;color:${color};}p{font-size:12px;color:#333;margin-top:5px;font-weight:700;}table{width:100%;border-collapse:collapse;font-size:12px;border:2px solid #000;}th{background:#fff;color:#000;padding:9px 6px;text-align:center;font-weight:900;border:2px solid #000;}td{padding:7px 6px;text-align:center;border:2px solid #000;color:#000;font-weight:700;}@media print{body{padding:10px;}}</style></head><body><div class="header"><h1>🏭 ${refineryName}</h1><p>الفترة: ${periodLabel} | عدد السيارات: ${list.length} | ${new Date().toLocaleString('ar-IQ')}</p></div><table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الطن</th><th>الكغم</th><th>أجرة الطن</th><th>أجور النقل</th><th>المستلم</th><th>المتبقي</th></tr></thead><tbody>${dataRows}${totalRow}</tbody></table><script>window.onload=()=>{window.print();};<\/script></body></html>`);
+  printWin.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>حساب الكراوي — ${refineryName}</title><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Cairo',sans-serif;direction:rtl;padding:20px;color:#000;}.header{text-align:center;border-bottom:3px solid ${color};padding-bottom:14px;margin-bottom:18px;}h1{font-size:20px;font-weight:900;color:${color};}p{font-size:12px;color:#333;margin-top:5px;font-weight:700;}table{width:100%;border-collapse:collapse;font-size:12px;border:2px solid #000;}th{background:#fff;color:#000;padding:9px 6px;text-align:center;font-weight:900;border:2px solid #000;}td{padding:7px 6px;text-align:center;border:2px solid #000;color:#000;font-weight:700;}@media print{body{padding:10px;}}</style></head><body><div class="header"><h1>🚚 حساب الكراوي — ${refineryName}</h1><p>الفترة: ${periodLabel} | عدد السيارات: ${list.length} | ${new Date().toLocaleString('ar-IQ')}</p></div><table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الطن</th><th>الكغم</th><th>أجرة الطن</th><th>أجور النقل</th><th>المستلم</th><th>المتبقي</th></tr></thead><tbody>${dataRows}${totalRow}</tbody></table><script>window.onload=()=>{window.print();};<\/script></body></html>`);
   printWin.document.close();
 }
 
@@ -8181,7 +8181,7 @@ async function backupAndClearAllProcurement(){
 
 // ===== إدارة الصلاحيات =====
 const ALL_PERMS=['salaf','private_salaf','expenses','kroob','kroob_statement','table','sale_table','reports','import_p','import_s','rafid','rafid_statement','refinery'];
-const PERM_LABELS={'salaf':'💰 السلف','private_salaf':'🔐 سلف خاصة','expenses':'📋 المصاريف','kroob':'🏦 الكروب','kroob_statement':'📜 كشف حساب الكروب','table':'📋 سجل المشتريات','sale_table':'📋 سجل المبيعات','reports':'📄 التقارير','import_p':'📥 استيراد المشتريات','import_s':'📥 استيراد المبيعات','rafid':'💼 حسابات سيد رافد','rafid_statement':'📜 كشف حساب سيد رافد','refinery':'🏭 حساب المصفى'};
+const PERM_LABELS={'salaf':'💰 السلف','private_salaf':'🔐 سلف خاصة','expenses':'📋 المصاريف','kroob':'🏦 الكروب','kroob_statement':'📜 كشف حساب الكروب','table':'📋 سجل المشتريات','sale_table':'📋 سجل المبيعات','reports':'📄 التقارير','import_p':'📥 استيراد المشتريات','import_s':'📥 استيراد المبيعات','rafid':'💼 حسابات سيد رافد','rafid_statement':'📜 كشف حساب سيد رافد','refinery':'🚚 حساب الكراوي'};
 
 function viewPermissions(){
   const users=DB.get('users',{});

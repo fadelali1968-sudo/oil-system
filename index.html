@@ -769,7 +769,7 @@ async function syncFromCloud(silent=false) {
       const rafidAccounts = await FDB.getAll('rafid_accounts'); if(rafidAccounts&&rafidAccounts.length) DB.set('rafid_accounts',rafidAccounts);
       const rafidOpArr = await FDB.getAll('rafid_opening'); if(rafidOpArr&&rafidOpArr.length){const op=rafidOpArr.find(x=>x.id==='opening')||rafidOpArr[0];if(op)DB.set('rafid_opening',{dinar:parseFloat(op.dinar||0),dollar:parseFloat(op.dollar||0)});}
     }
-    const settings=await FDB.getAll('settings');if(settings&&settings.length){const fd=settings.find(x=>x.id==='factories');if(fd&&fd.list&&fd.list.length){DB.set('factories',fd.list);}const kot=settings.find(x=>x.id==='kroob_op_types');if(kot&&kot.list&&kot.list.length)DB.set('kroob_op_types',kot.list);const fq=settings.find(x=>x.id==='factory_quotas');if(fq&&fq.map&&typeof fq.map==='object')DB.set('factory_quotas',fq.map);const qh=settings.find(x=>x.id==='quota_history');if(qh&&Array.isArray(qh.list))DB.set('quota_history',qh.list);const ea=settings.find(x=>x.id==='expense_entity_aliases');if(ea&&ea.map&&typeof ea.map==='object')DB.set('expense_entity_aliases',ea.map);const prl=settings.find(x=>x.id==='pricing_rules');if(prl&&Array.isArray(prl.list))DB.set('pricing_rules',prl.list);const srt=settings.find(x=>x.id==='sale_rates');if(srt&&srt.map&&typeof srt.map==='object')DB.set('sale_rates',srt.map);}
+    const settings=await FDB.getAll('settings');if(settings&&settings.length){const fd=settings.find(x=>x.id==='factories');if(fd&&fd.list&&fd.list.length){DB.set('factories',fd.list);}const kot=settings.find(x=>x.id==='kroob_op_types');if(kot&&kot.list&&kot.list.length)DB.set('kroob_op_types',kot.list);const fq=settings.find(x=>x.id==='factory_quotas');if(fq&&fq.map&&typeof fq.map==='object')DB.set('factory_quotas',fq.map);const qh=settings.find(x=>x.id==='quota_history');if(qh&&Array.isArray(qh.list))DB.set('quota_history',qh.list);const ea=settings.find(x=>x.id==='expense_entity_aliases');if(ea&&ea.map&&typeof ea.map==='object')DB.set('expense_entity_aliases',ea.map);const prl=settings.find(x=>x.id==='pricing_rules');if(prl&&Array.isArray(prl.list))DB.set('pricing_rules',prl.list);const trl=settings.find(x=>x.id==='transport_rules');if(trl&&Array.isArray(trl.list))DB.set('transport_rules',trl.list);const srt=settings.find(x=>x.id==='sale_rates');if(srt&&srt.map&&typeof srt.map==='object')DB.set('sale_rates',srt.map);}
     const expEntArr=await FDB.getAll('expense_entities');if(expEntArr&&expEntArr.length)DB.set('expense_entities',expEntArr);
     if(!silent) showToast('تمت المزامنة مع Firebase','info',2000);
     return true;
@@ -2826,7 +2826,7 @@ function viewTable(){
     <td class="td" style="color:#64748b;font-size:11px">${e.date}</td><td class="td" style="color:#2563eb;font-size:10px">${esc(e.product_type)}</td>
     <td class="td">${esc(e.driver_name)}</td><td class="td">${esc(e.car_no)}</td><td class="td" style="font-size:11px">${esc(e.location)}</td>
     <td class="td">${fmtTon(e.qty_tons)}</td><td class="td">${fmtLiter(e.natural_liters)}</td><td class="td">${fmtKg(e.weight_kg)}</td>
-    <td class="td" style="color:#64748b">${e.po_no}</td><td class="td">${fmtM(e.price||pricingFor(e.date).price)}</td><td class="td">${fmtM(e.transport_fee||pricingFor(e.date).transport)}</td>
+    <td class="td" style="color:#64748b">${e.po_no}</td><td class="td">${fmtM(e.price||pricingFor(e.date).price)}</td><td class="td">${fmtM(transportRateFor(e.date,e.factory).rate)}</td>
     <td class="td" style="color:#1d4ed8;font-weight:900">${fmtM(e.refinery_price)}</td>
     ${showActionCol?`<td class="td" style="white-space:nowrap">${canEditRow(e)?`<button class="btn btn-gray" style="padding:6px 10px;font-size:11px;margin-left:6px" onclick="editEntry('${e.id}')">✏️</button>`:''}${canEdit('purchases')?`<button class="btn btn-red" style="padding:6px 10px;font-size:11px" onclick="deleteEntry('${e.id}')">🗑️</button>`:''}</td>`:''}
   </tr>`).join('');
@@ -3147,7 +3147,7 @@ function exportXLSX(type){
   if(type==='purchases'){
     sheetName='المشتريات';fname='مشتريات_'+today()+'.xlsx';
     rows.push(['ت','المعمل','البوجر','المصفى','التاريخ','النوع','السائق','السيارة','العائدية','كمية /طن','طبيعي /لتر','وزن /كغم','PO','السعر','نقل','الإجمالي']);
-    list.forEach((e,i)=>rows.push([i+1,e.factory,e.voucher_no,e.refinery,e.date,e.product_type,e.driver_name,e.car_no,e.location,sc(e.qty_tons),sc(e.natural_liters),sc(e.weight_kg),e.po_no,e.price||pricingFor(e.date).price,e.transport_fee||pricingFor(e.date).transport,parseFloat(e.refinery_price)||0]));
+    list.forEach((e,i)=>rows.push([i+1,e.factory,e.voucher_no,e.refinery,e.date,e.product_type,e.driver_name,e.car_no,e.location,sc(e.qty_tons),sc(e.natural_liters),sc(e.weight_kg),e.po_no,e.price||pricingFor(e.date).price,transportRateFor(e.date,e.factory).rate,parseFloat(e.refinery_price)||0]));
   }else{
     sheetName='المبيعات';fname='مبيعات_'+today()+'.xlsx';
     rows.push(['ت','اسم السائق','رقم المركبة','العائدية','تاريخ التحميل','كمية التحميل','كمية التفريغ','تاريخ التفريغ','النقص','جهة التسويق','نوع المنتوج','المعمل','العنوان','أجرة النقل','إجمالي كراوي السواق','سعر البيع','إجمالي البيع','إكرامية السائق','المصدر']);
@@ -6924,7 +6924,86 @@ function importRafidXLSX(input){
 }
 
 // ===== حساب المصفى =====
-const REFINERY_PRICE_PER_KG = 42;
+// أجور النقل: تُحسب على الطن. القاعدة {factory, from, rate}؛ factory فارغ = كل المعامل.
+// قاعدة المعمل تتقدّم على القاعدة العامة، وتسري تلقائياً على كل سجل (قديم وجديد) تاريخه >= from.
+const TRANSPORT_PER_TON_DEFAULT = 42000;
+function transportRules(){
+  const l=DB.get('transport_rules',[]);
+  return Array.isArray(l)?l.filter(r=>r&&r.from).slice().sort((a,b)=>String(a.from).localeCompare(String(b.from))):[];
+}
+function saveTransportRules(l){
+  DB.set('transport_rules',l);
+  FDB.save('settings','transport_rules',{id:'transport_rules',list:l});
+}
+function transportRateFor(date,factory){
+  const d=String(date||'');
+  let gen=null,fac=null;
+  if(d) transportRules().forEach(r=>{
+    if(d<String(r.from)) return;
+    if(!r.factory) gen=r; else if(factory&&sameFactory(r.factory,factory)) fac=r;
+  });
+  const r=fac||gen;
+  return r?{rate:parseFloat(r.rate)||0,from:r.from,factory:r.factory||''}:{rate:TRANSPORT_PER_TON_DEFAULT,from:'',factory:''};
+}
+// الطن بالنظام يُخزَّن بصيغة 31500 (= 31.5 طن)؛ قيمة صغيرة تعني أنها مكتوبة بالطن فعلاً
+function entryTons(e){
+  let t=parseFloat(e.qty_tons)||0;
+  if(!t) return (parseFloat(e.weight_kg)||0)/1000;
+  return t<1000?t:t/1000;
+}
+function entryTransport(e){ return Math.round(entryTons(e)*transportRateFor(e.date,e.factory).rate); }
+function sumTransport(list){ return list.reduce((s,e)=>s+entryTransport(e),0); }
+function sumTons(list){ return list.reduce((s,e)=>s+entryTons(e),0); }
+function rateLabel(list){
+  const set={}; list.forEach(e=>{ set[transportRateFor(e.date,e.factory).rate]=1; });
+  const k=Object.keys(set); return k.length===1?fmtM(k[0]):(k.length?'متعدد':'—');
+}
+function saveTransportRule(){
+  if(!isManager()){ showToast('غير مصرّح','error'); return; }
+  const fac=gv('tr_factory'), from=gv('tr_from'), rate=_qNum('tr_rate');
+  if(!from){ showToast('حدّد تاريخ بداية الأجرة','warning'); return; }
+  if(!(rate>0)){ showToast('أدخل أجرة الطن','warning'); return; }
+  const l=transportRules().filter(r=>!(r.from===from&&(r.factory||'')===(fac||'')));
+  l.push({factory:fac||'',from:from,rate:rate,at:Date.now(),by:(currentUser&&currentUser.email)||''});
+  saveTransportRules(l);
+  auditLog('أجرة نقل',(fac||'كل المعامل')+' | من '+from+' | '+fmtM(rate)+' للطن');
+  showToast('حُفظت أجرة النقل — '+(fac||'كل المعامل')+' من '+from,'success',5000);
+  renderContent();
+}
+function deleteTransportRule(fac,from){
+  if(!isManager()){ showToast('غير مصرّح','error'); return; }
+  if(!confirm('حذف أجرة النقل لـ'+(fac||'كل المعامل')+' النافذة من '+from+'؟')) return;
+  saveTransportRules(transportRules().filter(r=>!(r.from===from&&(r.factory||'')===(fac||''))));
+  auditLog('حذف أجرة نقل',(fac||'كل المعامل')+' | من '+from);
+  showToast('حُذفت القاعدة','info');
+  renderContent();
+}
+function renderTransportRulesCard(){
+  if(!isManager()) return '';
+  const entries=loadEntries();
+  const facts=allFactoryNames().filter(x=>!sameFactory(x,'الكل'));
+  const rows=transportRules().map((r,i)=>{
+    const cnt=entries.filter(e=>{const t=transportRateFor(e.date,e.factory);return t.from===r.from&&t.factory===(r.factory||'');}).length;
+    return '<tr><td class="td" style="color:#64748b">'+(i+1)+'</td>'
+      +'<td class="td" style="font-weight:900">'+esc(r.factory||'كل المعامل')+'</td>'
+      +'<td class="td" style="font-weight:900">'+esc(r.from)+'</td>'
+      +'<td class="td" style="font-weight:900;color:#b45309">'+fmtM(r.rate)+'</td>'
+      +'<td class="td" style="color:#64748b;font-size:11px">'+cnt+' سجل</td>'
+      +'<td class="td"><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="deleteTransportRule(\''+escJs(r.factory||'')+'\',\''+escJs(r.from)+'\')">حذف</button></td></tr>';
+  }).join('');
+  return '<div class="card no-print" style="margin-bottom:14px;border:2px solid #b45309;padding:0;overflow:hidden">'
+    +'<div style="padding:12px 16px;background:#92400e;font-weight:900;font-size:13px;color:#fde68a">🚚 أجور النقل (لكل طن)</div>'
+    +'<div style="padding:14px 16px">'
+    +'<p style="font-size:11px;color:#64748b;font-weight:700;line-height:1.9;margin:0 0 10px">الأجرة الافتراضية '+fmtM(TRANSPORT_PER_TON_DEFAULT)+' د.ع للطن. كل قاعدة تسري على سجلات المعمل التي تاريخها <b>من</b> ذلك اليوم فصاعداً (القديمة والجديدة) حتى قاعدة أحدث. قاعدة المعمل تتقدّم على قاعدة «كل المعامل».</p>'
+    +'<div style="overflow-x:auto;margin-bottom:12px"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">ت</th><th class="th">المعمل</th><th class="th">من تاريخ</th><th class="th">أجرة الطن</th><th class="th">سجلات تتبعها</th><th class="th">حذف</th></tr></thead>'
+    +'<tbody>'+(rows||'<tr><td colspan="6" class="td" style="padding:14px;color:#64748b">لا توجد قواعد — كل السجلات على '+fmtM(TRANSPORT_PER_TON_DEFAULT)+' للطن</td></tr>')+'</tbody></table></div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px">'
+      +'<div><label class="lbl" for="tr_factory">المعمل</label><select class="inp" id="tr_factory" style="width:190px"><option value="">كل المعامل</option>'+facts.map(f=>'<option value="'+esc(f)+'">'+esc(f)+'</option>').join('')+'</select></div>'
+      +'<div><label class="lbl" for="tr_from">من تاريخ *</label><input class="inp" id="tr_from" type="date" style="width:170px"></div>'
+      +'<div><label class="lbl" for="tr_rate">أجرة الطن *</label><input class="inp" id="tr_rate" type="text" inputmode="numeric" dir="ltr" placeholder="42000" style="width:140px;text-align:center"></div>'
+      +'<button class="btn btn-amber" style="padding:9px 20px;font-weight:900" onclick="saveTransportRule()">💾 حفظ الأجرة</button>'
+    +'</div></div></div>';
+}
 
 // خريطة أسماء الأشهر العربية/السريانية إلى أرقامها
 const ARABIC_MONTH_MAP = {
@@ -6991,7 +7070,8 @@ function viewRefineryAccount(){
     if(wt)filtered=filtered.filter(e=>e.date<=wt);
 
     const grandKg=filtered.reduce((s,e)=>s+parseFloat(e.weight_kg||0),0);
-    const grandAmount=Math.round(grandKg*REFINERY_PRICE_PER_KG);
+    const grandTons=sumTons(filtered);
+    const grandAmount=sumTransport(filtered);
     const kroobData=getKroobRefineryPayments(title, wf, wt);
     const grandReceived=Object.values(kroobData.byDate).reduce((s,v)=>s+v,0);
     const grandRemaining=grandAmount-grandReceived;
@@ -6999,25 +7079,31 @@ function viewRefineryAccount(){
     const byFactory={};
     filtered.forEach(e=>{
       const f=e.factory||'غير محدد';
-      if(!byFactory[f])byFactory[f]={cars:0,kg:0,amount:0};
+      if(!byFactory[f])byFactory[f]={cars:0,kg:0,tons:0,amount:0,list:[]};
       byFactory[f].cars++;
       byFactory[f].kg+=parseFloat(e.weight_kg||0);
-      byFactory[f].amount+=Math.round(parseFloat(e.weight_kg||0)*REFINERY_PRICE_PER_KG);
+      byFactory[f].tons+=entryTons(e);
+      byFactory[f].amount+=entryTransport(e);
+      byFactory[f].list.push(e);
     });
 
     const factRows=Object.keys(byFactory).map((f,i)=>`<tr>
       <td class="td" style="color:#64748b;font-size:14px">${i+1}</td>
       <td class="td" style="font-weight:900;font-size:14px">${esc(f)}</td>
       <td class="td" style="color:#2563eb;font-weight:900;font-size:16px">${byFactory[f].cars}</td>
+      <td class="td" style="color:#7c3aed;font-weight:900;font-size:15px">${fmt(byFactory[f].tons)}</td>
       <td class="td" style="color:#059669;font-weight:900;font-size:15px">${fmt(byFactory[f].kg)}</td>
+      <td class="td" style="color:#b45309;font-weight:900;font-size:14px">${rateLabel(byFactory[f].list)}</td>
       <td class="td" style="color:#1e3a8a;font-weight:900;font-size:15px">${fmtM(byFactory[f].amount)}</td>
     </tr>`).join('');
 
     const totalRow=`<tr style="background:#92400e;color:#fff">
       <td class="td" colspan="2" style="color:#fde68a;font-weight:900;font-size:13px">📊 الإجمالي</td>
       <td class="td" style="color:#fff;font-weight:900;font-size:20px">${filtered.length}<br><span style="font-size:11px;color:#fde68a">سيارة</span></td>
+      <td class="td" style="color:#ddd6fe;font-weight:900;font-size:18px">${fmt(grandTons)}<br><span style="font-size:11px;color:#fde68a">طن</span></td>
       <td class="td" style="color:#6ee7b7;font-weight:900;font-size:18px">${fmt(grandKg)}<br><span style="font-size:11px;color:#fde68a">كغم</span></td>
-      <td class="td" style="color:#fbbf24;font-weight:900;font-size:18px">${fmtM(grandAmount)}<br><span style="font-size:11px;color:#fde68a">المبلغ المستحق</span></td>
+      <td class="td" style="color:#fde68a;font-weight:900;font-size:14px">${rateLabel(filtered)}</td>
+      <td class="td" style="color:#fbbf24;font-weight:900;font-size:18px">${fmtM(grandAmount)}<br><span style="font-size:11px;color:#fde68a">أجور النقل</span></td>
     </tr>`;
 
     const summaryCard=`<div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap">
@@ -7039,7 +7125,7 @@ function viewRefineryAccount(){
           <span style="font-weight:900;font-size:15px;color:#fff">${title}</span>
           <div style="display:flex;gap:16px;font-size:12px;color:rgba(255,255,255,0.85)">
             <span>السيارات: <b style="color:#fff">${filtered.length}</b></span>
-            <span>المبلغ: <b style="color:#fbbf24">${fmtM(grandAmount)}</b></span>
+            <span>أجور النقل: <b style="color:#fbbf24">${fmtM(grandAmount)}</b></span>
             <span style="color:${grandRemaining>0?'#fca5a5':'#6ee7b7'}">المتبقي: <b>${fmtM(Math.abs(grandRemaining))}</b></span>
           </div>
         </div>
@@ -7049,8 +7135,10 @@ function viewRefineryAccount(){
               <th class="th" style="font-size:13px">ت</th>
               <th class="th" style="font-size:13px">المعمل</th>
               <th class="th" style="font-size:13px">السيارات</th>
+              <th class="th" style="font-size:13px">الطن</th>
               <th class="th" style="font-size:13px">الكغم</th>
-              <th class="th" style="font-size:13px">إجمالي المبلغ</th>
+              <th class="th" style="font-size:13px">أجرة الطن</th>
+              <th class="th" style="font-size:13px">أجور النقل</th>
             </tr></thead>
             <tbody>${factRows}${totalRow}</tbody>
           </table>
@@ -7063,7 +7151,7 @@ function viewRefineryAccount(){
   return`<div style="max-width:1100px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <h2 style="font-size:15px;font-weight:900;color:#92400e">🏭 حساب المصفى</h2>
-      <div style="font-size:12px;color:#64748b;font-weight:700">سعر الكغم الثابت: <span style="color:#dc2626;font-weight:900">${fmtM(REFINERY_PRICE_PER_KG)} د.ع</span></div>
+      <div style="font-size:12px;color:#64748b;font-weight:700">أجرة الطن الافتراضية: <span style="color:#dc2626;font-weight:900">${fmtM(TRANSPORT_PER_TON_DEFAULT)} د.ع</span></div>
     </div>
 
     <div class="card no-print" style="margin-bottom:14px;background:#f8fafc;padding:12px">
@@ -7079,7 +7167,7 @@ function viewRefineryAccount(){
         <button class="btn btn-blue" style="font-size:12px" onclick="generateRefineryPDF('مصفى صلاح الدين')">📄 PDF صلاح الدين</button>
       </div>
     </div>
-}
+    ${renderTransportRulesCard()}
     ${buildRefineryTable(karbalaEntries,'مصفى كربلاء','#b45309')}
     ${buildRefineryTable(sdEntries,'مصفى صلاح الدين','#1e3a8a')}
   </div>`;
@@ -7110,15 +7198,15 @@ function sendRefineryWhatsapp(){
     if(wt)list=list.filter(function(e){return e.date<=wt;});
     if(!list.length)return;
     var totalKg=list.reduce(function(s,e){return s+parseFloat(e.weight_kg||0);},0);
-    var grandAmount=Math.round(totalKg*REFINERY_PRICE_PER_KG);
+    var grandAmount=sumTransport(list);
     var kroobData=getKroobRefineryPayments(ref, wf, wt);
     var grandReceived=Object.values(kroobData.byDate).reduce(function(s,v){return s+v;},0);
     var grandRemaining=grandAmount-grandReceived;
     lines.push('');
     lines.push('🏭 *'+ref+'*');
     lines.push('🚛 السيارات: '+list.length);
-    lines.push('⚖️ الكغم: '+fmt(totalKg));
-    lines.push('💰 المبلغ المستحق: '+fmtM(grandAmount)+' د.ع');
+    lines.push('⚖️ الطن: '+fmt(sumTons(list))+' | الكغم: '+fmt(totalKg));
+    lines.push('🚚 أجور النقل: '+fmtM(grandAmount)+' د.ع');
     lines.push('✅ المستلم: '+fmtM(grandReceived)+' د.ع');
     lines.push((grandRemaining>0?'⚠️':'✅')+' المتبقي: '+fmtM(Math.abs(grandRemaining))+' د.ع '+(grandRemaining>0?'(غير مسوى)':'(مسوى)'));
     lines.push(sep);
@@ -7135,14 +7223,14 @@ function exportRefineryXLSX(){
   if(typeof XLSX==='undefined')return;
   const entries=DB.get('entries',[]);
   const receptions=DB.get('refinery_received',{});
-  const rows=[['المصفى','التاريخ','عدد السيارات','الكغم','اللتر','المبلغ المستحق','المستلم','المتبقي']];
+  const rows=[['المصفى','التاريخ','عدد السيارات','الطن','الكغم','اللتر','أجور النقل','المستلم','المتبقي']];
   ['مصفى كربلاء','مصفى صلاح الدين'].forEach(ref=>{
     const list=entries.filter(e=>e.refinery===ref);
-    const byDate={};list.forEach(e=>{const d=e.date||'?';if(!byDate[d])byDate[d]={kg:0,liters:0,cars:0};byDate[d].kg+=parseFloat(e.weight_kg||0);byDate[d].liters+=parseFloat(e.natural_liters||0);byDate[d].cars++;});
+    const byDate={};list.forEach(e=>{const d=e.date||'?';if(!byDate[d])byDate[d]={kg:0,tons:0,liters:0,cars:0,amount:0};byDate[d].kg+=parseFloat(e.weight_kg||0);byDate[d].tons+=entryTons(e);byDate[d].amount+=entryTransport(e);byDate[d].liters+=parseFloat(e.natural_liters||0);byDate[d].cars++;});
     const recByRef=receptions[ref]||{};
-    Object.keys(byDate).sort().forEach(date=>{const d=byDate[date];const amount=Math.round(d.kg*REFINERY_PRICE_PER_KG);const received=parseFloat((recByRef[date]||{}).amount||0);rows.push([ref,date,d.cars,d.kg,d.liters,amount,received,amount-received]);});
+    Object.keys(byDate).sort().forEach(date=>{const d=byDate[date];const amount=d.amount;const received=parseFloat((recByRef[date]||{}).amount||0);rows.push([ref,date,d.cars,Math.round(d.tons*1000)/1000,d.kg,d.liters,amount,received,amount-received]);});
   });
-  const ws=xlsxSheet(rows,{title:'حساب المصفى — '+today(),cars:rows.slice(1).reduce((s,r)=>s+r[2],0),sum:['عدد السيارات','الكغم','اللتر','المبلغ المستحق','المستلم','المتبقي']});
+  const ws=xlsxSheet(rows,{title:'حساب المصفى — '+today(),cars:rows.slice(1).reduce((s,r)=>s+r[2],0),sum:['عدد السيارات','الطن','الكغم','اللتر','أجور النقل','المستلم','المتبقي']});
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'حساب المصفى');xlsxSave(wb,'حساب_المصفى_'+today()+'.xlsx');
 }
 
@@ -7157,24 +7245,26 @@ function generateRefineryPDF(refineryName){
   const byFactory={};
   list.forEach(e=>{
     const f=e.factory||'غير محدد';
-    if(!byFactory[f])byFactory[f]={cars:0,kg:0,amount:0};
+    if(!byFactory[f])byFactory[f]={cars:0,kg:0,tons:0,amount:0,list:[]};
     byFactory[f].cars++;
     byFactory[f].kg+=parseFloat(e.weight_kg||0);
-    byFactory[f].amount+=Math.round(parseFloat(e.weight_kg||0)*REFINERY_PRICE_PER_KG);
+    byFactory[f].tons+=entryTons(e);
+    byFactory[f].amount+=entryTransport(e);
+    byFactory[f].list.push(e);
   });
   const kroobData=getKroobRefineryPayments(refineryName,wf,wt);
   const grandKg=list.reduce((s,e)=>s+parseFloat(e.weight_kg||0),0);
-  const grandAmount=Math.round(grandKg*REFINERY_PRICE_PER_KG);
+  const grandAmount=sumTransport(list);
   const grandReceived=Object.values(kroobData.byDate).reduce((s,v)=>s+v,0);
   const grandRemaining=grandAmount-grandReceived;
   const dataRows=Object.keys(byFactory).map((f,i)=>{
     const d=byFactory[f];
-    return`<tr><td>${i+1}</td><td>${f}</td><td>${d.cars}</td><td>${fmt(d.kg)}</td><td>${fmtM(d.amount)}</td><td>—</td><td>—</td></tr>`;
+    return`<tr><td>${i+1}</td><td>${f}</td><td>${d.cars}</td><td>${fmt(d.tons)}</td><td>${fmt(d.kg)}</td><td>${rateLabel(d.list)}</td><td>${fmtM(d.amount)}</td><td>—</td><td>—</td></tr>`;
   }).join('');
-  const totalRow=`<tr style="background:${color};color:#fff;font-weight:900"><td colspan="2">الإجمالي — ${list.length} سيارة</td><td></td><td>${fmt(grandKg)} كغم</td><td>${fmtM(grandAmount)}</td><td>${fmtM(grandReceived)}</td><td>${fmtM(Math.abs(grandRemaining))} ${grandRemaining>0?'(غير مسوى)':'(مسوى)'}</td></tr>`;
+  const totalRow=`<tr style="background:${color};color:#fff;font-weight:900"><td colspan="2">الإجمالي — ${list.length} سيارة</td><td></td><td>${fmt(sumTons(list))} طن</td><td>${fmt(grandKg)} كغم</td><td>${rateLabel(list)}</td><td>${fmtM(grandAmount)}</td><td>${fmtM(grandReceived)}</td><td>${fmtM(Math.abs(grandRemaining))} ${grandRemaining>0?'(غير مسوى)':'(مسوى)'}</td></tr>`;
   const printWin=window.open('','_blank');
   if(!printWin){showToast('يرجى السماح بفتح النوافذ المنبثقة','error');return;}
-  printWin.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>${refineryName}</title><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Cairo',sans-serif;direction:rtl;padding:20px;color:#000;}.header{text-align:center;border-bottom:3px solid ${color};padding-bottom:14px;margin-bottom:18px;}h1{font-size:20px;font-weight:900;color:${color};}p{font-size:12px;color:#333;margin-top:5px;font-weight:700;}table{width:100%;border-collapse:collapse;font-size:12px;border:2px solid #000;}th{background:#fff;color:#000;padding:9px 6px;text-align:center;font-weight:900;border:2px solid #000;}td{padding:7px 6px;text-align:center;border:2px solid #000;color:#000;font-weight:700;}@media print{body{padding:10px;}}</style></head><body><div class="header"><h1>🏭 ${refineryName}</h1><p>الفترة: ${periodLabel} | عدد السيارات: ${list.length} | ${new Date().toLocaleString('ar-IQ')}</p></div><table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الكغم</th><th>المبلغ المستحق</th><th>المستلم</th><th>المتبقي</th></tr></thead><tbody>${dataRows}${totalRow}</tbody></table><script>window.onload=()=>{window.print();};<\/script></body></html>`);
+  printWin.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>${refineryName}</title><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Cairo',sans-serif;direction:rtl;padding:20px;color:#000;}.header{text-align:center;border-bottom:3px solid ${color};padding-bottom:14px;margin-bottom:18px;}h1{font-size:20px;font-weight:900;color:${color};}p{font-size:12px;color:#333;margin-top:5px;font-weight:700;}table{width:100%;border-collapse:collapse;font-size:12px;border:2px solid #000;}th{background:#fff;color:#000;padding:9px 6px;text-align:center;font-weight:900;border:2px solid #000;}td{padding:7px 6px;text-align:center;border:2px solid #000;color:#000;font-weight:700;}@media print{body{padding:10px;}}</style></head><body><div class="header"><h1>🏭 ${refineryName}</h1><p>الفترة: ${periodLabel} | عدد السيارات: ${list.length} | ${new Date().toLocaleString('ar-IQ')}</p></div><table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الطن</th><th>الكغم</th><th>أجرة الطن</th><th>أجور النقل</th><th>المستلم</th><th>المتبقي</th></tr></thead><tbody>${dataRows}${totalRow}</tbody></table><script>window.onload=()=>{window.print();};<\/script></body></html>`);
   printWin.document.close();
 }
 
@@ -7559,7 +7649,7 @@ const BACKUP_KEYS=['entries','sales','expenses','expense_entities','expense_enti
   'salaf','salaf_settlement_cfg','private_salaf','deleted_private_salaf_ids',
   'kroob','kroob_opening','kroob_month_openings','kroob_op_types',
   'rafid_accounts','rafid_opening','refinery_received',
-  'drivers','factories','factory_quotas','quota_history','pricing_rules','sale_rates','users','audit_log','notifs',
+  'drivers','factories','factory_quotas','quota_history','pricing_rules','transport_rules','sale_rates','users','audit_log','notifs',
   'entries_cleaned','expenses_haidar_migrated','expenses_settlement_cleaned',
   'haider_salaf_migrated','kroob_cleared','rafid_cleared','statement_perms_migrated'];
 const BACKUP_KEEP=30;                       // عدد النسخ المحفوظة بالمجلّد
@@ -8383,6 +8473,7 @@ document.addEventListener('fb-ready', function(){
   // قواعد تسعير المشتريات يحتاجها كل مستخدم — المحاسب لا يُشغّل syncFromCloud فتُقرأ وحدها هنا
   FDB.getAll('settings').then(function(list){
     if(list){ const prl=list.find(function(x){return x&&x.id==='pricing_rules';}); if(prl&&Array.isArray(prl.list)) DB.set('pricing_rules',prl.list);
+      const trl=list.find(function(x){return x&&x.id==='transport_rules';}); if(trl&&Array.isArray(trl.list)) DB.set('transport_rules',trl.list);
       const srt=list.find(function(x){return x&&x.id==='sale_rates';}); if(srt&&srt.map&&typeof srt.map==='object') DB.set('sale_rates',srt.map); }
     seedPricingRule();
     try{ if(currentUser&&typeof renderContent==='function') renderContent(); }catch(e){}

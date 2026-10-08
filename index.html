@@ -3681,17 +3681,25 @@ function resetImport(){importedRows=[];importHasVoucherCol=false;const p=el('imp
 // ===== نظام السلف =====
 const SALAF_PERSONS=['سيد حيدر','محمد خالد','سيد رافد','فايق رويمي'];
 
+// المبلغ يُعتبر سلفة فقط إذا ذُكرت كلمة «سلف/سلفه/سلفة» في البيان، وإلا فهو صرف نقدي لا يدخل في السلف
+function isSalafEntryFor(e,names){
+  const desc=e.description||'',recv=e.receiver||'';
+  if(!/سلف/.test(desc))return false;
+  if((e.type_dinar||'مدين').trim()!=='مدين')return false;
+  return names.some(n=>desc.includes(n)||recv.includes(n));
+}
+const HAIDAR_SALAF_NAMES=['حيدر صبري','سيد حيدر'],MOHAMMED_SALAF_NAMES=['محمد خالد'];
 function getHaidarKroobSalaf(){
-  return DB.get('kroob',[]).filter(e=>(e.description||'').includes('حيدر صبري')&&/سلف[هة]/.test(e.description||'')&&(e.type_dinar||'مدين').trim()==='مدين');
+  return DB.get('kroob',[]).filter(e=>isSalafEntryFor(e,HAIDAR_SALAF_NAMES));
 }
 function getHaidarRafidSalaf(){
-  return DB.get('rafid_accounts',[]).filter(e=>(e.description||'').includes('حيدر صبري')&&/سلف[هة]/.test(e.description||'')&&(e.type_dinar||'مدين').trim()==='مدين');
+  return DB.get('rafid_accounts',[]).filter(e=>isSalafEntryFor(e,HAIDAR_SALAF_NAMES));
 }
 function getMohammedKroobSalaf(){
-  return DB.get('kroob',[]).filter(e=>e.date&&(e.receiver||'').trim()==='محمد خالد'&&(e.type_dinar||'مدين').trim()==='مدين');
+  return DB.get('kroob',[]).filter(e=>e.date&&isSalafEntryFor(e,MOHAMMED_SALAF_NAMES));
 }
 function getMohammedRafidSalaf(){
-  return DB.get('rafid_accounts',[]).filter(e=>(e.receiver||'').trim()==='محمد خالد'&&(e.type_dinar||'مدين').trim()==='مدين');
+  return DB.get('rafid_accounts',[]).filter(e=>isSalafEntryFor(e,MOHAMMED_SALAF_NAMES));
 }
 function isHaiderPersonName(p){return samePerson(p,'حيدر صبري');}
 function getHaiderManualSalaf(){return DB.get('salaf',[]).filter(s=>isHaiderPersonName(s.person));}

@@ -4941,16 +4941,7 @@ function viewSalafSettlement(){
   const cfg=getSalafSettlementConfig();
   const bc=v=>v>0?'#dc2626':v<0?'#059669':'#475569';
 
-  // مصاريف الشهر التي لا تدخل تسوية أي من الشخصين — تُعرض هنا بدل أن تختفي بصمت
-  const _unmatched=DB.get('expenses',[]).filter(e=>expDateMatchesMonth(e.date,month)&&!samePerson(e.person,cfg.haidar.personName)&&!samePerson(e.person,cfg.mohammed.personName)&&!samePerson(e.person,cfg.yaser.personName));
-  const _namedUnmatched=_unmatched.filter(e=>(e.person||'').trim());
-  const _noPerson=_unmatched.filter(e=>!(e.person||'').trim());
-  const _uRow=e=>`<tr><td class="td">${e.date||''}</td><td class="td" style="font-size:11px;color:#7f1d1d;font-weight:900">${esc(e.factory||'')}</td><td class="td" style="text-align:right;font-size:11px">${esc(e.details||'')}</td><td class="td" style="font-size:10px">${(e.person||'').trim()?`<span style="background:#fee2e2;color:#991b1b;border-radius:4px;padding:1px 6px;font-weight:700">${esc(e.person)}</span>`:'<span style="color:#94a3b8">— بلا شخص</span>'}</td><td class="td" style="color:#ca8a04;font-weight:900">${e.amount_dinar?fmtM(e.amount_dinar):''}</td><td class="td" style="color:#0f172a;font-weight:900">${e.amount_dollar?fmtM(e.amount_dollar):''}</td>${canEdit('expenses')?`<td class="td" style="white-space:nowrap"><button class="btn" style="background:#dc2626;color:#fff;font-size:10px;padding:4px 8px;margin-left:4px" onclick="assignExpensePerson('${escJs(e.id)}','${escJs(cfg.haidar.personName||'حيدر صبري')}')">↩ ${esc(cfg.haidar.personName||'حيدر صبري')}</button><button class="btn" style="background:#2563eb;color:#fff;font-size:10px;padding:4px 8px" onclick="assignExpensePerson('${escJs(e.id)}','${escJs(cfg.mohammed.personName||'محمد خالد')}')">↩ ${esc(cfg.mohammed.personName||'محمد خالد')}</button><button class="btn" style="background:#be185d;color:#fff;font-size:10px;padding:4px 8px;margin-right:4px" onclick="assignExpensePerson('${escJs(e.id)}','${escJs(cfg.yaser.personName||'ياسر جبر')}')">↩ ${esc(cfg.yaser.personName||'ياسر جبر')}</button></td>`:''}</tr>`;
-  const unmatchedPanel=_unmatched.length?`<details class="card" style="margin-bottom:16px;border-right:5px solid #f59e0b"${_namedUnmatched.length?' open':''}>
-    <summary style="cursor:pointer;user-select:none;font-size:13px;font-weight:900;color:#92400e">🔎 مصاريف ${monthLabel} غير داخلة بالتسوية — ${_unmatched.length} سجل${_namedUnmatched.length?` <span style="color:#b91c1c">(منها ${_namedUnmatched.length} باسم شخص لا يطابق الأسماء أعلاه)</span>`:''}</summary>
-    <p style="font-size:11px;color:#64748b;margin:8px 0 6px">أي سجل هنا يخصّ حيدر أو محمد أو ياسر — اضغط زر الإسناد ليدخل التسوية فوراً.</p>
-    <div style="overflow-x:auto;max-height:300px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;min-width:680px"><thead style="position:sticky;top:0"><tr><th class="th" style="background:#92400e">التاريخ</th><th class="th" style="background:#92400e">الجهة</th><th class="th" style="background:#92400e">التفاصيل</th><th class="th" style="background:#92400e">الشخص</th><th class="th" style="background:#b45309">دينار</th><th class="th" style="background:#b45309">دولار</th>${canEdit('expenses')?'<th class="th" style="background:#92400e">إسناد</th>':''}</tr></thead><tbody>${_namedUnmatched.concat(_noPerson).map(_uRow).join('')}</tbody></table></div>
-  </details>`:'';
+  // الصفحة تخص أصحاب السلف فقط؛ مصاريف الصرف المباشر (أسماء أخرى/بلا شخص) تبقى في صفحة المصاريف
 
   const buildCard=(label,color,person,pcfg)=>{
     const personName=pcfg.personName||'';
@@ -5021,7 +5012,6 @@ function viewSalafSettlement(){
     <span style="font-size:14px;font-weight:900;color:#92400e">📊 تسوية السلف — ${monthLabel}</span>
     <button onclick="S.salafSettlementMonth=today().slice(0,7);renderContent()" class="btn btn-amber" style="font-size:11px;padding:5px 12px;margin-right:auto">الشهر الحالي</button>
   </div>
-  ${unmatchedPanel}
   ${buildCard('حيدر صبري','#dc2626','haidar',cfg.haidar)}
   ${buildCard('محمد خالد','#2563eb','mohammed',cfg.mohammed)}
   ${month>=YASER_START.slice(0,7)?buildCard('ياسر جبر','#be185d','yaser',cfg.yaser):''}

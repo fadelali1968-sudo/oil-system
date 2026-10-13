@@ -717,6 +717,56 @@ async function printSelectedScans(kind){
   printScanImages(imgs, 'طباعة البوجرات ('+imgs.length+')');
 }
 
+// ===== تصدير بوجرات المبيعات PDF (A4 عمودي — بوجر واحد بكل صفحة، صورة فقط) =====
+// السجلات: المحددة بالمربعات إن وُجدت، وإلا كل المعروض بالفلتر الحالي
+function askExportSaleScansPdf(){
+  const sel=_scanSel.sales.size;
+  const base=sel?getFilteredSaleList().filter(e=>_scanSel.sales.has(e.id)):getFilteredSaleList();
+  const nL=base.filter(e=>e.has_load_scan).length,nU=base.filter(e=>e.has_unload_scan).length;
+  if(!nL&&!nU){showToast(sel?'السجلات المحددة ليس فيها بوجرات':'السجلات المعروضة ليس فيها بوجرات','error',4000);return;}
+  const old=document.getElementById('scanPdfModal');if(old)old.remove();
+  const m=document.createElement('div');m.id='scanPdfModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  const b=(k,label,n)=>`<button class="btn ${n?'btn-blue':'btn-gray'}" ${n?'':'disabled'} style="width:100%;padding:12px;font-size:13px;margin-bottom:8px" onclick="document.getElementById('scanPdfModal').remove();exportSaleScansPdf('${k}')">${label} <span class="badge" style="background:#fff;color:#1e3a8a">${n}</span></button>`;
+  m.innerHTML=`<div class="card" style="max-width:380px;width:100%;padding:18px"><h3 style="font-size:14px;font-weight:900;color:#1e3a8a;margin-bottom:6px">📄 تصدير بوجرات PDF</h3><div style="font-size:11px;color:#64748b;margin-bottom:14px">${sel?'السجلات المحددة: '+base.length:'السجلات المعروضة بالفلتر الحالي: '+base.length} — ${esc(S.selectedFactory)}</div>${b('load','🚚 بوجرات التحميل',nL)}${b('unload','📥 بوجرات التفريغ',nU)}${b('both','🚚📥 التحميل والتفريغ معاً',nL+nU)}<button class="btn btn-gray" style="width:100%;padding:10px;font-size:12px" onclick="document.getElementById('scanPdfModal').remove()">إلغاء</button></div>`;
+  m.addEventListener('click',ev=>{if(ev.target===m)m.remove();});
+  document.body.appendChild(m);
+}
+async function getJsPDF(){
+  if(window.jspdf&&window.jspdf.jsPDF)return window.jspdf.jsPDF;
+  if(window.jsPDF)return window.jsPDF;
+  if(typeof html2pdf!=='undefined'){const pdf=await html2pdf().from(document.createElement('div')).toPdf().get('pdf');return pdf.constructor;}
+  return null;
+}
+function imgSize(src){return new Promise(r=>{const i=new Image();i.onload=()=>r({w:i.naturalWidth,h:i.naturalHeight});i.onerror=()=>r(null);i.src=src;});}
+async function exportSaleScansPdf(kind){
+  const sel=_scanSel.sales.size;
+  const list=(sel?getFilteredSaleList().filter(e=>_scanSel.sales.has(e.id)):getFilteredSaleList()).slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const fields=kind==='load'?['img_load']:kind==='unload'?['img_unload']:['img_load','img_unload'];
+  const jobs=[];list.forEach(e=>fields.forEach(f=>{if(f==='img_load'?e.has_load_scan:e.has_unload_scan)jobs.push([e.id,f]);}));
+  if(!jobs.length){showToast('لا توجد بوجرات للتصدير','error');return;}
+  const JsPDF=await getJsPDF();
+  if(!JsPDF){showToast('⚠️ مكتبة PDF غير محملة، أعد تحميل الصفحة','warning');return;}
+  const doc=new JsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+  const PW=210,PH=297,M=8;let pages=0,failed=0;
+  for(let i=0;i<jobs.length;i++){
+    if(i%5===0)showToast('جاري تجهيز البوجرات '+(i+1)+' / '+jobs.length+' ...','info',2500);
+    try{
+      const src=await fetchSaleScan(jobs[i][0],jobs[i][1]);
+      const sz=await imgSize(src);if(!sz||!sz.w)throw new Error('صورة غير صالحة');
+      const sc=Math.min((PW-2*M)/sz.w,(PH-2*M)/sz.h),w=sz.w*sc,h=sz.h*sc;
+      if(pages)doc.addPage();
+      doc.addImage(src,/^data:image\/png/i.test(src)?'PNG':'JPEG',(PW-w)/2,(PH-h)/2,w,h);
+      pages++;
+    }catch(err){failed++;console.warn('scan pdf failed for',jobs[i],err);}
+  }
+  if(!pages){showToast('تعذّر تحميل أي بوجر','error');return;}
+  const kl=kind==='load'?'التحميل':kind==='unload'?'التفريغ':'التحميل والتفريغ';
+  const ds=list.map(e=>e.date).filter(Boolean),range=ds.length?(ds[0]===ds[ds.length-1]?ds[0]:ds[0]+' الى '+ds[ds.length-1]):today();
+  doc.save(('بوجرات '+kl+' - '+S.selectedFactory+' - '+range+'.pdf').replace(/[\/:*?"<>|]/g,'-'));
+  showToast('✅ تم تصدير '+pages+' بوجر'+(failed?' — تعذّر '+failed:''),failed?'warning':'success',5000);
+}
+
 async function syncFromCloud(silent=false) {
   try {
     const [entries,sales,drivers,salaf] = await Promise.all([FDB.getAll('entries'),FDB.getAll('sales'),FDB.getAll('drivers'),FDB.getAll('salaf')]);
@@ -2876,14 +2926,19 @@ function editEntry(id){const e=DB.get('entries',[]);S.editEntry=e.find(x=>x.id==
 function deleteEntry(id){if(!confirm('حذف هذا السجل؟'))return;const entry=DB.get('entries',[]).find(x=>x.id===id);auditLog('حذف مشتريات',`بوجر: ${entry?.voucher_no||id} | ${entry?.factory||''}`);let e=DB.get('entries',[]);DB.set('entries',e.filter(x=>x.id!==id));FDB.delete('entries',id);renderContent();}
 
 // ===== سجل المبيعات =====
-function viewSaleTable(){
-  const sf=S.selectedFactory,isM=isManager();
+// سجلات المبيعات كما تظهر بالجدول (المعمل + البحث + النوع + الفترة)
+function getFilteredSaleList(){
   let list=getSaleList();
   const sSearch=(S.sSearch||'').toLowerCase(),sTypeFilter=S.sTypeFilter||'',sDateFrom=S.sDateFrom||'',sDateTo=S.sDateTo||'';
   if(sSearch)list=list.filter(e=>matchSearch(e,sSearch,S_SEARCH_FIELDS));
   if(sTypeFilter)list=list.filter(e=>e.product_type===sTypeFilter);
   if(sDateFrom)list=list.filter(e=>e.date>=sDateFrom);
   if(sDateTo)list=list.filter(e=>e.date<=sDateTo);
+  return list;
+}
+function viewSaleTable(){
+  const sf=S.selectedFactory,isM=isManager();
+  const list=getFilteredSaleList();
   const totKaban=list.reduce((s,e)=>s+parseFloat(e.kaban||0),0);
   const totLoad=list.reduce((s,e)=>s+(parseFloat(e.load_qty)||0),0);
   const pendingCnt=list.filter(e=>!(parseFloat(e.kaban)||0)).length;
@@ -2920,6 +2975,7 @@ function viewSaleTable(){
       <span style="font-weight:900;font-size:14px;color:#6d28d9">سجل بيانات المبيعات — ${sf} <span class="badge" style="background:#f5f3ff;color:#7c3aed">${list.length} سجل</span> <span class="badge" style="background:#f5f3ff;color:#7c3aed">التحميل: ${fmtKaban(totLoad)}</span> <span class="badge" style="background:#f5f3ff;color:#7c3aed">التفريغ (الكبان): ${fmtKaban(totKaban)}</span> <span class="badge" style="background:${totShort<0?'#fef2f2;color:#dc2626':'#ecfdf5;color:#059669'}">النقص: ${fmtKaban(totShort)}</span> <span class="badge" style="background:#eff6ff;color:#1e3a8a">كراوي السواق: ${fmtM(list.reduce((s,e)=>s+saleFare(e),0))}</span>${pendingCnt?` <span class="badge" style="background:#fffbeb;color:#b45309">⏳ بانتظار التفريغ: ${pendingCnt}</span>`:''}</span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-blue no-print" style="font-size:11px;padding:7px 12px" onclick="printSelectedScans('sales')" title="طباعة بوجرات التحميل والتفريغ للسجلات المحددة — كل بوجر بصفحة">🖨️ طباعة البوجرات (<span id="cnt_scans_sales">${_scanSel.sales.size}</span>)</button>
+        <button class="btn btn-red no-print" style="font-size:11px;padding:7px 12px" onclick="askExportSaleScansPdf()" title="ملف PDF لبوجرات السجلات المعروضة بالفلتر الحالي (أو المحددة بالمربعات إن وُجدت) — كل بوجر بصفحة">📄 بوجرات PDF</button>
         <button class="btn btn-gray no-print" style="font-size:11px;padding:7px 12px" onclick="clearScanSel('sales')" title="إلغاء تحديد السجلات">✕ إلغاء التحديد</button>
         ${canEdit('sales')?`<button class="btn btn-red no-print" style="font-size:11px;padding:7px 12px" onclick="deleteSelectedSales()" title="حذف كل السجلات المحددة">🗑️ حذف المحدد (<span id="cnt_del_sales">${_scanSel.sales.size}</span>)</button>`:''}
         <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="bulkScanOpen('sales')" title="رفع ملف PDF يحوي عدة بوجرات وتوزيع كل صفحة على سجلها (تحميل/تفريغ)">📚 توزيع بوجرات من ملف</button>

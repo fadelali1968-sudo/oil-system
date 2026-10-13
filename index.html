@@ -627,9 +627,10 @@ async function saveSaleScan(file, saleId, field) {
   return dataUrl;
 }
 const _saleScanCache = {};
-async function fetchSaleScan(saleId, field) {
+// fresh=true: يتجاوز الذاكرة المؤقتة ويجلب من السحابة (للتصدير والطباعة — حتى لا يخرج بوجر قديم استُبدل من جهاز/نافذة أخرى)
+async function fetchSaleScan(saleId, field, fresh) {
   const cacheKey = saleId + '_' + field;
-  if (_saleScanCache[cacheKey]) return _saleScanCache[cacheKey];
+  if (!fresh && _saleScanCache[cacheKey]) return _saleScanCache[cacheKey];
   if (!window._fbReady) throw new Error('Firebase غير جاهز');
   const {db, doc, getDoc} = window._fb;
   const snap = await getDoc(doc(db, 'sale_scans', saleId));
@@ -709,8 +710,8 @@ async function printSelectedScans(kind){
     try{
       if(kind==='purchases'){ imgs.push(await fetchVoucherScan(e.id)); }
       else{
-        if(e.has_load_scan) imgs.push(await fetchSaleScan(e.id,'img_load'));
-        if(e.has_unload_scan) imgs.push(await fetchSaleScan(e.id,'img_unload'));
+        if(e.has_load_scan) imgs.push(await fetchSaleScan(e.id,'img_load',true));
+        if(e.has_unload_scan) imgs.push(await fetchSaleScan(e.id,'img_unload',true));
       }
     }catch(err){ failed++; console.warn('scan fetch failed for', e.id, err); }
   }
@@ -760,7 +761,7 @@ async function exportSaleScansPdf(kind){
   for(let i=0;i<jobs.length;i++){
     scanPdfProgress('📄 جاري تجهيز البوجرات '+(i+1)+' / '+jobs.length+' ...');
     try{
-      const src=await fetchSaleScan(jobs[i][0],jobs[i][1]);
+      const src=await fetchSaleScan(jobs[i][0],jobs[i][1],true);
       const sz=await imgSize(src);if(!sz||!sz.w)throw new Error('صورة غير صالحة');
       const sc=Math.min((PW-2*M)/sz.w,(PH-2*M)/sz.h),w=sz.w*sc,h=sz.h*sc;
       if(pages)doc.addPage();

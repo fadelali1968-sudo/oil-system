@@ -540,6 +540,7 @@ async function compressFileToBase64(file, maxDim=1400, startQuality=0.6, maxLen=
 async function saveVoucherScan(file, entryId) {
   const dataUrl = await compressFileToBase64(file);
   await FDB.save('voucher_scans', entryId, {img: dataUrl});
+  _scanCache[entryId] = dataUrl;  // تحديث الذاكرة المؤقتة وإلا يبقى البوجر القديم معروضاً بعد الاستبدال
   return dataUrl;
 }
 const _scanCache = {};
@@ -622,6 +623,7 @@ async function saveSaleScan(file, saleId, field) {
   } catch(e) {}
   existing[field] = dataUrl;
   await FDB.save('sale_scans', saleId, existing);
+  _saleScanCache[saleId + '_' + field] = dataUrl;  // تحديث الذاكرة المؤقتة وإلا يبقى البوجر القديم معروضاً بعد الاستبدال
   return dataUrl;
 }
 const _saleScanCache = {};

@@ -732,11 +732,18 @@ function askExportSaleScansPdf(){
   m.addEventListener('click',ev=>{if(ev.target===m)m.remove();});
   document.body.appendChild(m);
 }
-async function getJsPDF(){
-  if(window.jspdf&&window.jspdf.jsPDF)return window.jspdf.jsPDF;
-  if(window.jsPDF)return window.jsPDF;
-  if(typeof html2pdf!=='undefined'){const pdf=await html2pdf().from(document.createElement('div')).toPdf().get('pdf');return pdf.constructor;}
-  return null;
+// مستند PDF فارغ (A4 عمودي بصفحة أولى فارغة) — jsPDF غير مكشوف عالمياً فيُؤخذ من مكتبة html2pdf
+async function newA4PdfDoc(){
+  if(window.jspdf&&window.jspdf.jsPDF)return new window.jspdf.jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+  if(typeof html2pdf==='undefined')return null;
+  return html2pdf().set({margin:0,jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}}).from(document.createElement('div')).toPdf().get('pdf');
+}
+// شريط تقدّم واحد يتحدّث بمكانه بدل تكديس الرسائل
+function scanPdfProgress(txt){
+  let el=document.getElementById('scanPdfProgress');
+  if(!txt){if(el)el.remove();return;}
+  if(!el){el=document.createElement('div');el.id='scanPdfProgress';el.style.cssText='position:fixed;top:20px;left:20px;z-index:10000;background:#1e3a8a;color:#fff;font-weight:900;font-size:13px;padding:12px 18px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.3)';document.body.appendChild(el);}
+  el.textContent=txt;
 }
 function imgSize(src){return new Promise(r=>{const i=new Image();i.onload=()=>r({w:i.naturalWidth,h:i.naturalHeight});i.onerror=()=>r(null);i.src=src;});}
 async function exportSaleScansPdf(kind){
@@ -745,12 +752,11 @@ async function exportSaleScansPdf(kind){
   const fields=kind==='load'?['img_load']:kind==='unload'?['img_unload']:['img_load','img_unload'];
   const jobs=[];list.forEach(e=>fields.forEach(f=>{if(f==='img_load'?e.has_load_scan:e.has_unload_scan)jobs.push([e.id,f]);}));
   if(!jobs.length){showToast('لا توجد بوجرات للتصدير','error');return;}
-  const JsPDF=await getJsPDF();
-  if(!JsPDF){showToast('⚠️ مكتبة PDF غير محملة، أعد تحميل الصفحة','warning');return;}
-  const doc=new JsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+  const doc=await newA4PdfDoc();
+  if(!doc){showToast('⚠️ مكتبة PDF غير محملة، أعد تحميل الصفحة','warning');return;}
   const PW=210,PH=297,M=8;let pages=0,failed=0;
   for(let i=0;i<jobs.length;i++){
-    if(i%5===0)showToast('جاري تجهيز البوجرات '+(i+1)+' / '+jobs.length+' ...','info',2500);
+    scanPdfProgress('📄 جاري تجهيز البوجرات '+(i+1)+' / '+jobs.length+' ...');
     try{
       const src=await fetchSaleScan(jobs[i][0],jobs[i][1]);
       const sz=await imgSize(src);if(!sz||!sz.w)throw new Error('صورة غير صالحة');
@@ -760,6 +766,7 @@ async function exportSaleScansPdf(kind){
       pages++;
     }catch(err){failed++;console.warn('scan pdf failed for',jobs[i],err);}
   }
+  scanPdfProgress('');
   if(!pages){showToast('تعذّر تحميل أي بوجر','error');return;}
   const kl=kind==='load'?'التحميل':kind==='unload'?'التفريغ':'التحميل والتفريغ';
   const ds=list.map(e=>e.date).filter(Boolean),range=ds.length?(ds[0]===ds[ds.length-1]?ds[0]:ds[0]+' الى '+ds[ds.length-1]):today();

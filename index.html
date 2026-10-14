@@ -544,8 +544,9 @@ async function saveVoucherScan(file, entryId) {
   return dataUrl;
 }
 const _scanCache = {};
-async function fetchVoucherScan(entryId) {
-  if (_scanCache[entryId]) return _scanCache[entryId];
+// fresh=true: يتجاوز الذاكرة المؤقتة ويجلب من السحابة (للتصدير والطباعة)
+async function fetchVoucherScan(entryId, fresh) {
+  if (!fresh && _scanCache[entryId]) return _scanCache[entryId];
   if (!window._fbReady) throw new Error('Firebase غير جاهز');
   const {db, doc, getDoc} = window._fb;
   const snap = await getDoc(doc(db, 'voucher_scans', entryId));
@@ -708,7 +709,7 @@ async function printSelectedScans(kind){
   const imgs=[]; let failed=0;
   for(const e of chosen){
     try{
-      if(kind==='purchases'){ imgs.push(await fetchVoucherScan(e.id)); }
+      if(kind==='purchases'){ imgs.push(await fetchVoucherScan(e.id,true)); }
       else{
         if(e.has_load_scan) imgs.push(await fetchSaleScan(e.id,'img_load',true));
         if(e.has_unload_scan) imgs.push(await fetchSaleScan(e.id,'img_unload',true));
@@ -774,6 +775,32 @@ async function exportSaleScansPdf(kind){
   const kl=kind==='load'?'التحميل':kind==='unload'?'التفريغ':'التحميل والتفريغ';
   const ds=list.map(e=>e.date).filter(Boolean),range=ds.length?(ds[0]===ds[ds.length-1]?ds[0]:ds[0]+' الى '+ds[ds.length-1]):today();
   doc.save(('بوجرات '+kl+' - '+S.selectedFactory+' - '+range+'.pdf').replace(/[\/:*?"<>|]/g,'-'));
+  showToast('✅ تم تصدير '+pages+' بوجر'+(failed?' — تعذّر '+failed:''),failed?'warning':'success',5000);
+}
+// ===== تصدير بوجرات المشتريات PDF (A4 عمودي — بوجر واحد بكل صفحة، صورة فقط) =====
+// السجلات: المحددة بالمربعات إن وُجدت، وإلا كل المعروض بالفلتر الحالي — مرتبة بالتاريخ تصاعدياً
+async function exportPurchaseScansPdf(){
+  const sel=_scanSel.purchases.size;
+  const list=(sel?getFilteredList().filter(e=>_scanSel.purchases.has(e.id)):getFilteredList()).filter(e=>e.has_scan).slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if(!list.length){showToast(sel?'السجلات المحددة ليس فيها بوجرات':'السجلات المعروضة ليس فيها بوجرات','error',4000);return;}
+  const doc=await newA4PdfDoc();
+  if(!doc){showToast('⚠️ مكتبة PDF غير محملة، أعد تحميل الصفحة','warning');return;}
+  const PW=210,PH=297,M=8;let pages=0,failed=0;
+  for(let i=0;i<list.length;i++){
+    scanPdfProgress('📄 جاري تجهيز البوجرات '+(i+1)+' / '+list.length+' ...');
+    try{
+      const src=await fetchVoucherScan(list[i].id,true);
+      const sz=await imgSize(src);if(!sz||!sz.w)throw new Error('صورة غير صالحة');
+      const sc=Math.min((PW-2*M)/sz.w,(PH-2*M)/sz.h),w=sz.w*sc,h=sz.h*sc;
+      if(pages)doc.addPage();
+      doc.addImage(src,/^data:image\/png/i.test(src)?'PNG':'JPEG',(PW-w)/2,(PH-h)/2,w,h);
+      pages++;
+    }catch(err){failed++;console.warn('scan pdf failed for',list[i].id,err);}
+  }
+  scanPdfProgress('');
+  if(!pages){showToast('تعذّر تحميل أي بوجر','error');return;}
+  const ds=list.map(e=>e.date).filter(Boolean),range=ds.length?(ds[0]===ds[ds.length-1]?ds[0]:ds[0]+' الى '+ds[ds.length-1]):today();
+  doc.save(('بوجرات المشتريات - '+S.selectedFactory+' - '+range+'.pdf').replace(/[\/:*?"<>|]/g,'-'));
   showToast('✅ تم تصدير '+pages+' بوجر'+(failed?' — تعذّر '+failed:''),failed?'warning':'success',5000);
 }
 
@@ -2869,8 +2896,7 @@ async function bulkSave(){
   renderContent();
 }
 // ===== سجل المشتريات =====
-function viewTable(){
-  const sf=S.selectedFactory,isM=isManager();
+function getFilteredList(){
   let list=getList();
   const pSearch=(S.pSearch||'').toLowerCase(),pRefinery=S.pRefinery||'',pType=S.pType||'',pDateFrom=S.pDateFrom||'',pDateTo=S.pDateTo||'';
   if(pSearch)list=list.filter(e=>matchSearch(e,pSearch,P_SEARCH_FIELDS));
@@ -2878,6 +2904,11 @@ function viewTable(){
   if(pType)list=list.filter(e=>e.product_type===pType);
   if(pDateFrom)list=list.filter(e=>e.date>=pDateFrom);
   if(pDateTo)list=list.filter(e=>e.date<=pDateTo);
+  return list;
+}
+function viewTable(){
+  const sf=S.selectedFactory,isM=isManager();
+  let list=getFilteredList();
   const canEditRow=e=>canEdit('purchases')||e.accountant===currentUser?.email;
   const showActionCol=canEdit('purchases')||list.some(canEditRow);
   const rows=list.map((e,i)=>`<tr>
@@ -2898,6 +2929,7 @@ function viewTable(){
         <button class="btn btn-blue no-print" style="font-size:11px;padding:7px 12px" onclick="printSelectedScans('purchases')" title="طباعة صور البوجرات المحددة — A4 عمودي، بوجر بكل صفحة">🖨️ طباعة البوجرات (<span id="cnt_scans_purchases">${_scanSel.purchases.size}</span>)</button>
         <button class="btn btn-gray no-print" style="font-size:11px;padding:7px 12px" onclick="clearScanSel('purchases')" title="إلغاء تحديد البوجرات">✕ إلغاء التحديد</button>
         <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="bulkScanOpen('purchases')" title="رفع ملف PDF يحوي عدة بوجرات وتوزيع كل صفحة على سجلها">📚 توزيع بوجرات من ملف</button>
+        <button class="btn btn-red no-print" style="font-size:11px;padding:7px 12px" onclick="exportPurchaseScansPdf()" title="ملف PDF لبوجرات السجلات المعروضة بالفلتر الحالي (أو المحددة بالمربعات إن وُجدت) — كل بوجر بصفحة">📄 بوجرات PDF</button>
         <button class="btn btn-green no-print" style="font-size:11px;padding:7px 12px" onclick="exportXLSX('purchases')">📊 Excel</button>
         <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="window.print()">🖨️</button>
         <button class="btn btn-red no-print" style="font-size:11px;padding:7px 12px" onclick="generatePDF('purchases')">📄 PDF</button>

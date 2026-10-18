@@ -956,7 +956,7 @@ setInterval(()=>{ if(currentUser) _checkIntegrity(); }, 30000);
 let S = {
   view:'dashboard', selectedFactory:'الكل', filterFrom:'', filterTo:'',
   quotaNewIdx:-1,
-  editEntry:null, editSale:null, wFrom:'', wTo:'',
+  editEntry:null, editSale:null, wFrom:'', wTo:'', wsFrom:null, wsTo:null,
   pSearch:'', pRefinery:'', pType:'', pDateFrom:'', pDateTo:'',
   sSearch:'', sTypeFilter:'', sDateFrom:'', sDateTo:'',
   salafEditId:'', salafPersonFilter:'', salafMonthFilter:'', salafHaiderTab:'kroob', salafKhaledTab:'kroob', salafSettlementMonth:'',
@@ -1497,11 +1497,19 @@ function ovCopy(txt){
   document.body.removeChild(t);
 }
 
+// فترة مبيعات الموقف الإجمالي مستقلة عن فترة المشتريات (S.wFrom/S.wTo)؛ أول فتح تأخذ فترة المشتريات
+function ovSalesRange(){if(S.wsFrom===null||S.wsFrom===undefined){S.wsFrom=S.wFrom||'';S.wsTo=S.wTo||'';}return [S.wsFrom,S.wsTo];}
+// k='p' المشتريات، 's' المبيعات
+function ovSetRange(k,a,b){if(k==='s'){ovSalesRange();S.wsFrom=a;S.wsTo=b;}else{S.wFrom=a;S.wTo=b;}renderContent();}
+function ovSetPreset(k,p){
+  const t=today(),r=p==='today'?[t,t]:p==='week'?ovWeekRange():p==='month'?ovMonthRange():p==='quota'?[(getQuotaStatus(S.selectedFactory)||{}).start||'',t]:['',''];
+  ovSetRange(k,r[0],r[1]);
+}
 function viewWhatsapp() {
-  const wf=S.wFrom,wt=S.wTo;
-  const analysis=getAnalysis(wf,wt),saleAn=getSaleAnalysis(wf,wt),sf=S.selectedFactory;
+  const wf=S.wFrom,wt=S.wTo,[swf,swt]=ovSalesRange();
+  const analysis=getAnalysis(wf,wt),saleAn=getSaleAnalysis(swf,swt),sf=S.selectedFactory;
   const facts=sf==='الكل'?allFactoryNames():[sf];
-  const periodLabel=ovPeriodLabel(wf,wt);
+  const periodLabel=ovPeriodLabel(wf,wt),sPeriodLabel=ovPeriodLabel(swf,swt);
   const FC=['#2563eb','#7c3aed','#059669','#d97706','#0891b2','#db2777','#4f46e5','#b45309'];
 
   // ——— إجماليات الفترة ———
@@ -1522,7 +1530,8 @@ function viewWhatsapp() {
         <div class="ovhero-t">📊 الموقف الإجمالي</div>
         <div class="ovhero-tags">
           <span class="ovtag">🏭 ${esc(sf)}</span>
-          <span class="ovtag">📅 ${periodLabel}</span>
+          <span class="ovtag">🛢️ المشتريات: ${periodLabel}</span>
+          <span class="ovtag">📦 المبيعات: ${sPeriodLabel}</span>
           <span class="ovtag">🕓 ${ovNow()}</span>
         </div>
       </div>
@@ -1533,20 +1542,24 @@ function viewWhatsapp() {
     </div>
   </div>`;
 
-  // ——— شريط الفلترة ———
-  const t=today(),wk=ovWeekRange(),mo=ovMonthRange();
+  // ——— شريط الفلترة: فترة للمشتریات وفترة للمبيعات ———
+  const t=today(),wk=ovWeekRange(),mo=ovMonthRange(),qs=sf!=='الكل'?getQuotaStatus(sf):null;
   const chip=(lbl,act,fn)=>`<button class="ovchip${act?' on':''}" onclick="${fn}">${lbl}</button>`;
-  const filters=`<div class="card no-print ovfilter">
-    <div class="ovfilter-row">
-      <div class="ovfield"><label class="lbl" for="w_from">📅 من التاريخ</label><input class="inp" type="date" id="w_from" value="${wf}" onchange="S.wFrom=this.value;renderContent()"></div>
-      <div class="ovfield"><label class="lbl" for="w_to">📅 إلى التاريخ</label><input class="inp" type="date" id="w_to" value="${wt}" onchange="S.wTo=this.value;renderContent()"></div>
+  const prow=(k,ttl,c,a,b)=>`<div class="ovfilter-row" style="${k==='s'?'margin-top:12px;padding-top:12px;border-top:1px dashed #e2e8f0':''}">
+      <div style="min-width:120px;font-weight:900;font-size:13px;color:${c};align-self:center">${ttl}</div>
+      <div class="ovfield"><label class="lbl" for="w${k}_from">📅 من التاريخ</label><input class="inp" type="date" id="w${k}_from" value="${a}" onchange="ovSetRange('${k}',this.value,'${b}')"></div>
+      <div class="ovfield"><label class="lbl" for="w${k}_to">📅 إلى التاريخ</label><input class="inp" type="date" id="w${k}_to" value="${b}" onchange="ovSetRange('${k}','${a}',this.value)"></div>
       <div class="ovchips">
-        ${chip('اليوم',wf===t&&wt===t,"S.wFrom=today();S.wTo=today();renderContent()")}
-        ${chip('هذا الأسبوع',wf===wk[0]&&wt===wk[1],'setThisWeek()')}
-        ${chip('هذا الشهر',wf===mo[0]&&wt===mo[1],'setThisMonth()')}
-        ${chip('كل الفترات',!wf&&!wt,"S.wFrom='';S.wTo='';renderContent()")}
+        ${chip('اليوم',a===t&&b===t,`ovSetPreset('${k}','today')`)}
+        ${chip('هذا الأسبوع',a===wk[0]&&b===wk[1],`ovSetPreset('${k}','week')`)}
+        ${chip('هذا الشهر',a===mo[0]&&b===mo[1],`ovSetPreset('${k}','month')`)}
+        ${qs&&qs.start?chip('من بداية القطع',a===qs.start&&b===t,`ovSetPreset('${k}','quota')`):''}
+        ${chip('كل الفترات',!a&&!b,`ovSetPreset('${k}','all')`)}
       </div>
-    </div>
+    </div>`;
+  const filters=`<div class="card no-print ovfilter">
+    ${prow('p','🛢️ فترة المشتريات','#1e3a8a',wf,wt)}
+    ${prow('s','📦 فترة المبيعات','#5b21b6',swf,swt)}
   </div>`;
 
   // ——— بطاقات الملخص ———
@@ -1566,7 +1579,7 @@ function viewWhatsapp() {
     ${kpi('#64748b,#0f172a','rgba(15,23,42,.55)','💰','مبالغ المشتريات',fmtM(P.money),'دينار','')}
     ${kpi('#f472b6,#be185d','rgba(219,39,119,.55)','🏷️','إجمالي المبيعات',fmtM(SL.sale),'دينار','')}
     ${kpi('#818cf8,#3730a3','rgba(79,70,229,.55)','👷','أجور السواق',fmtM(SL.money+SL.tips),'دينار',`كراوي ${fmtM(SL.money)} + إكرامية ${fmtM(SL.tips)}`)}
-    <div onclick="ovGoProfits()" style="cursor:pointer;display:grid" title="فتح صفحة الأرباح لنفس الفترة">${kpi(PR.v<0?'#f87171,#991b1b':'#4ade80,#166534',PR.v<0?'rgba(185,28,28,.55)':'rgba(22,101,52,.55)','💹','صافي الربح',fmtM(PR.v),'دينار',PR.usdMissing?'⚠️ مصاريف بالدولار بلا سعر صرف':PR.note+' · التفاصيل ←')}</div>
+    <div onclick="ovGoProfits()" style="cursor:pointer;display:grid" title="فتح صفحة الأرباح لنفس الفترة">${kpi(PR.v<0?'#f87171,#991b1b':'#4ade80,#166534',PR.v<0?'rgba(185,28,28,.55)':'rgba(22,101,52,.55)','💹','صافي الربح',fmtM(PR.v),'دينار',PR.usdMissing?'⚠️ مصاريف بالدولار بلا سعر صرف':PR.note+((swf!==wf||swt!==wt)?' · حسب فترة المشتريات':'')+' · التفاصيل ←')}</div>
   </div>`;
 
   // ——— جدول المشتريات ———
@@ -1582,7 +1595,7 @@ function viewWhatsapp() {
   }).join('');
   const purchTable=`<div class="card ovtable">
     <div class="ovsec" style="--sc:#1e3a8a;--sc2:#3b82f6">
-      <span class="ovsec-t">🛢️ المشتريات</span>
+      <span class="ovsec-t">🛢️ المشتريات <span style="font-size:11px;opacity:.85">— ${periodLabel}</span></span>
       <span class="ovsec-b">${activeP} معمل نشط · ${fmtM(P.cars)} سيارة</span>
     </div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:640px">
@@ -1608,7 +1621,7 @@ function viewWhatsapp() {
   }).join('');
   const salesTable=`<div class="card ovtable">
     <div class="ovsec" style="--sc:#4c1d95;--sc2:#8b5cf6">
-      <span class="ovsec-t">📦 المبيعات</span>
+      <span class="ovsec-t">📦 المبيعات <span style="font-size:11px;opacity:.85">— ${sPeriodLabel}</span></span>
       <span class="ovsec-b">${activeS} معمل نشط · ${fmtM(SL.cars)} سيارة</span>
     </div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:820px">
@@ -1624,7 +1637,7 @@ function viewWhatsapp() {
   const kroob=renderKroobDailySection(wf,wt);
   const rafid=renderRafidDailySection(wf,wt);
 
-  window._ovPrint={periodLabel:periodLabel,factory:sf,P:P,SL:SL,PR:PR,
+  window._ovPrint={periodLabel:periodLabel,sPeriodLabel:sPeriodLabel,factory:sf,P:P,SL:SL,PR:PR,
     pRows:facts.map(f=>({f:f,d:anOf(analysis,f).total})),
     sRows:facts.map(f=>({f:f,d:anOf(saleAn,f).total}))};
 
@@ -1796,7 +1809,7 @@ tfoot td{font-weight:900;background:#f0f0f0}
 @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
   const html=`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>الموقف الإجمالي</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet"><style>${styles}</style></head><body>
-<div class="hd"><h1>📊 الموقف الإجمالي</h1><p>المعمل: ${esc(d.factory)} &nbsp;|&nbsp; الفترة: ${esc(d.periodLabel)} &nbsp;|&nbsp; تاريخ الطباعة: ${ovNow()}</p></div>
+<div class="hd"><h1>📊 الموقف الإجمالي</h1><p>المعمل: ${esc(d.factory)} &nbsp;|&nbsp; المشتريات: ${esc(d.periodLabel)} &nbsp;|&nbsp; المبيعات: ${esc(d.sPeriodLabel)} &nbsp;|&nbsp; تاريخ الطباعة: ${ovNow()}</p></div>
 <div class="boxes">
   ${box('سيارات المشتريات',fmtM(d.P.cars),'#1e3a8a')}
   ${box('الطن',fmt(d.P.tons),'#0e7490')}
@@ -1811,11 +1824,11 @@ tfoot td{font-weight:900;background:#f0f0f0}
   ${box('أجور السواق',fmtM(d.SL.money+d.SL.tips),'#3730a3')}
   ${box(sameFactory(d.factory,'الكل')?'صافي الربح':'ربح المعمل',fmtM(d.PR.v),d.PR.v<0?'#b91c1c':'#166534')}
 </div>
-<h2>🛢️ المشتريات</h2>
+<h2>🛢️ المشتريات — ${esc(d.periodLabel)}</h2>
 <table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الطن</th><th>اللتر الطبيعي</th><th>الوزن كغم</th><th>سعر المصفى</th></tr></thead>
 <tbody>${pr||empty(7)}</tbody>
 <tfoot><tr><td colspan="2">الإجمالي العام</td><td>${fmtM(d.P.cars)}</td><td>${fmt(d.P.tons)}</td><td>${fmt(d.P.liters)}</td><td>${fmt(d.P.kg)}</td><td>${fmtM(d.P.money)}</td></tr></tfoot></table>
-<h2>📦 المبيعات</h2>
+<h2>📦 المبيعات — ${esc(d.sPeriodLabel)}</h2>
 <table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الكبان</th><th>كراوي السواق</th><th>إكرامية السواق</th><th>إجمالي أجور السواق</th><th>إجمالي المبيعات</th></tr></thead>
 <tbody>${sr2||empty(8)}</tbody>
 <tfoot><tr><td colspan="2">الإجمالي العام</td><td>${fmtM(d.SL.cars)}</td><td>${fmtKaban(d.SL.kaban)}</td><td>${fmtM(d.SL.money)}</td><td>${fmtM(d.SL.tips)}</td><td>${fmtM(d.SL.money+d.SL.tips)}</td><td>${fmtM(d.SL.sale)}</td></tr></tfoot></table>
@@ -1833,10 +1846,10 @@ ${acct('كشف حسابات سيد رافد',R)}
 // بالهاتف يُفتح شباك المشاركة مباشرة (واتساب)، وبالحاسبة يُنزَّل الملف.
 function whatsappPdf(){
   if(typeof html2pdf==='undefined'){showToast('⚠️ مكتبة PDF غير محملة، أعد تحميل الصفحة','warning');return;}
-  const wf=S.wFrom,wt=S.wTo;
-  const analysis=getAnalysis(wf,wt),saleAn=getSaleAnalysis(wf,wt),sf=S.selectedFactory;
+  const wf=S.wFrom,wt=S.wTo,[swf,swt]=ovSalesRange();
+  const analysis=getAnalysis(wf,wt),saleAn=getSaleAnalysis(swf,swt),sf=S.selectedFactory;
   const facts=sf==='الكل'?allFactoryNames():[sf];
-  const periodLabel=ovPeriodLabel(wf,wt);
+  const periodLabel=ovPeriodLabel(wf,wt),sPeriodLabel=ovPeriodLabel(swf,swt);
   const pList=facts.map(f=>({f,d:anOf(analysis,f).total})).filter(r=>r.d.cars);
   const sList=facts.map(f=>({f,d:anOf(saleAn,f).total})).filter(r=>r.d.cars||r.d.loadCars);
   const P=pList.reduce((a,r)=>{a.cars+=r.d.cars;a.tons+=r.d.tons;a.liters+=r.d.liters;a.kg+=r.d.kg;return a;},{cars:0,tons:0,liters:0,kg:0});
@@ -1854,12 +1867,12 @@ function whatsappPdf(){
 .wp td{border:2px solid #000;padding:7px 4px;text-align:center;font-weight:700}
 .wp td.rt{text-align:right}
 .wp tr.tot td{font-weight:900;background:#f0f0f0}`;
-  const body=`<div class="wp"><div class="hd"><h1>📊 الموقف الإجمالي</h1><p>المعمل: ${esc(sf)} &nbsp;|&nbsp; الفترة: ${esc(periodLabel)} &nbsp;|&nbsp; ${ovNow()}</p></div>
-<h2>🛢️ المشتريات</h2>
+  const body=`<div class="wp"><div class="hd"><h1>📊 الموقف الإجمالي</h1><p>المعمل: ${esc(sf)} &nbsp;|&nbsp; ${ovNow()}</p></div>
+<h2>🛢️ المشتريات — ${esc(periodLabel)}</h2>
 <table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الطن</th><th>اللتر الطبيعي</th><th>الوزن كغم</th></tr></thead><tbody>
 ${pList.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmt(r.d.tons)}</td><td>${fmt(r.d.liters)}</td><td>${fmt(r.d.kg)}</td></tr>`).join('')||empty(6)}
 <tr class="tot"><td colspan="2">الإجمالي</td><td>${fmtM(P.cars)}</td><td>${fmt(P.tons)}</td><td>${fmt(P.liters)}</td><td>${fmt(P.kg)}</td></tr></tbody></table>
-<h2>📦 المبيعات</h2>
+<h2>📦 المبيعات — ${esc(sPeriodLabel)}</h2>
 <table><thead><tr><th>ت</th><th>المعمل</th><th>سيارات التحميل</th><th>كمية التحميل</th><th>سيارات التفريغ</th><th>كمية التفريغ</th></tr></thead><tbody>
 ${sList.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.loadCars||0)}</td><td>${fmtKaban(r.d.loadQty||0)}</td><td>${fmtM(r.d.cars)}</td><td>${fmtKaban(r.d.kaban)}</td></tr>`).join('')||empty(6)}
 <tr class="tot"><td colspan="2">الإجمالي</td><td>${fmtM(SL.loadCars)}</td><td>${fmtKaban(SL.load)}</td><td>${fmtM(SL.cars)}</td><td>${fmtKaban(SL.kaban)}</td></tr></tbody></table>

@@ -1910,7 +1910,7 @@ function sharePdfHtml(html,fname,title){
 function acctDayPdf(kind){
   if(typeof html2pdf==='undefined'){showToast('⚠️ مكتبة PDF غير محملة، أعد تحميل الصفحة','warning');return;}
   const K=kind==='kroob',day=today();
-  const title=K?'كشف كروب رافد فيصل / ارض الطوى':'كشف حسابات سيد رافد / منفذ الحور',color=K?'#065f46':'#92400e';
+  const title=K?'كشف كروب رافد فيصل - ارض الطوى':'كشف حسابات سيد رافد - منفذ الحور',color=K?'#065f46':'#92400e';
   const list=K?getKroobInRange(day,day):getRafidInRange(day,day);
   const open=K?getKroobBalanceBefore(day):getRafidBalanceBefore(day);
   let bD=open.dinar,bDol=open.dollar;

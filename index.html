@@ -1841,6 +1841,8 @@ function whatsappPdf(){
   const sList=facts.map(f=>({f,d:anOf(saleAn,f).total})).filter(r=>r.d.cars);
   const P=pList.reduce((a,r)=>{a.cars+=r.d.cars;a.tons+=r.d.tons;a.liters+=r.d.liters;a.kg+=r.d.kg;return a;},{cars:0,tons:0,liters:0,kg:0});
   const SL=sList.reduce((a,r)=>{a.cars+=r.d.cars;a.kaban+=r.d.kaban;return a;},{cars:0,kaban:0});
+  // المتبقي من حصة الشراء (القطع النشط) — من تاريخ بدء القطع لا من فترة الصفحة
+  const qList=facts.map(f=>({f,q:getQuotaStatus(f)})).filter(r=>r.q);
   const empty=n=>`<tr><td colspan="${n}" style="padding:12px;color:#666">لا توجد حركة في هذه الفترة</td></tr>`;
   const styles=`.wp{direction:rtl;font-family:'Cairo',sans-serif;color:#000;font-size:13px}
 .wp .hd{text-align:center;border-bottom:3px solid #1e3a8a;padding-bottom:10px;margin-bottom:14px}
@@ -1860,7 +1862,11 @@ ${pList.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM
 <h2>📦 المبيعات</h2>
 <table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الكبان</th></tr></thead><tbody>
 ${sList.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmtKaban(r.d.kaban)}</td></tr>`).join('')||empty(4)}
-<tr class="tot"><td colspan="2">الإجمالي</td><td>${fmtM(SL.cars)}</td><td>${fmtKaban(SL.kaban)}</td></tr></tbody></table></div>`;
+<tr class="tot"><td colspan="2">الإجمالي</td><td>${fmtM(SL.cars)}</td><td>${fmtKaban(SL.kaban)}</td></tr></tbody></table>
+${qList.length?`<h2>📋 الكمية المتبقية للمشتريات (لتر طبيعي)</h2>
+<table><thead><tr><th>ت</th><th>المعمل</th><th>بداية القطع</th><th>الحصة</th><th>المشترى</th><th>المتبقي</th></tr></thead><tbody>
+${qList.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${esc(r.q.start||'—')}</td><td>${fmtM(r.q.quota)}</td><td>${fmtM(r.q.used)}</td><td style="color:${r.q.over?'#b91c1c':'#166534'};font-weight:900">${r.q.over?'تجاوز '+fmtM(Math.abs(r.q.remaining)):fmtM(r.q.remaining)}</td></tr>`).join('')}
+${qList.length>1?`<tr class="tot"><td colspan="3">الإجمالي</td><td>${fmtM(qList.reduce((a,r)=>a+r.q.quota,0))}</td><td>${fmtM(qList.reduce((a,r)=>a+r.q.used,0))}</td><td>${fmtM(qList.reduce((a,r)=>a+Math.max(r.q.remaining,0),0))}</td></tr>`:''}</tbody></table>`:''}</div>`;
   const fname=('الموقف الإجمالي - '+sf+' - '+periodLabel).replace(/[\\/:*?"<>|→]/g,'-').replace(/\s+/g,' ')+'.pdf';
   const div=document.createElement('div');
   div.style.cssText='width:190mm;padding:8mm;background:#fff';

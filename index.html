@@ -2987,7 +2987,7 @@ function viewTable(){
     ${showActionCol?`<td class="td" style="white-space:nowrap">${canEditRow(e)?`<button class="btn btn-gray" style="padding:6px 10px;font-size:11px;margin-left:6px" onclick="editEntry('${e.id}')">✏️</button>`:''}${canEdit('purchases')?`<button class="btn btn-red" style="padding:6px 10px;font-size:11px" onclick="deleteEntry('${e.id}')">🗑️</button>`:''}</td>`:''}
   </tr>`).join('');
   const sumP=f=>list.reduce((s,e)=>s+(f==='refinery_price'?parseFloat(e[f]||0):sc(e[f])),0);
-  return `<div class="card" style="overflow:hidden;padding:0">
+  return `${futureDatesPanel('purchases',sf)}<div class="card" style="overflow:hidden;padding:0">
     <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border-bottom:1px solid #e2e8f0">
       <span style="font-weight:900;font-size:14px;color:#1e40af">سجل بيانات المشتريات — ${sf} <span class="badge" style="background:#eff6ff;color:#2563eb">🚚 عدد السيارات: ${list.length}</span> <span class="badge" style="background:#eff6ff;color:#2563eb">طن: ${fmtTon(sumP('qty_tons'))}</span> <span class="badge" style="background:#eff6ff;color:#2563eb">لتر: ${fmtLiter(sumP('natural_liters'))}</span> <span class="badge" style="background:#eff6ff;color:#2563eb">كغم: ${fmtKg(sumP('weight_kg'))}</span> <span class="badge" style="background:#ecfdf5;color:#059669">إجمالي الشراء: ${fmtM(sumP('refinery_price'))}</span></span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -3074,7 +3074,7 @@ function viewSaleTable(){
   return `${stageDup?`<div class="card no-print" style="margin-bottom:12px;background:#fef2f2;border:1px solid #fca5a5;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
       <div style="font-size:13px;color:#991b1b;line-height:1.8"><b>⚠️ يوجد ${stageDup} سجل مكرر</b> نتج عن استيراد ملف «تحميل وتفريغ»: سجل قديم (كبانه = كمية التحميل) ونسخة مستوردة لنفس السيارة ونفس تاريخ التحميل.<br><span style="font-size:12px;color:#7f1d1d">الدمج يُبقي السجل القديم بصوره ومبالغه وينقل إليه كمية التحميل والتفريغ وتاريخ التفريغ وجهة التسويق، ثم يحذف النسخة المكررة.</span></div>
       <button class="btn btn-red" style="font-size:12px;padding:8px 16px;white-space:nowrap" onclick="mergeStageDuplicates()">🔗 دمج المكرر (${stageDup})</button>
-    </div>`:''}${stageSuspectsPanel(sf)}${addrMkt?`<div class="card no-print" style="margin-bottom:12px;background:#fffbeb;border:1px solid #fcd34d;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+    </div>`:''}${futureDatesPanel('sales',sf)}${stageSuspectsPanel(sf)}${addrMkt?`<div class="card no-print" style="margin-bottom:12px;background:#fffbeb;border:1px solid #fcd34d;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
       <div style="font-size:13px;color:#92400e;line-height:1.8"><b>📝 ${addrMkt} سجل</b> فيه «العنوان» جهة تسويق (مثل «شركة لؤلؤة الدار») لا ميناء.<br><span style="font-size:12px">النقل يضع النص في «جهة التسويق» ويترك «العنوان» فارغاً.</span></div>
       <button class="btn btn-amber" style="font-size:12px;padding:8px 16px;white-space:nowrap" onclick="moveAddressToMarket()">↪️ نقل إلى جهة التسويق (${addrMkt})</button>
     </div>`:''}<div class="card" style="overflow:hidden;padding:0">
@@ -3608,6 +3608,68 @@ function stageSuspectsPanel(sf){
     <p style="font-size:12px;color:#78350f;margin:8px 0">راجع كل زوج: إن كانا نفس السيارة ونفس النقلة اضغط «دمج» — يبقى السجل الأول بصوره ومبالغه ويأخذ كمية التحميل والتفريغ من الثاني، ثم يُحذف الثاني. إن كانا نقلتين مختلفتين فاتركهما.</p>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:760px"><thead><tr style="background:#fef3c7"><th style="${td}"></th><th style="${td}">السائق</th><th style="${td}">المركبة</th><th style="${td}">تاريخ التحميل</th><th style="${td}">التحميل</th><th style="${td}">التفريغ/الكبان</th><th style="${td}">المعمل</th><th style="${td}"></th></tr></thead><tbody>${rows}</tbody></table></div>
   </details>`;
+}
+// ===== تواريخ في المستقبل — غالباً انقلب فيها اليوم والشهر عند الاستيراد (2026-11-10 بدل 2026-10-11) =====
+// تُخرج السجل من فلاتر الفترات (الموقف الإجمالي/PDF الواتساب). المقترح = قلب اليوم والشهر إن كان تاريخاً صحيحاً لا يتجاوز اليوم
+const FD_FIELDS={sales:[['date','تاريخ التحميل'],['unload_date','تاريخ التفريغ']],purchases:[['date','التاريخ']]};
+function fdIso(d){const m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec((d||'').toString().trim());return m?m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0'):'';}
+function fdSwap(iso){
+  const y=+iso.slice(0,4),mo=+iso.slice(8,10),dy=+iso.slice(5,7);
+  if(mo<1||mo>12)return '';
+  const dt=new Date(y,mo-1,dy);
+  if(dt.getMonth()!==mo-1||dt.getDate()!==dy)return '';
+  const x=ymd(dt);
+  return x<=today()?x:'';
+}
+function findFutureDates(kind,sf){
+  const t=today(),out=[];
+  DB.get(kind==='sales'?'sales':'entries',[]).forEach(r=>{
+    if(sf&&sf!=='الكل'&&!sameFactory(r.factory,sf))return;
+    FD_FIELDS[kind].forEach(([f,lbl])=>{
+      const iso=fdIso(r[f]);
+      if(iso&&iso>t)out.push({r,f,lbl,cur:r[f],fix:fdSwap(iso)});
+    });
+  });
+  return out.sort((a,b)=>(a.cur>b.cur?1:-1));
+}
+function futureDatesPanel(kind,sf){
+  if(!canEdit(kind))return '';
+  const list=findFutureDates(kind,sf);
+  if(!list.length)return '';
+  const td='padding:6px 8px;border-bottom:1px solid #fecaca;font-size:12px;text-align:center';
+  const fixable=list.filter(x=>x.fix).length;
+  const rows=list.map(x=>{const r=x.r;
+    return `<tr><td style="${td}">${x.fix?`<input type="checkbox" class="fd-chk-${kind}" data-id="${esc(r.id)}" data-f="${x.f}" checked style="width:16px;height:16px;cursor:pointer">`:''}</td>
+      <td style="${td}">${kind==='sales'?esc(r.driver_name||''):'بوجر '+esc(r.voucher_no||'')}</td><td style="${td}">${esc(r.car_no||'')}</td><td style="${td}">${esc(r.factory||'')}</td><td style="${td}">${x.lbl}</td>
+      <td style="${td};color:#b91c1c;font-weight:900">${esc(x.cur)}</td>
+      <td style="${td};color:#166534;font-weight:900">${x.fix||'<span style="color:#92400e;font-weight:700">— عدّله يدوياً</span>'}</td>
+      <td style="${td}"><button class="btn btn-gray" style="padding:4px 10px;font-size:11px" onclick="${kind==='sales'?'editSale':'editEntry'}('${escJs(r.id)}')">✏️</button></td></tr>`;}).join('');
+  return `<details class="card no-print" open style="margin-bottom:12px;background:#fef2f2;border:1px solid #fca5a5">
+    <summary style="cursor:pointer;font-weight:900;color:#991b1b;font-size:13px">📅 ${list.length} تاريخ بعد اليوم (${today()}) — غالباً انقلب فيه اليوم والشهر</summary>
+    <p style="font-size:12px;color:#7f1d1d;margin:8px 0">هذه السجلات لا تظهر بالفترات الحالية في الموقف الإجمالي وملف الواتساب. المقترح = قلب اليوم والشهر (مثلاً 2026-11-10 ← 2026-10-11). راجع القائمة وألغِ تحديد ما لا تريد تصحيحه، أو عدّل السجل يدوياً بزر ✏️.</p>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:720px"><thead><tr style="background:#fee2e2"><th style="${td}">✔</th><th style="${td}">${kind==='sales'?'السائق':'البوجر'}</th><th style="${td}">المركبة</th><th style="${td}">المعمل</th><th style="${td}">الحقل</th><th style="${td}">التاريخ الحالي</th><th style="${td}">التاريخ المقترح</th><th style="${td}"></th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${fixable?`<div style="margin-top:10px;text-align:left"><button class="btn btn-red" style="font-size:12px;padding:8px 16px" onclick="applyFutureDateFix('${kind}')">📅 تصحيح التواريخ المحددة</button></div>`:''}
+  </details>`;
+}
+async function applyFutureDateFix(kind){
+  if(!canEdit(kind)){showToast('لا تملك صلاحية التعديل','error');return;}
+  const picks=[...document.querySelectorAll('.fd-chk-'+kind)].filter(c=>c.checked).map(c=>({id:c.dataset.id,f:c.dataset.f}));
+  if(!picks.length){showToast('لم يُحدَّد أي تاريخ','warning');return;}
+  if(!confirm('سيُقلب اليوم والشهر في '+picks.length+' تاريخ محدد (مثلاً 2026-11-10 ← 2026-10-11).\n\nمتابعة؟'))return;
+  const key=kind==='sales'?'sales':'entries',list=DB.get(key,[]),byId=new Map(list.map(r=>[r.id,r])),changed=new Map();
+  picks.forEach(p=>{
+    const r=byId.get(p.id);if(!r)return;
+    const iso=fdIso(r[p.f]);if(!iso||iso<=today())return;
+    const fix=fdSwap(iso);if(!fix)return;
+    r[p.f]=fix;r.time=Date.now();changed.set(r.id,r);
+  });
+  if(!changed.size){showToast('لا يوجد ما يُصحَّح','info');renderContent();return;}
+  DB.set(key,list);
+  auditLog('تصحيح تواريخ مستقبلية',`${picks.length} تاريخ في ${changed.size} سجل ${kind==='sales'?'مبيعات':'مشتريات'}`);
+  let fail=0;
+  for(const r of changed.values()){if(!(await FDB.save(key,r.id,r)))fail++;}
+  showToast(fail?`⚠️ صُحِّح ${changed.size} سجل لكن ${fail} لم تصل السحابة`:`✅ صُحِّحت التواريخ في ${changed.size} سجل`,fail?'warning':'success',7000);
+  renderContent();
 }
 // ===== «العنوان» الذي يحوي جهة تسويق (مثل «شركة لؤلؤة الدار») بدل ميناء =====
 // العنوان مخصص للميناء (الخور/الحرة) وعليه يُبنى «موقف مبيعات الموانئ»؛ أي نص آخر هو جهة التسويق

@@ -1513,6 +1513,7 @@ function viewWhatsapp() {
   });
   const activeP=facts.filter(f=>anOf(analysis,f).total.cars>0).length;
   const activeS=facts.filter(f=>anOf(saleAn,f).total.cars>0).length;
+  const PR=ovProfit(wf,wt,sf);
 
   // ——— الترويسة ———
   const hero=`<div class="ovhero no-print">
@@ -1526,7 +1527,7 @@ function viewWhatsapp() {
         </div>
       </div>
       <div class="ovhero-b">
-        <button class="btn btn-green" onclick="copyWhatsapp()">📱 نسخ للواتساب</button>
+        <button class="btn btn-green" onclick="whatsappPdf()">📄 PDF للواتساب</button>
         <button class="btn ovbtn-ghost" onclick="printOverall()">🖨️ طباعة الموقف</button>
       </div>
     </div>
@@ -1565,6 +1566,7 @@ function viewWhatsapp() {
     ${kpi('#64748b,#0f172a','rgba(15,23,42,.55)','💰','مبالغ المشتريات',fmtM(P.money),'دينار','')}
     ${kpi('#f472b6,#be185d','rgba(219,39,119,.55)','🏷️','إجمالي المبيعات',fmtM(SL.sale),'دينار','')}
     ${kpi('#818cf8,#3730a3','rgba(79,70,229,.55)','👷','أجور السواق',fmtM(SL.money+SL.tips),'دينار',`كراوي ${fmtM(SL.money)} + إكرامية ${fmtM(SL.tips)}`)}
+    <div onclick="ovGoProfits()" style="cursor:pointer;display:grid" title="فتح صفحة الأرباح لنفس الفترة">${kpi(PR.v<0?'#f87171,#991b1b':'#4ade80,#166534',PR.v<0?'rgba(185,28,28,.55)':'rgba(22,101,52,.55)','💹','صافي الربح',fmtM(PR.v),'دينار',PR.usdMissing?'⚠️ مصاريف بالدولار بلا سعر صرف':PR.note+' · التفاصيل ←')}</div>
   </div>`;
 
   // ——— جدول المشتريات ———
@@ -1581,7 +1583,7 @@ function viewWhatsapp() {
   const purchTable=`<div class="card ovtable">
     <div class="ovsec" style="--sc:#1e3a8a;--sc2:#3b82f6">
       <span class="ovsec-t">🛢️ المشتريات</span>
-      <span class="ovsec-b">${facts.length} معمل · ${fmtM(P.cars)} سيارة</span>
+      <span class="ovsec-b">${activeP} معمل نشط · ${fmtM(P.cars)} سيارة</span>
     </div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:640px">
       <thead><tr><th class="ovth">ت</th><th class="ovth" style="text-align:right">المعمل</th><th class="ovth">السيارات</th><th class="ovth">الطن</th><th class="ovth">اللتر الطبيعي</th><th class="ovth">الوزن كغم</th><th class="ovth">سعر المصفى</th></tr></thead>
@@ -1622,7 +1624,7 @@ function viewWhatsapp() {
   const kroob=renderKroobDailySection(wf,wt);
   const rafid=renderRafidDailySection(wf,wt);
 
-  window._ovPrint={periodLabel:periodLabel,factory:sf,P:P,SL:SL,
+  window._ovPrint={periodLabel:periodLabel,factory:sf,P:P,SL:SL,PR:PR,
     pRows:facts.map(f=>({f:f,d:anOf(analysis,f).total})),
     sRows:facts.map(f=>({f:f,d:anOf(saleAn,f).total}))};
 
@@ -1653,12 +1655,10 @@ function profitMonths(){
   getExpenseList('').forEach(e=>{const m=expDateToYM(e.date);if(m)set.add(m);});
   return [...set].sort().reverse();
 }
-function viewProfits(){
-  const months=profitMonths();
-  if(S.profMonth===undefined)S.profMonth=months.includes(today().slice(0,7))?today().slice(0,7):(months[0]||'');
-  // من/إلى يتقدّم على الشهر: إن حُدِّد أحدهما تُهمَل قائمة الشهر
-  const df=S.profFrom||'',dt=S.profTo||'',useRange=!!(df||dt);
-  const m=useRange?'':S.profMonth;
+// حساب الأرباح لفترة: df/dt (من/إلى) يتقدّمان على الشهر m. يُستعمل بصفحة الأرباح وبطاقة صافي الربح بالموقف الإجمالي
+function profitCalc(df,dt,m){
+  const useRange=!!(df||dt);
+  if(useRange)m='';
   const from=useRange?df:(m?m+'-01':''),to=useRange?dt:(m?m+'-31':'');
   const facts=allFactoryNames().filter(x=>!sameFactory(x,'الكل'));
   const an=getAnalysis(from,to),san=getSaleAnalysis(from,to);
@@ -1678,6 +1678,23 @@ function viewProfits(){
   const T=rows.reduce((a,r)=>{a.sale+=r.sale;a.buy+=r.buy;a.exD+=r.exD;a.exU+=r.exU;a.exAll+=r.exAll;a.profit+=r.profit;return a;},{sale:0,buy:0,exD:0,exU:0,exAll:0,profit:0});
   const gAll=G.d+G.u*usd,net=T.profit-gAll;
   const anyUsd=T.exU+G.u>0;
+  return {usd,G,rows,T,gAll,net,anyUsd};
+}
+// صافي ربح الموقف الإجمالي: «الكل» = صافي الربح بعد المصاريف العامة، ومعمل محدد = ربح ذلك المعمل فقط
+function ovProfit(wf,wt,sf){
+  const r=profitCalc(wf,wt,'');
+  if(sameFactory(sf,'الكل'))return {v:r.net,note:'بعد المصاريف العامة',usdMissing:r.anyUsd&&!r.usd};
+  const row=r.rows.find(x=>sameFactory(x.f,sf));
+  return {v:row?row.profit:0,note:'ربح المعمل (بلا المصاريف العامة)',usdMissing:!!(row&&row.exU&&!r.usd)};
+}
+function ovGoProfits(){S.profFrom=S.wFrom||'';S.profTo=S.wTo||'';if(!S.profFrom&&!S.profTo)S.profMonth='';go('profits');}
+function viewProfits(){
+  const months=profitMonths();
+  if(S.profMonth===undefined)S.profMonth=months.includes(today().slice(0,7))?today().slice(0,7):(months[0]||'');
+  // من/إلى يتقدّم على الشهر: إن حُدِّد أحدهما تُهمَل قائمة الشهر
+  const df=S.profFrom||'',dt=S.profTo||'',useRange=!!(df||dt);
+  const m=useRange?'':S.profMonth;
+  const {usd,G,rows,T,gAll,net,anyUsd}=profitCalc(df,dt,m);
   const mn={'01':'كانون الثاني','02':'شباط','03':'آذار','04':'نيسان','05':'أيار','06':'حزيران','07':'تموز','08':'آب','09':'أيلول','10':'تشرين الأول','11':'تشرين الثاني','12':'كانون الأول'};
   const mLabel=x=>x?(mn[x.slice(5,7)]||x.slice(5,7))+' '+x.slice(0,4):'كل الفترات';
   const periodLabel=useRange?('من '+(df||'البداية')+' إلى '+(dt||'اليوم')):mLabel(m);
@@ -1751,8 +1768,9 @@ function printOverall(){
   const d=window._ovPrint;
   if(!d){showToast('افتح صفحة الموقف الإجمالي أولاً','warning');return;}
   const K=window._ovKroobSum,R=window._ovRafidSum;
-  const pr=d.pRows.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmt(r.d.tons)}</td><td>${fmt(r.d.liters)}</td><td>${fmt(r.d.kg)}</td><td>${fmtM(r.d.money)}</td></tr>`).join('');
-  const sr2=d.sRows.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmtKaban(r.d.kaban)}</td><td>${fmtM(r.d.money)}</td><td>${fmtM(r.d.tips||0)}</td><td>${fmtM(r.d.money+(r.d.tips||0))}</td><td>${fmtM(r.d.sale||0)}</td></tr>`).join('');
+  const empty=n=>`<tr><td colspan="${n}" style="padding:10px;color:#666">لا توجد حركة في هذه الفترة</td></tr>`;
+  const pr=d.pRows.filter(r=>r.d.cars).map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmt(r.d.tons)}</td><td>${fmt(r.d.liters)}</td><td>${fmt(r.d.kg)}</td><td>${fmtM(r.d.money)}</td></tr>`).join('');
+  const sr2=d.sRows.filter(r=>r.d.cars).map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmtKaban(r.d.kaban)}</td><td>${fmtM(r.d.money)}</td><td>${fmtM(r.d.tips||0)}</td><td>${fmtM(r.d.money+(r.d.tips||0))}</td><td>${fmtM(r.d.sale||0)}</td></tr>`).join('');
   const box=(t,v,c)=>`<div class="box"><div class="bt">${t}</div><div class="bv" style="color:${c}">${v}</div></div>`;
   const acct=(title,s)=>s?`<table class="acct"><thead><tr><th colspan="5">${title} — ${esc(s.label)} (${s.count} حركة)</th></tr>
     <tr><th>الرصيد السابق د.ع</th><th>إجمالي الدائن</th><th>إجمالي المدين</th><th>الرصيد الختامي د.ع</th><th>الرصيد الختامي $</th></tr></thead>
@@ -1787,13 +1805,19 @@ tfoot td{font-weight:900;background:#f0f0f0}
   ${box('سيارات المبيعات',fmtM(d.SL.cars),'#5b21b6')}
   ${box('الكبان',fmtKaban(d.SL.kaban),'#5b21b6')}
 </div>
+<div class="boxes">
+  ${box('مبالغ المشتريات',fmtM(d.P.money),'#1e3a8a')}
+  ${box('إجمالي المبيعات',fmtM(d.SL.sale),'#be185d')}
+  ${box('أجور السواق',fmtM(d.SL.money+d.SL.tips),'#3730a3')}
+  ${box(sameFactory(d.factory,'الكل')?'صافي الربح':'ربح المعمل',fmtM(d.PR.v),d.PR.v<0?'#b91c1c':'#166534')}
+</div>
 <h2>🛢️ المشتريات</h2>
 <table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الطن</th><th>اللتر الطبيعي</th><th>الوزن كغم</th><th>سعر المصفى</th></tr></thead>
-<tbody>${pr}</tbody>
+<tbody>${pr||empty(7)}</tbody>
 <tfoot><tr><td colspan="2">الإجمالي العام</td><td>${fmtM(d.P.cars)}</td><td>${fmt(d.P.tons)}</td><td>${fmt(d.P.liters)}</td><td>${fmt(d.P.kg)}</td><td>${fmtM(d.P.money)}</td></tr></tfoot></table>
 <h2>📦 المبيعات</h2>
 <table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الكبان</th><th>كراوي السواق</th><th>إكرامية السواق</th><th>إجمالي أجور السواق</th><th>إجمالي المبيعات</th></tr></thead>
-<tbody>${sr2}</tbody>
+<tbody>${sr2||empty(8)}</tbody>
 <tfoot><tr><td colspan="2">الإجمالي العام</td><td>${fmtM(d.SL.cars)}</td><td>${fmtKaban(d.SL.kaban)}</td><td>${fmtM(d.SL.money)}</td><td>${fmtM(d.SL.tips)}</td><td>${fmtM(d.SL.money+d.SL.tips)}</td><td>${fmtM(d.SL.sale)}</td></tr></tfoot></table>
 ${K||R?'<h2>🏦 ملخص الحسابات</h2>':''}
 ${acct('كشف الكروب',K)}
@@ -1805,22 +1829,57 @@ ${acct('كشف حسابات سيد رافد',R)}
   w.document.write(html);w.document.close();
 }
 
-function copyWhatsapp(){
+// ملف PDF للواتساب (A4 عمودي): السيارات والكميات فقط بلا مبالغ، والمعامل التي لها حركة فقط.
+// بالهاتف يُفتح شباك المشاركة مباشرة (واتساب)، وبالحاسبة يُنزَّل الملف.
+function whatsappPdf(){
+  if(typeof html2pdf==='undefined'){showToast('⚠️ مكتبة PDF غير محملة، أعد تحميل الصفحة','warning');return;}
   const wf=S.wFrom,wt=S.wTo;
   const analysis=getAnalysis(wf,wt),saleAn=getSaleAnalysis(wf,wt),sf=S.selectedFactory;
   const facts=sf==='الكل'?allFactoryNames():[sf];
   const periodLabel=ovPeriodLabel(wf,wt);
-  let tc=0,tt=0,tl=0,tk=0,sc2=0,sk=0;
-  let txt=`*📊 الموقف الإجمالي*\n🏭 ${sf}\n📅 ${periodLabel}\n`;
-  txt+=`\n*🛢️ المشتريات:*\n`;
-  for(const f of facts){const d=anOf(analysis,f).total;if(!d.cars)continue;tc+=d.cars;tt+=d.tons;tl+=d.liters;tk+=d.kg;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmt(d.tons)} طن | ${fmt(d.liters)} لتر | ${fmt(d.kg)} كغم\n`;}
-  txt+=`━━━━━━━━━━━━━\n*الإجمالي:* ${tc} سيارة | ${fmt(tt)} طن | ${fmt(tl)} لتر | ${fmt(tk)} كغم\n`;
-  txt+=`\n*📦 المبيعات:*\n`;
-  for(const f of facts){const d=anOf(saleAn,f).total;if(!d.cars)continue;sc2+=d.cars;sk+=d.kaban;txt+=`🏭 ${f}: ${d.cars} سيارة | ${fmtKaban(d.kaban)} كبان\n`;}
-  txt+=`━━━━━━━━━━━━━\n*الإجمالي:* ${sc2} سيارة | ${fmtKaban(sk)} كبان\n`;
-  txt+=`\n✅ نظام المراقبة v47.5`;
-  ovCopy(txt);
-  const c=el('copy-ok');if(c){c.style.display='block';setTimeout(()=>c.style.display='none',3000);}
+  const pList=facts.map(f=>({f,d:anOf(analysis,f).total})).filter(r=>r.d.cars);
+  const sList=facts.map(f=>({f,d:anOf(saleAn,f).total})).filter(r=>r.d.cars);
+  const P=pList.reduce((a,r)=>{a.cars+=r.d.cars;a.tons+=r.d.tons;a.liters+=r.d.liters;a.kg+=r.d.kg;return a;},{cars:0,tons:0,liters:0,kg:0});
+  const SL=sList.reduce((a,r)=>{a.cars+=r.d.cars;a.kaban+=r.d.kaban;return a;},{cars:0,kaban:0});
+  const empty=n=>`<tr><td colspan="${n}" style="padding:12px;color:#666">لا توجد حركة في هذه الفترة</td></tr>`;
+  const styles=`.wp{direction:rtl;font-family:'Cairo',sans-serif;color:#000;font-size:13px}
+.wp .hd{text-align:center;border-bottom:3px solid #1e3a8a;padding-bottom:10px;margin-bottom:14px}
+.wp h1{font-size:22px;font-weight:900;color:#1e3a8a;margin:0}
+.wp .hd p{font-size:13px;font-weight:700;color:#333;margin:6px 0 0}
+.wp h2{font-size:16px;font-weight:900;margin:16px 0 8px;color:#1e3a8a;border-right:6px solid #1e3a8a;padding-right:8px}
+.wp table{width:100%;border-collapse:collapse;font-size:13px}
+.wp th{background:#e8eefc;font-weight:900;border:2px solid #000;padding:7px 4px;text-align:center}
+.wp td{border:2px solid #000;padding:7px 4px;text-align:center;font-weight:700}
+.wp td.rt{text-align:right}
+.wp tr.tot td{font-weight:900;background:#f0f0f0}`;
+  const body=`<div class="wp"><div class="hd"><h1>📊 الموقف الإجمالي</h1><p>المعمل: ${esc(sf)} &nbsp;|&nbsp; الفترة: ${esc(periodLabel)} &nbsp;|&nbsp; ${ovNow()}</p></div>
+<h2>🛢️ المشتريات</h2>
+<table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الطن</th><th>اللتر الطبيعي</th><th>الوزن كغم</th></tr></thead><tbody>
+${pList.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmt(r.d.tons)}</td><td>${fmt(r.d.liters)}</td><td>${fmt(r.d.kg)}</td></tr>`).join('')||empty(6)}
+<tr class="tot"><td colspan="2">الإجمالي</td><td>${fmtM(P.cars)}</td><td>${fmt(P.tons)}</td><td>${fmt(P.liters)}</td><td>${fmt(P.kg)}</td></tr></tbody></table>
+<h2>📦 المبيعات</h2>
+<table><thead><tr><th>ت</th><th>المعمل</th><th>السيارات</th><th>الكبان</th></tr></thead><tbody>
+${sList.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmtKaban(r.d.kaban)}</td></tr>`).join('')||empty(4)}
+<tr class="tot"><td colspan="2">الإجمالي</td><td>${fmtM(SL.cars)}</td><td>${fmtKaban(SL.kaban)}</td></tr></tbody></table></div>`;
+  const fname=('الموقف الإجمالي - '+sf+' - '+periodLabel).replace(/[\\/:*?"<>|→]/g,'-').replace(/\s+/g,' ')+'.pdf';
+  const div=document.createElement('div');
+  div.style.cssText='width:190mm;padding:8mm;background:#fff';
+  div.innerHTML=`<style>${styles}</style>${body}`;
+  document.body.appendChild(div);
+  showToast('⏳ جاري إنشاء الملف...','info',3000);
+  const done=()=>{if(div.parentNode)div.parentNode.removeChild(div);};
+  const w=html2pdf().set({margin:[5,5,5,5],filename:fname,html2canvas:{scale:2,useCORS:true,letterRendering:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}}).from(div);
+  const mobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
+  if(mobile&&navigator.canShare){
+    w.outputPdf('blob').then(b=>{
+      done();
+      const file=new File([b],fname,{type:'application/pdf'});
+      if(navigator.canShare({files:[file]}))return navigator.share({files:[file],title:'الموقف الإجمالي'}).catch(()=>{});
+      const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=fname;a.click();
+    }).catch(()=>{done();showToast('⚠️ فشل إنشاء الملف','error');});
+  } else {
+    w.save().then(()=>{done();showToast('✅ تم حفظ الملف — أرسله بالواتساب','success');}).catch(()=>{done();showToast('⚠️ فشل الحفظ','error');});
+  }
 }
 
 // ===== نموذج المشتريات =====

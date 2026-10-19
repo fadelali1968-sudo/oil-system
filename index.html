@@ -6412,6 +6412,39 @@ function parseAcctXlsx(rows){
   return{opD,opDol,hasOp,list};
 }
 
+// ===== تنبيه الاستيراد: سطور تاريخها خارج شهر الملف =====
+// مثل سطر في ملف أيلول تاريخه 17-06 بالخطأ: لولا التنبيه يدخل حزيران ولا يحذفه استيراد أيلول التالي.
+// يُرجع false إذا أُلغي الاستيراد. «تصحيح» ينقل السطر لشهر الملف بنفس اليوم.
+function acctOutOfMonthCheck(list,targetMonth){
+  const out=list.filter(e=>e.date&&e.date.slice(0,7)!==targetMonth);
+  if(!out.length)return Promise.resolve(true);
+  const amt=e=>{const d=safeNum(e.amount_dinar??e.dinar),dl=safeNum(e.amount_dollar??e.dollar);return [d?fmtM(d)+' د.ع':'',dl?'$'+fmtM(dl):''].filter(Boolean).join(' · ')||'—';};
+  const rows=out.map(e=>`<tr><td style="padding:6px;border-bottom:1px solid #e2e8f0;color:#b91c1c;font-weight:900;white-space:nowrap">${esc(e.date)}</td><td style="padding:6px;border-bottom:1px solid #e2e8f0">${esc(e.description||'')}${e.receiver?' / '+esc(e.receiver):''}</td><td style="padding:6px;border-bottom:1px solid #e2e8f0;white-space:nowrap">${amt(e)}</td></tr>`).join('');
+  return new Promise(res=>{
+    const m=document.createElement('div');
+    m.id='oom-modal';
+    m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+    m.innerHTML=`<div class="card" style="max-width:560px;width:100%;max-height:85vh;display:flex;flex-direction:column;padding:16px">
+      <h3 style="margin:0 0 6px;font-size:15px;font-weight:900;color:#b45309">⚠️ ${out.length} سطر تاريخه خارج شهر الملف (${esc(targetMonth)})</h3>
+      <p style="font-size:12px;color:#475569;margin:0 0 10px">غالباً خطأ في كتابة التاريخ بالملف. إذا استوردتها كما هي تدخل شهراً آخر ولا يحذفها استيراد هذا الملف مرة ثانية، فتتكرر.</p>
+      <div style="overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;flex:1"><table style="width:100%;border-collapse:collapse;font-size:12px">${rows}</table></div>
+      <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:12px">
+        <button class="btn btn-gray" data-c="cancel">إلغاء الاستيراد</button>
+        <button class="btn btn-gray" data-c="keep">استيراد بتواريخها كما هي</button>
+        <button class="btn btn-green" data-c="fix">✅ تصحيحها إلى شهر ${esc(targetMonth)}</button></div></div>`;
+    m.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{
+      const c=b.dataset.c;m.remove();
+      if(c==='fix'){
+        const [y,mo]=targetMonth.split('-').map(Number),last=new Date(y,mo,0).getDate();
+        out.forEach(e=>{e.date=targetMonth+'-'+String(Math.min(parseInt(e.date.slice(8,10))||1,last)).padStart(2,'0');});
+        showToast('تم تصحيح '+out.length+' تاريخ إلى شهر '+targetMonth,'info',4000);
+      }
+      res(c!=='cancel');
+    });
+    document.body.appendChild(m);
+  });
+}
+
 function importKroobXLSX(input){
   const file=input.files[0];if(!file||typeof XLSX==='undefined')return;
   const reader=new FileReader();
@@ -6546,6 +6579,7 @@ function importKroobXLSX(input){
     kroob.forEach(e=>{if(e.date){const m=e.date.slice(0,7);_kroobMonthCounts[m]=(_kroobMonthCounts[m]||0)+1;}});
     const targetMonth=Object.entries(_kroobMonthCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
     if(!targetMonth){showToast('لا يمكن تحديد شهر الملف — تأكد من صحة عمود التاريخ','error');return;}
+    if(!await acctOutOfMonthCheck(kroob,targetMonth)){input.value='';showToast('أُلغي الاستيراد','info');return;}
 
     // حذف سجلات الشهر المستهدف فقط من البيانات الحالية
     let existing=DB.get('kroob',[]);
@@ -7345,6 +7379,7 @@ function importRafidXLSX(input){
     list.forEach(e=>{if(e.date){const m=e.date.slice(0,7);_monthCounts[m]=(_monthCounts[m]||0)+1;}});
     const targetMonth=Object.entries(_monthCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
     if(!targetMonth){showToast('لا يمكن تحديد شهر الملف — تأكد من صحة عمود التاريخ','error');return;}
+    if(!await acctOutOfMonthCheck(list,targetMonth)){input.value='';showToast('أُلغي الاستيراد','info');return;}
 
     // حذف سجلات الشهر المستهدف فقط من البيانات الحالية
     let existing=DB.get('rafid_accounts',[]);

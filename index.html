@@ -1852,9 +1852,11 @@ function whatsappPdf(){
   const facts=sf==='الكل'?allFactoryNames():[sf];
   const periodLabel=ovPeriodLabel(wf,wt),sPeriodLabel=ovPeriodLabel(swf,swt);
   const pList=facts.map(f=>({f,d:anOf(analysis,f).total})).filter(r=>r.d.cars);
-  const sList=facts.map(f=>({f,d:anOf(saleAn,f).total})).filter(r=>r.d.cars||r.d.loadCars);
+  // الكمية المتبقية = الطن المشترى (فترة المشتريات) − كمية التحميل (فترة المبيعات)
+  const sList=facts.map(f=>{const d=anOf(saleAn,f).total,t=anOf(analysis,f).total.tons||0;return{f,d,rem:t-(d.loadQty||0)};}).filter(r=>r.d.cars||r.d.loadCars);
+  const remCell=v=>`<td style="color:${v<0?'#b91c1c':'#166534'};font-weight:900">${fmtKaban(v)}</td>`;
   const P=pList.reduce((a,r)=>{a.cars+=r.d.cars;a.tons+=r.d.tons;a.liters+=r.d.liters;a.kg+=r.d.kg;return a;},{cars:0,tons:0,liters:0,kg:0});
-  const SL=sList.reduce((a,r)=>{a.loadCars+=r.d.loadCars||0;a.load+=r.d.loadQty||0;a.cars+=r.d.cars;a.kaban+=r.d.kaban;return a;},{loadCars:0,load:0,cars:0,kaban:0});
+  const SL=sList.reduce((a,r)=>{a.loadCars+=r.d.loadCars||0;a.load+=r.d.loadQty||0;a.rem+=r.rem;return a;},{loadCars:0,load:0,rem:0});
   // المتبقي من حصة الشراء (القطع النشط) — من تاريخ بدء القطع لا من فترة الصفحة
   const qList=facts.map(f=>({f,q:getQuotaStatus(f)})).filter(r=>r.q);
   const empty=n=>`<tr><td colspan="${n}" style="padding:12px;color:#666">لا توجد حركة في هذه الفترة</td></tr>`;
@@ -1874,9 +1876,9 @@ function whatsappPdf(){
 ${pList.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.cars)}</td><td>${fmt(r.d.tons)}</td><td>${fmt(r.d.liters)}</td><td>${fmt(r.d.kg)}</td></tr>`).join('')||empty(6)}
 <tr class="tot"><td colspan="2">الإجمالي</td><td>${fmtM(P.cars)}</td><td>${fmt(P.tons)}</td><td>${fmt(P.liters)}</td><td>${fmt(P.kg)}</td></tr></tbody></table>
 <h2>📦 المبيعات — ${esc(sPeriodLabel)}</h2>
-<table><thead><tr><th>ت</th><th>المعمل</th><th>سيارات التحميل</th><th>كمية التحميل</th><th>سيارات التفريغ</th><th>كمية التفريغ</th></tr></thead><tbody>
-${sList.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.loadCars||0)}</td><td>${fmtKaban(r.d.loadQty||0)}</td><td>${fmtM(r.d.cars)}</td><td>${fmtKaban(r.d.kaban)}</td></tr>`).join('')||empty(6)}
-<tr class="tot"><td colspan="2">الإجمالي</td><td>${fmtM(SL.loadCars)}</td><td>${fmtKaban(SL.load)}</td><td>${fmtM(SL.cars)}</td><td>${fmtKaban(SL.kaban)}</td></tr></tbody></table>
+<table><thead><tr><th>ت</th><th>المعمل</th><th>سيارات التحميل</th><th>كمية التحميل</th><th>الكمية المتبقية</th></tr></thead><tbody>
+${sList.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${fmtM(r.d.loadCars||0)}</td><td>${fmtKaban(r.d.loadQty||0)}</td>${remCell(r.rem)}</tr>`).join('')||empty(5)}
+<tr class="tot"><td colspan="2">الإجمالي</td><td>${fmtM(SL.loadCars)}</td><td>${fmtKaban(SL.load)}</td>${remCell(SL.rem)}</tr></tbody></table>
 ${qList.length?`<h2>📋 الكمية المتبقية للمشتريات (لتر طبيعي)</h2>
 <table><thead><tr><th>ت</th><th>المعمل</th><th>بداية القطع</th><th>الحصة</th><th>المشترى</th><th>المتبقي</th></tr></thead><tbody>
 ${qList.map((r,i)=>`<tr><td>${i+1}</td><td class="rt">${esc(r.f)}</td><td>${esc(r.q.start||'—')}</td><td>${fmtM(r.q.quota)}</td><td>${fmtM(r.q.used)}</td><td style="color:${r.q.over?'#b91c1c':'#166534'};font-weight:900">${r.q.over?'تجاوز '+fmtM(Math.abs(r.q.remaining)):fmtM(r.q.remaining)}</td></tr>`).join('')}

@@ -1851,14 +1851,13 @@ function whatsappPdf(){
   buildWaPdf(null);
 }
 
-// «الكل»: نافذة لكل معمل فيها فترة المشتريات وفترة المبيعات، تُحفظ للمرة القادمة (wa_pdf_ranges)
+// «الكل»: نافذة لكل معمل فيها فترة المشتريات وفترة المبيعات، تُحفظ للمرة القادمة (wa_pdf_ranges2)
 function showWaPdfRangesModal(){
-  const saved=DB.get('wa_pdf_ranges',{}),[swf,swt]=ovSalesRange();
-  const an=getAnalysis(S.wFrom,S.wTo),san=getSaleAnalysis(swf,swt);
-  const inp=(id,v)=>`<input class="inp" type="date" id="${id}" value="${esc(v||'')}" style="padding:6px;font-size:12px">`;
+  const saved=DB.get('wa_pdf_ranges2',{});
+  const inp=(id,v)=>`<input class="inp" type="date" id="${id}" value="${esc(v||'')}" style="padding:6px;font-size:12px" onchange="const c=document.getElementById('wr_on_'+this.id.split('_').pop());if(c&&this.value)c.checked=true">`;
   const rowsHtml=allFactoryNames().map((f,i)=>{
-    const r=saved[f]||{pf:S.wFrom,pt:S.wTo,sf:swf,st:swt};
-    const on=saved[f]?saved[f].on!==false:!!(anOf(an,f).total.cars||anOf(san,f).total.cars||anOf(san,f).total.loadCars);
+    // المعمل الجديد يبدأ بلا تواريخ وغير محدد؛ يُحدَّد تلقائياً عند إدخال تاريخ له
+    const r=saved[f]||{},on=!!(r.on&&(r.pf||r.pt||r.sf||r.st));
     return `<div data-f="${esc(f)}" data-i="${i}" style="padding:10px;border-bottom:1px solid #e2e8f0">
       <label style="display:flex;align-items:center;gap:8px;font-weight:900;font-size:13px;color:#1e293b;cursor:pointer"><input type="checkbox" id="wr_on_${i}" ${on?'checked':''}> ${esc(f)}</label>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px;margin-top:6px;font-size:11px;font-weight:700;color:#475569">
@@ -1871,21 +1870,21 @@ function showWaPdfRangesModal(){
   m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
   m.innerHTML=`<div class="card" style="max-width:620px;width:100%;max-height:88vh;display:flex;flex-direction:column;padding:16px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0;font-size:15px;font-weight:900;color:#1e293b">📄 فترة كل معمل في ملف PDF</h3><button onclick="document.getElementById('wa-ranges-modal').remove()" aria-label="إغلاق" style="background:none;border:none;font-size:18px;cursor:pointer;font-weight:900;color:#64748b">✕</button></div>
-    <p style="font-size:11px;color:#64748b;margin:0 0 10px">حدّد المعامل التي تدخل الملف وفترة مشتريات ومبيعات كل واحد. التواريخ تُحفظ للمرة القادمة، والتاريخ الفارغ يعني كل الفترات.</p>
+    <p style="font-size:11px;color:#64748b;margin:0 0 10px">يدخل الملف فقط المعمل المحدد الذي أدخلت له فترة. التواريخ تُحفظ للمرة القادمة.</p>
     <div style="overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;flex:1">${rowsHtml}</div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px"><button class="btn btn-gray" onclick="document.getElementById('wa-ranges-modal').remove()">إلغاء</button><button class="btn btn-green" onclick="confirmWaPdfRanges()">📄 إنشاء PDF</button></div></div>`;
   document.body.appendChild(m);
 }
 function confirmWaPdfRanges(){
   const m=document.getElementById('wa-ranges-modal');if(!m)return;
-  const saved=DB.get('wa_pdf_ranges',{}),ranges={};
+  const saved=DB.get('wa_pdf_ranges2',{}),ranges={};
   m.querySelectorAll('[data-f]').forEach(d=>{
     const f=d.dataset.f,i=d.dataset.i,v=k=>(document.getElementById('wr_'+k+'_'+i)||{}).value||'';
     const r={pf:v('pf'),pt:v('pt'),sf:v('sf'),st:v('st'),on:!!document.getElementById('wr_on_'+i).checked};
-    saved[f]=r;if(r.on)ranges[f]=r;
+    saved[f]=r;if(r.on&&(r.pf||r.pt||r.sf||r.st))ranges[f]=r;
   });
-  DB.set('wa_pdf_ranges',saved);
-  if(!Object.keys(ranges).length){showToast('حدّد معملاً واحداً على الأقل','warning');return;}
+  DB.set('wa_pdf_ranges2',saved);
+  if(!Object.keys(ranges).length){showToast('حدّد معملاً واحداً على الأقل وأدخل له فترة','warning');return;}
   m.remove();
   buildWaPdf(ranges);
 }

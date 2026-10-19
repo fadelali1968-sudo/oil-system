@@ -855,6 +855,7 @@ async function syncFromCloud(silent=false) {
     if(!DB.get('rafid_cleared',false)){
       const rafidAccounts = await FDB.getAll('rafid_accounts'); if(rafidAccounts&&rafidAccounts.length) DB.set('rafid_accounts',rafidAccounts);
       const rafidOpArr = await FDB.getAll('rafid_opening'); if(rafidOpArr&&rafidOpArr.length){const op=rafidOpArr.find(x=>x.id==='opening')||rafidOpArr[0];if(op)DB.set('rafid_opening',{dinar:parseFloat(op.dinar||0),dollar:parseFloat(op.dollar||0)});}
+      const rafidMonthOp=await FDB.getAll('rafid_month_openings'); if(rafidMonthOp&&rafidMonthOp.length){const map=DB.get('rafid_month_openings',{});rafidMonthOp.forEach(x=>{if(x.id)map[x.id]={dinar:x.dinar,dollar:x.dollar};});DB.set('rafid_month_openings',map);}
     }
     const settings=await FDB.getAll('settings');if(settings&&settings.length){const fd=settings.find(x=>x.id==='factories');if(fd&&fd.list&&fd.list.length){DB.set('factories',fd.list);}const kot=settings.find(x=>x.id==='kroob_op_types');if(kot&&kot.list&&kot.list.length)DB.set('kroob_op_types',kot.list);const fq=settings.find(x=>x.id==='factory_quotas');if(fq&&fq.map&&typeof fq.map==='object')DB.set('factory_quotas',fq.map);const qh=settings.find(x=>x.id==='quota_history');if(qh&&Array.isArray(qh.list))DB.set('quota_history',qh.list);const ea=settings.find(x=>x.id==='expense_entity_aliases');if(ea&&ea.map&&typeof ea.map==='object')DB.set('expense_entity_aliases',ea.map);const prl=settings.find(x=>x.id==='pricing_rules');if(prl&&Array.isArray(prl.list))DB.set('pricing_rules',prl.list);const trl=settings.find(x=>x.id==='transport_rules');if(trl&&Array.isArray(trl.list))DB.set('transport_rules',trl.list);const srt=settings.find(x=>x.id==='sale_rates');if(srt&&srt.map&&typeof srt.map==='object')DB.set('sale_rates',srt.map);}
     const expEntArr=await FDB.getAll('expense_entities');if(expEntArr&&expEntArr.length)DB.set('expense_entities',expEntArr);
@@ -5387,6 +5388,8 @@ function calcKroobBalanceFrom(list,startDinar,startDollar){
 }
 
 function getRafidCarryForward(month){
+  const monthOpenings=DB.get('rafid_month_openings',{});
+  if(monthOpenings[month]) return{dinar:safeNum(monthOpenings[month].dinar),dollar:safeNum(monthOpenings[month].dollar)};
   const allList=getRafidList(),prevList=allList.filter(e=>(e.date||'').slice(0,7)<month);
   if(!prevList.length){const op=DB.get('rafid_opening',{dinar:0,dollar:0});return{dinar:safeNum(op.dinar),dollar:safeNum(op.dollar)};}
   const withBal=calcRafidBalance(prevList),last=withBal[withBal.length-1];
@@ -6328,6 +6331,37 @@ function _xlsxTopBalance(ws,head,bal){const B={style:'thin',color:{rgb:'A6A6A6'}
 function _xlsxCurFmt(ws,head){const rng=XLSX.utils.decode_range(ws['!ref']);const cols=[];head.forEach((h,c)=>{if(/دينار/.test(h))cols.push([c,1]);else if(/دولار/.test(h))cols.push([c,0]);});const decL=cols.some(([c,d])=>{if(d)return false;for(let r=0;r<=rng.e.r;r++){const x=ws[XLSX.utils.encode_cell({r,c})];if(x&&x.t==='n'&&x.v%1!==0)return true;}return false;});cols.forEach(([c,isD])=>{for(let r=0;r<=rng.e.r;r++){if(r===1)continue;const ref=XLSX.utils.encode_cell({r,c});const cell=ws[ref];if(r===0&&(!cell||cell.t!=='n'))continue;if(!cell)continue;cell.s=Object.assign({},cell.s,{numFmt:isD?'#,##0 "د.ع"':(decL?'"$"#,##0.00':'"$"#,##0')});}});}
 function exportKroobXLSX(){if(typeof XLSX==='undefined')return;const month=S.kroobMonth||today().slice(0,7),mLabel=_iqMonthLabel(month),opening=getKroobCarryForward(month),withBal=calcKroobBalanceFrom(getKroobList().filter(e=>(e.date||'').startsWith(month)),opening.dinar,opening.dollar);const rows=[['ت','التاريخ','البيان','الجهة المستفيدة','المستلم','دائن دينار','مدين دينار','دائن دولار','مدين دولار','نوع العملية','عمولة دينار','عمولة دولار','رصيد دينار','رصيد دولار']];rows.push(['رصيد مرحّل من الشهر السابق','','','','','','','','','','','',(opening.dinar||0),(opening.dollar||0)]);withBal.forEach((e,i)=>{const tdD=kroobDir(e,'dinar'),tdDol=kroobDir(e,'dollar');rows.push([i+1,e.date,e.description,e.beneficiary||'',e.receiver||'',tdD==='دائن'?e.amount_dinar||0:'',tdD==='مدين'?e.amount_dinar||0:'',tdDol==='دائن'?e.amount_dollar||0:'',tdDol==='مدين'?e.amount_dollar||0:'',e.operation_type||'',e.commission||0,e.commission_dollar||0,e.bal_dinar,e.bal_dollar]);});const _bk=_xlsxBalFormulas(rows,60);const ws=xlsxSheet(rows,{title:'كروب رافد فيصل — شهر '+mLabel,cars:withBal.length,countLabel:'عدد الحركات',sum:['دائن دينار','مدين دينار','دائن دولار','مدين دولار','عمولة دينار','عمولة دولار'],num:['رصيد دينار','رصيد دولار']});_xlsxTopBalance(ws,rows[0],_bk);_xlsxCurFmt(ws,rows[0]);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'كروب رافد فيصل');xlsxSave(wb,'كروب_'+mLabel.replace(/ /g,'_')+'.xlsx');}
 
+// ===== قراءة ملف Excel بتصميم تصدير البرنامج (الكروب / رافد) =====
+// العناوين: ت | التاريخ | البيان | الجهة | المستلم | دائن دينار | مدين دينار | دائن دولار | مدين دولار | نوع العملية | عمولة دينار | عمولة دولار | رصيد دينار | رصيد دولار
+// يُرجع null إذا لم يكن الملف بهذا التصميم (فيُقرأ بالطريقة القديمة). السطر بلا رقم تسلسل يُستورد ما دام له تاريخ ومبلغ.
+function parseAcctXlsx(rows){
+  const hi=rows.slice(0,6).findIndex(r=>r.some(v=>String(v).trim()==='دائن دينار')&&r.some(v=>String(v).trim()==='رصيد دينار'));
+  if(hi<0)return null;
+  const H=rows[hi].map(v=>String(v).trim()),col=(...n)=>H.findIndex(h=>n.includes(h));
+  const C={date:col('التاريخ'),desc:col('البيان'),benef:col('الجهة','الجهة المستفيدة'),recv:col('المستلم'),dainD:col('دائن دينار'),madinD:col('مدين دينار'),dainDol:col('دائن دولار'),madinDol:col('مدين دولار'),op:col('نوع العملية'),comD:col('عمولة دينار'),comDol:col('عمولة دولار'),balD:col('رصيد دينار'),balDol:col('رصيد دولار')};
+  const num=v=>parseFloat(String(v??'').replace(/[$,،\s\u200e\u200f]/g,''))||0;
+  const p2=n=>String(n).padStart(2,'0');
+  function dateOf(v){
+    if(v instanceof Date)return v.getFullYear()+'-'+p2(v.getMonth()+1)+'-'+p2(v.getDate());
+    if(typeof v==='number'&&v>40000)return new Date(Math.round((v-25569)*86400000)).toISOString().slice(0,10);
+    const t=String(v||'').trim();let m;
+    if((m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)))return m[1]+'-'+p2(m[2])+'-'+p2(m[3]);
+    if((m=t.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/)))return m[3]+'-'+p2(m[2])+'-'+p2(m[1]);
+    return '';
+  }
+  let opD=0,opDol=0,hasOp=false;const list=[];
+  for(let r=hi+1;r<rows.length;r++){
+    const row=rows[r],txt=i=>i<0?'':String(row[i]??'').trim(),first=txt(0);
+    if(first.includes('رصيد')||first.includes('مدور')){if(!hasOp){opD=num(row[C.balD]);opDol=num(row[C.balDol]);hasOp=true;}continue;}
+    if(first.includes('المجموع')||first.includes('الإجمالي'))continue;
+    const date=dateOf(row[C.date]);
+    const e={date,desc:txt(C.desc),benef:txt(C.benef),recv:txt(C.recv),dainD:num(row[C.dainD]),madinD:num(row[C.madinD]),dainDol:num(row[C.dainDol]),madinDol:num(row[C.madinDol]),op:txt(C.op),comD:C.comD<0?0:num(row[C.comD]),comDol:C.comDol<0?0:num(row[C.comDol]),r};
+    if(!date||!(e.dainD||e.madinD||e.dainDol||e.madinDol||e.comD||e.comDol))continue;
+    list.push(e);
+  }
+  return{opD,opDol,hasOp,list};
+}
+
 function importKroobXLSX(input){
   const file=input.files[0];if(!file||typeof XLSX==='undefined')return;
   const reader=new FileReader();
@@ -6389,8 +6423,16 @@ function importKroobXLSX(input){
     // row[13]=نوع العملية | row[14]=عمولة دينار | row[15]=عمولة دولار
 
     let kroob=[],imported=0;
+    const nf=parseAcctXlsx(rows);
+    if(nf){
+      opDinar=nf.hasOp?nf.opD:0;opDollar=nf.hasOp?nf.opDol:0;
+      nf.list.forEach(x=>{kroob.push({id:'kr_xl_'+x.r+'_'+Date.now(),date:x.date,description:x.desc,operation_type:x.op||(x.dainD?'إيداع':'صرف'),
+        type_dinar:x.dainD>0?'دائن':'مدين',type_dollar:x.dainDol>0?'دائن':'مدين',beneficiary:x.benef,receiver:x.recv,
+        amount_dinar:x.dainD||x.madinD,amount_dollar:x.dainDol||x.madinDol,commission:x.comD,commission_dollar:x.comDol,
+        accountant:currentUser?.email||'import',time:Date.now()+x.r});imported++;});
+    }
 
-    for(let r=2;r<rows.length;r++){
+    for(let r=2;!nf&&r<rows.length;r++){
       const row=rows[r];
       const num=String(row[0]||'').trim();
       if(!num||isNaN(parseFloat(num)))continue;
@@ -6496,7 +6538,7 @@ function importKroobXLSX(input){
 
 // ===== حسابات سيد رافد - الدوال الكاملة =====
 function getRafidList(){let list=DB.get('rafid_accounts',[]);list.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));return list;}
-function calcRafidBalance(list){const opening=DB.get('rafid_opening',{dinar:0,dollar:0});let balDinar=parseFloat(opening.dinar||0),balDollar=parseFloat(opening.dollar||0);return list.map(e=>{const d=parseFloat(e.dinar||0),dl=parseFloat(e.dollar||0),com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0),tdD=(e.type_dinar||'مدين').trim(),tdDol=(e.type_dollar||'مدين').trim();if(tdD==='دائن')balDinar+=d;else balDinar-=d;if(tdDol==='دائن')balDollar+=dl;else balDollar-=dl;balDinar-=com;balDollar-=commD;return{...e,bal_dinar:balDinar,bal_dollar:balDollar};});}
+function calcRafidBalance(list){const opening=DB.get('rafid_opening',{dinar:0,dollar:0}),monthOpenings=DB.get('rafid_month_openings',{});let balDinar=parseFloat(opening.dinar||0),balDollar=parseFloat(opening.dollar||0),lastMonth='';return list.map(e=>{const eMonth=(e.date||'').slice(0,7);if(eMonth&&eMonth!==lastMonth){lastMonth=eMonth;if(monthOpenings[eMonth]){balDinar=safeNum(monthOpenings[eMonth].dinar);balDollar=safeNum(monthOpenings[eMonth].dollar);}}const d=parseFloat(e.dinar||0),dl=parseFloat(e.dollar||0),com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0),tdD=(e.type_dinar||'مدين').trim(),tdDol=(e.type_dollar||'مدين').trim();if(tdD==='دائن')balDinar+=d;else balDinar-=d;if(tdDol==='دائن')balDollar+=dl;else balDollar-=dl;balDinar-=com;balDollar-=commD;return{...e,bal_dinar:balDinar,bal_dollar:balDollar};});}
 
 function viewRafidAccounts(){
   const month=S.rafidMonth||today().slice(0,7);
@@ -6699,7 +6741,7 @@ function saveRafidOpening(){const d=amtVal('rf_op_dinar'),dl=amtVal('rf_op_dolla
 async function clearRafidData(){
   if(!confirm('مسح جميع بيانات حسابات سيد رافد؟'))return;
   if(!confirm('تأكيد نهائي — لا يمكن التراجع!'))return;
-  DB.set('rafid_accounts',[]);DB.set('rafid_opening',{dinar:0,dollar:0});DB.set('rafid_cleared',true);
+  DB.set('rafid_accounts',[]);DB.set('rafid_opening',{dinar:0,dollar:0});DB.set('rafid_month_openings',{});DB.set('rafid_cleared',true);
   if(window._fbReady){try{const {db,collection,getDocs,deleteDoc,doc}=window._fb;const snap=await getDocs(collection(db,'rafid_accounts'));await Promise.all(snap.docs.map(d=>deleteDoc(doc(db,'rafid_accounts',d.id))));await deleteDoc(doc(db,'rafid_opening','opening'));console.log('✅ Rafid cleared');}catch(e){console.warn(e);}}
   showToast('تم مسح كل بيانات حسابات سيد رافد','success');renderContent();
 }
@@ -7194,9 +7236,16 @@ function importRafidXLSX(input){
     }
     
     let list=[],imported=0;
+    const nf=parseAcctXlsx(rows);
+    if(nf){
+      opDinar=nf.hasOp?nf.opD:0;opDollar=nf.hasOp?nf.opDol:0;
+      nf.list.forEach(x=>{list.push({id:'rf_xl_'+x.r+'_'+Date.now(),date:x.date,description:x.desc,beneficiary:x.benef,receiver:x.recv,op_type:x.op,
+        dinar:x.dainD||x.madinD,type_dinar:x.dainD>0?'دائن':'مدين',dollar:x.dainDol||x.madinDol,type_dollar:x.dainDol>0?'دائن':'مدين',
+        commission:x.comD,commission_dollar:x.comDol,accountant:'import',time:Date.now()+x.r});imported++;});
+    }
     // البيانات من Row 4 (index 4) - نتجاهل صفوف الرصيد السابق
     const dataStartRow=4; // بعد الرأس وصف الباقي
-    for(let r=dataStartRow;r<rows.length;r++){
+    for(let r=dataStartRow;!nf&&r<rows.length;r++){
       const row=rows[r];
       const num=parseFloat(String(row[0]||''));
       if(!num||isNaN(num))continue;
@@ -7274,6 +7323,9 @@ function importRafidXLSX(input){
     const firstMonth=allRafid.find(e=>e.date)?.date?.slice(0,7)||'';
     const shouldUpdateOpening=(opDinar!==0||opDollar!==0)&&targetMonth===firstMonth;
     if(shouldUpdateOpening) DB.set('rafid_opening',{dinar:opDinar,dollar:opDollar});
+    // الملف بالتصميم الجديد: رصيده المرحّل يصير رصيد بداية هذا الشهر (كما في الكروب)
+    const saveMonthOp=!!(nf&&nf.hasOp);
+    if(saveMonthOp){const mo=DB.get('rafid_month_openings',{});mo[targetMonth]={dinar:opDinar,dollar:opDollar};DB.set('rafid_month_openings',mo);}
 
     DB.set('rafid_accounts',allRafid);
     DB.set('rafid_cleared',false);
@@ -7281,6 +7333,7 @@ function importRafidXLSX(input){
     showToast('⏳ جاري الحفظ في السحابة...','info',3000);
     const saves=list.map(k=>FDB.save('rafid_accounts',k.id,k));
     if(shouldUpdateOpening) saves.push(FDB.save('rafid_opening','opening',{dinar:opDinar,dollar:opDollar}));
+    if(saveMonthOp) saves.push(FDB.save('rafid_month_openings',targetMonth,{id:targetMonth,dinar:opDinar,dollar:opDollar}));
     const _res=await Promise.all(saves);
     const _bad=_res.filter(r=>!r).length;
     if(_bad)showToast('✅ تم استيراد '+imported+' حركة محلياً | ⚠️ '+_bad+' سجلاً لم يصل السحابة — اضغط الشارة أسفل اليسار','warning',9000);
@@ -8015,7 +8068,7 @@ function deleteUser(k){if(!confirm('حذف المستخدم: '+k+'?'))return;con
 const BACKUP_KEYS=['entries','sales','expenses','expense_entities','expense_entity_aliases','deleted_expense_ids',
   'salaf','salaf_settlement_cfg','private_salaf','deleted_private_salaf_ids',
   'kroob','kroob_opening','kroob_month_openings','kroob_op_types',
-  'rafid_accounts','rafid_opening','refinery_received',
+  'rafid_accounts','rafid_opening','rafid_month_openings','refinery_received',
   'drivers','factories','factory_quotas','quota_history','pricing_rules','transport_rules','sale_rates','users','audit_log','notifs',
   'entries_cleaned','expenses_haidar_migrated','expenses_settlement_cleaned',
   'haider_salaf_migrated','kroob_cleared','rafid_cleared','statement_perms_migrated'];

@@ -14,7 +14,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy, where, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy, where, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, deleteUser as fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   const firebaseConfig = {
     apiKey: "AIzaSyAEQ4T5W2sddGkrVkbq2KroZPmFy6BPPgU",
@@ -25,7 +25,10 @@
     appId: "1:825587214922:web:aa249893dde01f6dcd14b3"
   };
   const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+  // ذاكرة Firestore دائمة على الجهاز: القراءة بدون نت تأتي منها، والكتابات المعلَّقة تبقى بعد إغلاق الصفحة وتُرسل عند عودة الاتصال
+  let db;
+  try { db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
+  catch (e) { console.warn('Firestore persistence unavailable:', e); db = getFirestore(app); }
   const auth = getAuth(app);
   window._fb = { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy, where, limit };
   window._auth = { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider };
@@ -212,7 +215,10 @@ function _dbWriteFailed(key,err){
 // للقيود والمبيعات — فأي سجل لم يصل السحابة (انقطاع نت/رفض قواعد) كان يُمحى صامتاً عند أول تحميل.
 const FDB_QUEUE_KEY='fdb_pending';
 function _fdbQueueAll(){ const q=DB.get(FDB_QUEUE_KEY,{}); return (q&&typeof q==='object'&&!Array.isArray(q))?q:{}; }
-function _fdbQueue(col,id,data){ if(!col||!id||data===undefined)return; const q=_fdbQueueAll(); q[col+'/'+id]={col:col,id:id,data:data,at:Date.now()}; DB.set(FDB_QUEUE_KEY,q); _fdbBadge(); }
+function _fdbQueue(col,id,data,quiet){ if(!col||!id||data===undefined)return; const q=_fdbQueueAll(); q[col+'/'+id]={col:col,id:id,data:data,at:Date.now()}; DB.set(FDB_QUEUE_KEY,q); if(!quiet)_fdbBadge(); }
+// انتظار كتابة Firestore بحد أقصى: بدون نت تبقى معلَّقة (وتُرسل لاحقاً تلقائياً) فنُرجع false بدل تجميد الواجهة
+const FDB_WAIT_MS=8000;
+function _fbWait(p){ return Promise.race([p,new Promise(function(r){ setTimeout(function(){ r(false); }, navigator.onLine===false?300:FDB_WAIT_MS); })]); }
 function _fdbUnqueue(col,id){ const q=_fdbQueueAll(),k=col+'/'+id; if(q[k]){ delete q[k]; DB.set(FDB_QUEUE_KEY,q); _fdbBadge(); } }
 function fdbPendingCount(){ return Object.keys(_fdbQueueAll()).length; }
 // معرّفات مجموعة بعينها ما زالت معلَّقة — تحمي syncFromCloud من محوها
@@ -224,7 +230,7 @@ async function flushFdbQueue(silent){
   if(!silent&&typeof showToast==='function')showToast('⏳ جاري رفع '+items.length+' سجل معلَّق...','info',3000);
   let ok=0,fail=0;
   for(const it of items){
-    try{ const {db,doc,setDoc}=window._fb; await setDoc(doc(db,it.col,it.id),{...it.data,_updated:Date.now()}); _fdbUnqueue(it.col,it.id); ok++; }
+    try{ const {db,doc,setDoc}=window._fb; if(await _fbWait(setDoc(doc(db,it.col,it.id),{...it.data,_updated:Date.now()}).then(function(){ _fdbUnqueue(it.col,it.id); return true; }))) ok++; else fail++; }
     catch(e){ fail++; }
   }
   if(!silent&&typeof showToast==='function'){
@@ -251,15 +257,22 @@ function _fdbBadge(){
 }
 const FDB = {
   // تُرجع true عند النجاح الفعلي، وfalse مع وضع السجل بطابور إعادة المحاولة
+  // بدون نت لا يكتمل setDoc حتى يعود الاتصال — فالسجل يُوضع بالطابور أولاً، ولا ننتظر أكثر من FDB_WAIT_MS
   async save(col, id, data) {
-    if(!window._fbReady){ _fdbQueue(col,id,data); return false; }
-    try { const {db,doc,setDoc}=window._fb; await setDoc(doc(db,col,id),{...data,_updated:Date.now()}); _fdbUnqueue(col,id); return true; }
-    catch(e) { console.warn('FDB.save error:',e); _fdbQueue(col,id,data); return false; }
+    _fdbQueue(col,id,data,true);
+    if(!window._fbReady){ _fdbBadge(); return false; }
+    try {
+      const {db,doc,setDoc}=window._fb;
+      const p=setDoc(doc(db,col,id),{...data,_updated:Date.now()}).then(function(){ _fdbUnqueue(col,id); return true; });
+      if(await _fbWait(p)) return true;
+      _fdbBadge(); return false;
+    }
+    catch(e) { console.warn('FDB.save error:',e); _fdbBadge(); return false; }
   },
   async delete(col, id) {
     _fdbUnqueue(col,id);   // حذف سجل معلَّق يُلغي رفعه
     if(!window._fbReady) return false;
-    try { const {db,doc,deleteDoc}=window._fb; await deleteDoc(doc(db,col,id)); return true; } catch(e) { console.warn('FDB.delete error:',e); return false; }
+    try { const {db,doc,deleteDoc}=window._fb; return await _fbWait(deleteDoc(doc(db,col,id)).then(function(){ return true; })); } catch(e) { console.warn('FDB.delete error:',e); return false; }
   },
   async getAll(col) {
     try { if(!window._fbReady) return null; const {db,collection,getDocs}=window._fb; const snap=await getDocs(collection(db,col)); return snap.docs.map(d=>d.data()); } catch(e) { return null; }
@@ -8865,6 +8878,8 @@ async function doLogin(){
     if(window._auth){
       const {auth,signInWithEmailAndPassword:sip}=window._auth;
       await sip(auth,email,pass);
+      // بصمة محلية لفتح قفل الشاشة بدون نت (لا يمكن التحقق من Firebase وقتها)
+      try{ DB.set('offline_unlock',{email:email,hash:await hashPassword(email.toLowerCase()+'|'+pass)}); }catch(e){}
     }
     // بعد نجاح Firebase Auth، نحمّل بيانات المستخدم من localStorage/Firestore
     const users=DB.get('users',{});const k=uid(email);
@@ -8926,13 +8941,48 @@ function logout(){
       document.body.appendChild(div);
     }, TIMEOUT_MS - WARNING_MS);
 
-    _timer = setTimeout(()=>{
+    _timer = setTimeout(async ()=>{
       if(!currentUser) return;
       const warnEl = document.getElementById('_session_warn');
       if(warnEl) warnEl.remove();
+      // بدون نت: تسجيل الخروج يمنع الدخول مجدداً حتى يعود الاتصال — فنقفل الشاشة بدلاً منه
+      if(!(await _netReachable())){ _offlineLock(); return; }
       showToast('تم تسجيل خروجك تلقائياً بسبب الخمول','error');
       setTimeout(logout, 1500);
     }, TIMEOUT_MS);
+  }
+
+  function _netReachable(){
+    if(navigator.onLine===false) return Promise.resolve(false);
+    return Promise.race([
+      fetch('https://www.gstatic.com/generate_204',{mode:'no-cors',cache:'no-store'}).then(()=>true,()=>false),
+      new Promise(r=>setTimeout(()=>r(false),5000))
+    ]);
+  }
+
+  function _offlineLock(){
+    const saved=DB.get('offline_unlock',null);
+    // لا بصمة محفوظة (لم يُسجَّل دخول منذ هذا التحديث) — لا يمكن التحقق، فنبقيه داخلاً بدل حرمانه من البرنامج
+    if(!saved||!saved.hash||!currentUser||String(saved.email).toLowerCase()!==String(currentUser.email||'').toLowerCase()){ _resetTimers(); return; }
+    if(document.getElementById('_offline_lock')) return;
+    const d=document.createElement('div');
+    d.id='_offline_lock';
+    d.style.cssText='position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);font-family:Cairo,sans-serif';
+    d.innerHTML='<div style="background:#fff;border-radius:20px;padding:32px;width:340px;max-width:92vw;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,.3)">'
+      +'<div style="font-size:40px">🔒</div><h2 style="font-size:18px;font-weight:900;color:#0f172a;margin:6px 0">الشاشة مقفلة</h2>'
+      +'<p style="font-size:12px;font-weight:700;color:#64748b;margin:0 0 14px">قُفلت بسبب الخمول والإنترنت مقطوع — أدخل كلمة السر للمتابعة<br>'+esc(saved.email)+'</p>'
+      +'<input type="password" id="_ol_pass" class="inp" placeholder="كلمة السر" style="text-align:center;margin-bottom:10px">'
+      +'<button id="_ol_btn" class="btn btn-blue" style="width:100%">🔓 فتح</button>'
+      +'<div id="_ol_err" style="color:#b91c1c;font-size:12px;font-weight:700;margin-top:8px;min-height:16px"></div></div>';
+    document.body.appendChild(d);
+    const inp=d.querySelector('#_ol_pass'),err=d.querySelector('#_ol_err');
+    const tryUnlock=async ()=>{
+      if(await hashPassword(saved.email.toLowerCase()+'|'+inp.value)===saved.hash){ d.remove(); _resetTimers(); }
+      else { err.textContent='كلمة السر غير صحيحة'; inp.value=''; inp.focus(); }
+    };
+    d.querySelector('#_ol_btn').addEventListener('click',tryUnlock);
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') tryUnlock(); });
+    setTimeout(()=>inp.focus(),50);
   }
 
   ['mousemove','keydown','mousedown','touchstart','scroll','click'].forEach(ev =>
@@ -8942,7 +8992,7 @@ function logout(){
   const _origRender = window.render;
   window.render = function(){ if(typeof _origRender==='function') _origRender(); _resetTimers(); };
   const _origLogout = window.logout;
-  window.logout = function(){ clearTimeout(_timer); clearTimeout(_warnTimer); const w=document.getElementById('_session_warn'); if(w)w.remove(); if(typeof _origLogout==='function') _origLogout(); };
+  window.logout = function(){ clearTimeout(_timer); clearTimeout(_warnTimer); const w=document.getElementById('_session_warn'); if(w)w.remove(); const ol=document.getElementById('_offline_lock'); if(ol)ol.remove(); if(typeof _origLogout==='function') _origLogout(); };
 })();
 
 // ===== رفع السجلات المعلَّقة تلقائياً =====
@@ -9020,6 +9070,12 @@ document.addEventListener('fullscreenchange', () => {
     btn.title = 'شاشة كاملة';
   }
 });
+</script>
+<script>
+// عمل بدون نت: sw.js يحفظ الصفحة ومكتباتها على الجهاز (لا يعمل من file://)
+if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
+  window.addEventListener('load',function(){ navigator.serviceWorker.register('sw.js').catch(function(e){ console.warn('SW register failed:',e); }); });
+}
 </script>
 </body>
 </html>

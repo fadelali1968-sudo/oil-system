@@ -1965,7 +1965,7 @@ function acctDayPdf(kind){
   const list=K?getKroobInRange(day,day):getRafidInRange(day,day);
   const open=K?getKroobBalanceBefore(day):getRafidBalanceBefore(day);
   let bD=open.dinar,bDol=open.dollar;
-  const sgn=(v,inn,pre)=>v?`<span style="color:${inn?'#166534':'#b91c1c'}">${inn?'+':'-'}${pre||''}${fmtM(v)}</span>`:'—';
+  const sgn=(v,inn,pre)=>v?`<span style="color:${inn?'#166534':'#b91c1c'}">${pre||''}${fmtM(v)}</span>`:'—';
   const rows=list.map((e,i)=>{
     const d=safeNum(K?e.amount_dinar:e.dinar),dl=safeNum(K?e.amount_dollar:e.dollar),com=safeNum(e.commission),comD=safeNum(e.commission_dollar);
     const inD=(K?kroobDir(e,'dinar'):rafidDir(e,'dinar'))==='دائن',inDol=(K?kroobDir(e,'dollar'):rafidDir(e,'dollar'))==='دائن';

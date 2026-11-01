@@ -14,7 +14,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy, where, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, writeBatch, onSnapshot, query, orderBy, where, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, deleteUser as fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   const firebaseConfig = {
     apiKey: "AIzaSyAEQ4T5W2sddGkrVkbq2KroZPmFy6BPPgU",
@@ -30,7 +30,7 @@
   try { db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
   catch (e) { console.warn('Firestore persistence unavailable:', e); db = getFirestore(app); }
   const auth = getAuth(app);
-  window._fb = { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy, where, limit };
+  window._fb = { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, writeBatch, onSnapshot, query, orderBy, where, limit };
   window._auth = { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider };
   window._fbReady = true;
   document.dispatchEvent(new Event('fb-ready'));
@@ -227,16 +227,70 @@ async function flushFdbQueue(silent){
   const q=_fdbQueueAll(),items=Object.keys(q).map(function(k){return q[k];});
   if(!items.length){ if(!silent&&typeof showToast==='function')showToast('لا توجد سجلات معلَّقة — كل شيء مرفوع ☁️','success',3000); return {ok:0,fail:0}; }
   if(!window._fbReady){ if(!silent&&typeof showToast==='function')showToast('لم يتصل Firebase بعد — حاول بعد قليل','warning',4000); return {ok:0,fail:items.length}; }
-  if(!silent&&typeof showToast==='function')showToast('⏳ جاري رفع '+items.length+' سجل معلَّق...','info',3000);
+  if(_fdbFlushing){ if(!silent&&typeof showToast==='function')showToast('⏳ الرفع جارٍ بالفعل...','info',3000); return {ok:0,fail:items.length}; }
+  _fdbFlushing=true;
   let ok=0,fail=0;
-  for(const it of items){
-    try{ const {db,doc,setDoc}=window._fb; if(await _fbWait(setDoc(doc(db,it.col,it.id),{...it.data,_updated:Date.now()}).then(function(){ _fdbUnqueue(it.col,it.id); return true; }))) ok++; else fail++; }
-    catch(e){ fail++; }
-  }
+  try{ const r=await fdbSaveBatched(items,silent?null:'رفع السجلات المعلَّقة'); ok=r.ok; fail=r.fail; }
+  finally{ _fdbFlushing=false; }
   if(!silent&&typeof showToast==='function'){
     if(fail)showToast('☁️ رُفع '+ok+' | ⚠️ ما زال '+fail+' معلَّقاً — تحقّق من الاتصال','warning',7000);
     else showToast('✅ رُفعت كل السجلات المعلَّقة ('+ok+') إلى السحابة ☁️','success',5000);
   }
+  return {ok:ok,fail:fail};
+}
+let _fdbFlushing=false;
+function _fdbQueueMany(arr){ if(!arr.length)return; const q=_fdbQueueAll(),t=Date.now(); arr.forEach(function(it){ q[it.col+'/'+it.id]={col:it.col,id:it.id,data:it.data,at:t}; }); DB.set(FDB_QUEUE_KEY,q); _fdbBadge(); }
+function _fdbUnqueueMany(arr){ const q=_fdbQueueAll(); let n=0; arr.forEach(function(it){ const k=it.col+'/'+it.id; if(q[k]){ delete q[k]; n++; } }); if(n){ DB.set(FDB_QUEUE_KEY,q); _fdbBadge(); } }
+// رفع على دفعات: writeBatch يكتب حتى 500 مستند بطلب واحد. كان الرفع الكامل يطلق آلاف setDoc متوازية
+// تنتهي مهلة كلٍّ منها (8 ثوانٍ) قبل وصولها، فتظهر كلها «لم يصل السحابة» بالشارة رغم أنها تُرفع.
+// items: [{col,id,data}] — ما لم يُؤكَّد رفعه يوضع بطابور إعادة المحاولة؛ label=null يعني بلا شريط تقدّم.
+const FDB_BATCH_SIZE=200, FDB_BATCH_WAIT_MS=60000;
+function _fdbProgress(html){
+  let b=document.getElementById('_fdb_prog');
+  if(html==null){ if(b)b.remove(); return; }
+  if(!b){
+    b=document.createElement('div'); b.id='_fdb_prog';
+    b.style.cssText='position:fixed;bottom:62px;left:14px;z-index:9999;background:#1e3a8a;color:#fff;border-radius:10px;padding:10px 14px;font-family:Cairo,sans-serif;font-weight:900;font-size:12px;min-width:240px;box-shadow:0 4px 16px rgba(0,0,0,.35)';
+    document.body.appendChild(b);
+  }
+  b.innerHTML=html;
+}
+async function fdbSaveBatched(items,label){
+  const {db,doc,setDoc,writeBatch}=window._fb;
+  const total=items.length; let ok=0,fail=0;
+  const bar=function(){
+    if(label==null)return;
+    const pct=total?Math.round((ok+fail)*100/total):100;
+    _fdbProgress('☁️ '+label+' — '+(ok+fail)+' / '+total+' ('+pct+'%)'
+      +'<div style="margin-top:6px;height:7px;background:rgba(255,255,255,.25);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:#34d399"></div></div>');
+  };
+  const timeout=function(ms){ return new Promise(function(r){ setTimeout(function(){ r(false); },ms); }); };
+  bar();
+  try{
+    for(let i=0;i<items.length;i+=FDB_BATCH_SIZE){
+      const chunk=items.slice(i,i+FDB_BATCH_SIZE);
+      if(navigator.onLine===false){ fail+=items.length-i; _fdbQueueMany(items.slice(i)); break; }
+      let res=false;
+      try{
+        const b=writeBatch(db),t=Date.now();
+        chunk.forEach(function(it){ b.set(doc(db,it.col,it.id),{...it.data,_updated:t}); });
+        // إن تأخر التأكيد عن المهلة واكتمل لاحقاً يُزال من الطابور عندها
+        res=await Promise.race([b.commit().then(function(){ _fdbUnqueueMany(chunk); return true; }),timeout(FDB_BATCH_WAIT_MS)]);
+      }catch(e){ console.warn('batch upload error:',e); res='error'; }
+      if(res===true){ ok+=chunk.length; }
+      else if(res==='error'){
+        // رفضُ مستند واحد (قواعد/حجم) يُسقط الدفعة كلها — نعيدها سجلاً سجلاً لنعزل المرفوض فقط
+        for(const it of chunk){
+          let one=false;
+          try{ one=await _fbWait(setDoc(doc(db,it.col,it.id),{...it.data,_updated:Date.now()}).then(function(){ _fdbUnqueue(it.col,it.id); return true; })); }catch(e){}
+          if(one) ok++; else { fail++; _fdbQueueMany([it]); }
+          bar();
+        }
+      }
+      else{ fail+=items.length-i; _fdbQueueMany(items.slice(i)); break; }   // انتهت المهلة: الاتصال بطيء/مقطوع — نؤجل الباقي
+      bar();
+    }
+  }finally{ _fdbProgress(null); }
   return {ok:ok,fail:fail};
 }
 // شارة ثابتة تُظهر وجود سجلات لم تصل السحابة — الضغط عليها يعيد المحاولة
@@ -8519,7 +8573,7 @@ async function fbDocIds(col){
 }
 
 // حمولة الرفع المشتركة بين «رفع كل البيانات» و«المطابقة الكاملة»
-function bkUploadPromises(){
+function bkUploadItems(){
   const entries=DB.get('entries',[]);
   const sales=DB.get('sales',[]);
   const expenses=DB.get('expenses',[]);
@@ -8531,29 +8585,30 @@ function bkUploadPromises(){
   const kroobOp=DB.get('kroob_opening',{dinar:0,dollar:0});
   const rafidOp=DB.get('rafid_opening',{dinar:0,dollar:0});
   const kroobOpTypes=DB.get('kroob_op_types',['صرف','إيداع','حواله']);
+  const it=(col,id,data)=>({col,id:String(id),data});
   return [
-    ...entries.map(e=>FDB.save('entries',e.id,e)),
-    ...sales.map(s=>FDB.save('sales',s.id,s)),
-    ...expenses.map(ex=>FDB.save('expenses',ex.id||String(Date.now()+Math.random()),ex)),
-    ...salaf.map(s=>FDB.save('salaf',s.id||s.name||String(Math.random()),s)),
-    ...privSalaf.filter(p=>p&&p.id).map(p=>FDB.save('private_salaf',p.id,p)),
-    ...kroob.map(k=>FDB.save('kroob',k.id,k)),
-    ...rafid.map(r=>FDB.save('rafid_accounts',r.id,r)),
-    ...Object.entries(users).map(([k,u])=>FDB.save('users',k,u)),
-    FDB.save('kroob_opening','opening',{...kroobOp,id:'opening'}),
-    FDB.save('rafid_opening','opening',{...rafidOp,id:'opening'}),
-    FDB.save('settings','kroob_op_types',{id:'kroob_op_types',list:kroobOpTypes}),
+    ...entries.map(e=>it('entries',e.id,e)),
+    ...sales.map(s=>it('sales',s.id,s)),
+    ...expenses.map(ex=>it('expenses',ex.id||String(Date.now()+Math.random()),ex)),
+    ...salaf.map(s=>it('salaf',s.id||s.name||String(Math.random()),s)),
+    ...privSalaf.filter(p=>p&&p.id).map(p=>it('private_salaf',p.id,p)),
+    ...kroob.map(k=>it('kroob',k.id,k)),
+    ...rafid.map(r=>it('rafid_accounts',r.id,r)),
+    ...Object.entries(users).map(([k,u])=>it('users',k,u)),
+    it('kroob_opening','opening',{...kroobOp,id:'opening'}),
+    it('rafid_opening','opening',{...rafidOp,id:'opening'}),
+    it('settings','kroob_op_types',{id:'kroob_op_types',list:kroobOpTypes}),
   ];
 }
 
 async function uploadAllToFirebase(){
   if(!window._fbReady){showToast('Firebase غير جاهز','error');return;}
   if(!confirm('رفع كل بيانات هذا الجهاز إلى Firebase؟\n\n• السجل الموجود بالجانبين: تُكتب فوقه نسخة الجهاز.\n• السجل الموجود بـFirebase وغير موجود بالجهاز: يبقى كما هو — لا يُحذف.\n\nإذا كنت تريد أن تصبح Firebase مطابقة تماماً لهذا الجهاز (بحذف الزائد) استعمل زر «🔁 مطابقة كاملة» بدلاً من هذا الزر.'))return;
-  showToast('⏳ جاري الرفع...','info');
   try{
-    await Promise.all(bkUploadPromises());
-    auditLog('رفع كل البيانات إلى Firebase','بلا حذف');
-    showToast('✅ تم رفع كل البيانات إلى Firebase','success');
+    const r=await fdbSaveBatched(bkUploadItems(),'رفع كل البيانات');
+    auditLog('رفع كل البيانات إلى Firebase','بلا حذف | رُفع '+r.ok+(r.fail?' | معلَّق '+r.fail:''));
+    if(r.fail) showToast('☁️ رُفع '+r.ok+' سجل | ⚠️ '+r.fail+' لم يصل — اضغط الشارة أسفل اليسار عند تحسّن الاتصال','warning',9000);
+    else showToast('✅ تم رفع كل البيانات إلى Firebase ('+r.ok+' سجل)','success',5000);
   }catch(e){showToast('خطأ أثناء الرفع: '+e.message,'error');}
 }
 
@@ -8584,9 +8639,11 @@ async function fullSyncToFirebase(fromRestore){
   msg+='\nملاحظة: المستخدمون والسائقون والإعدادات لا تُحذف أبداً.\n\nمتابعة؟';
   if(!confirm(msg)) return false;
   if(totalDel && !confirm('⚠️ تأكيد نهائي\n\nسيُحذف '+totalDel+' سجل من Firebase نهائياً ولا يمكن التراجع.\n\nاضغط موافق للحذف.')) return false;
-  showToast('⏳ جاري الرفع والحذف...','info');
   try{
-    await Promise.all(bkUploadPromises());
+    const up=await fdbSaveBatched(bkUploadItems(),'رفع بيانات الجهاز');
+    // لا حذف من السحابة قبل التأكد من وصول كل نسخة الجهاز
+    if(up.fail){ showToast('⚠️ لم يصل '+up.fail+' سجل إلى السحابة — أُوقفت المطابقة ولم يُحذف شيء. أعد المحاولة عند تحسّن الاتصال.','error',9000); return false; }
+    showToast('⏳ جاري حذف الزائد...','info');
     for(let i=0;i<plan.length;i++){
       const p=plan[i];
       if(!p.extra.length) continue;

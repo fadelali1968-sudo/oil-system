@@ -6512,6 +6512,63 @@ function acctOutOfMonthCheck(list,targetMonth){
   });
 }
 
+// ===== تنبيه الاستيراد: شهر الملف مشكوك فيه =====
+// مثل ملف «شهر11» تاريخه 1/11 قرأه الإكسل 11 كانون الثاني: كل السطور في شهر 1 فلا يُنبّه acctOutOfMonthCheck،
+// والاستيراد يمسح حركات شهر 1 ويضع الحركات فيه. هنا نقارن بشهر اسم الملف والشهر الحالي، ونعرض قلب اليوم/الشهر.
+// يُرجع الشهر المعتمد (وقد تتغير تواريخ list) أو '' إذا أُلغي الاستيراد.
+function acctMonthSanityCheck(list,targetMonth,fileName,storeKey){
+  const p2=n=>String(n).padStart(2,'0'),now=new Date(),cur=now.getFullYear()+'-'+p2(now.getMonth()+1);
+  const mIdx=m=>{const [y,mo]=m.split('-').map(Number);return y*12+mo-1;};
+  const fn=String(fileName||'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+  let expected='',m;
+  if((m=fn.match(/(20\d{2})\s*-\s*(\d{1,2})(?!\d)/))&&+m[2]>=1&&+m[2]<=12)expected=m[1]+'-'+p2(m[2]);
+  else if((m=fn.match(/شهر\s*_?\s*(\d{1,2})(?!\d)/))&&+m[1]>=1&&+m[1]<=12){
+    let y=now.getFullYear();if(+m[1]>now.getMonth()+2)y--;expected=y+'-'+p2(m[1]);
+  }
+  const far=Math.abs(mIdx(targetMonth)-mIdx(cur))>2;
+  if(expected?expected===targetMonth:!far)return Promise.resolve(targetMonth);
+  // قلب اليوم والشهر ممكن فقط إذا كل الأيام ≤ 12
+  const dated=list.filter(e=>e.date);
+  const swapOf=d=>d.slice(0,5)+d.slice(8,10)+'-'+d.slice(5,7);
+  let swapMonth='';
+  if(dated.length&&dated.every(e=>+e.date.slice(8,10)>=1&&+e.date.slice(8,10)<=12)){
+    const cnt={};dated.forEach(e=>{const k=swapOf(e.date).slice(0,7);cnt[k]=(cnt[k]||0)+1;});
+    swapMonth=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0][0];
+    if(swapMonth===targetMonth||(expected?swapMonth!==expected:Math.abs(mIdx(swapMonth)-mIdx(cur))>2))swapMonth='';
+  }
+  const moveMonth=expected&&expected!==swapMonth?expected:'';
+  const existN=storeKey?DB.get(storeKey,[]).filter(e=>(e.date||'').startsWith(targetMonth)).length:0;
+  const ex=dated.slice(0,3).map(e=>esc(e.date)).join(' ، ');
+  return new Promise(res=>{
+    const md=document.createElement('div');
+    md.id='msc-modal';
+    md.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+    md.innerHTML=`<div class="card" style="max-width:540px;width:100%;padding:16px">
+      <h3 style="margin:0 0 8px;font-size:15px;font-weight:900;color:#b45309">⚠️ تأكد من شهر الملف قبل الاستيراد</h3>
+      <p style="font-size:13px;color:#334155;margin:0 0 6px">تواريخ الملف تجعله لشهر <b style="color:#b91c1c">${esc(targetMonth)}</b>${expected?` بينما اسم الملف يدل على شهر <b style="color:#047857">${esc(expected)}</b>`:` وهو بعيد عن الشهر الحالي (${esc(cur)})`}.</p>
+      <p style="font-size:12px;color:#64748b;margin:0 0 6px">أمثلة من تواريخ الملف: ${ex}</p>
+      ${swapMonth?`<p style="font-size:12px;color:#475569;margin:0 0 6px">غالباً انقلب اليوم والشهر في الإكسل (مثل 1/11 صار 11 كانون الثاني). بعد القلب يصير الملف لشهر <b>${esc(swapMonth)}</b>.</p>`:''}
+      ${existN?`<p style="font-size:12px;color:#b91c1c;font-weight:700;margin:0 0 6px">انتبه: الاستيراد لشهر ${esc(targetMonth)} يمسح ${existN} حركة موجودة فيه.</p>`:''}
+      <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:12px">
+        <button class="btn btn-gray" data-c="cancel">إلغاء الاستيراد</button>
+        <button class="btn btn-gray" data-c="keep">استيراد لشهر ${esc(targetMonth)} كما هو</button>
+        ${moveMonth?`<button class="btn btn-amber" data-c="move">نقلها إلى شهر ${esc(moveMonth)} (بنفس اليوم)</button>`:''}
+        ${swapMonth?`<button class="btn btn-green" data-c="swap">✅ قلب اليوم والشهر ← ${esc(swapMonth)}</button>`:''}</div></div>`;
+    md.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{
+      const c=b.dataset.c;md.remove();
+      if(c==='cancel')return res('');
+      if(c==='swap'){dated.forEach(e=>{e.date=swapOf(e.date);});showToast('تم قلب اليوم والشهر في '+dated.length+' تاريخ','info',4000);return res(swapMonth);}
+      if(c==='move'){
+        const [y,mo]=moveMonth.split('-').map(Number),last=new Date(y,mo,0).getDate();
+        dated.forEach(e=>{e.date=moveMonth+'-'+p2(Math.min(+e.date.slice(8,10)||1,last));});
+        showToast('تم نقل '+dated.length+' تاريخ إلى شهر '+moveMonth,'info',4000);return res(moveMonth);
+      }
+      res(targetMonth);
+    });
+    document.body.appendChild(md);
+  });
+}
+
 function importKroobXLSX(input){
   const file=input.files[0];if(!file||typeof XLSX==='undefined')return;
   const reader=new FileReader();
@@ -6644,8 +6701,11 @@ function importKroobXLSX(input){
     kroob.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
     const _kroobMonthCounts={};
     kroob.forEach(e=>{if(e.date){const m=e.date.slice(0,7);_kroobMonthCounts[m]=(_kroobMonthCounts[m]||0)+1;}});
-    const targetMonth=Object.entries(_kroobMonthCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
+    let targetMonth=Object.entries(_kroobMonthCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
     if(!targetMonth){showToast('لا يمكن تحديد شهر الملف — تأكد من صحة عمود التاريخ','error');return;}
+    targetMonth=await acctMonthSanityCheck(kroob,targetMonth,file.name,'kroob');
+    if(!targetMonth){input.value='';showToast('أُلغي الاستيراد','info');return;}
+    kroob.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
     if(!await acctOutOfMonthCheck(kroob,targetMonth)){input.value='';showToast('أُلغي الاستيراد','info');return;}
 
     // حذف سجلات الشهر المستهدف فقط من البيانات الحالية
@@ -7444,8 +7504,11 @@ function importRafidXLSX(input){
     list.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
     const _monthCounts={};
     list.forEach(e=>{if(e.date){const m=e.date.slice(0,7);_monthCounts[m]=(_monthCounts[m]||0)+1;}});
-    const targetMonth=Object.entries(_monthCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
+    let targetMonth=Object.entries(_monthCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
     if(!targetMonth){showToast('لا يمكن تحديد شهر الملف — تأكد من صحة عمود التاريخ','error');return;}
+    targetMonth=await acctMonthSanityCheck(list,targetMonth,file.name,'rafid_accounts');
+    if(!targetMonth){input.value='';showToast('أُلغي الاستيراد','info');return;}
+    list.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
     if(!await acctOutOfMonthCheck(list,targetMonth)){input.value='';showToast('أُلغي الاستيراد','info');return;}
 
     // حذف سجلات الشهر المستهدف فقط من البيانات الحالية

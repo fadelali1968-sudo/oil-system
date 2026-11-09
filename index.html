@@ -6978,12 +6978,12 @@ function getKroobInRange(from,to){
     .sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
 }
 function getKroobBalanceBefore(date){
-  let list=DB.get('kroob',[]);
-  list.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
-  const opening=DB.get('kroob_opening',{dinar:0,dollar:0});
-  let balDinar=parseFloat(opening.dinar||0),balDollar=parseFloat(opening.dollar||0);
-  list.forEach(e=>{if((e.date||'')>=date)return;const d=parseFloat(e.amount_dinar||0),dl=parseFloat(e.amount_dollar||0),com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0);if(kroobDir(e,'dinar')==='دائن')balDinar+=d;else balDinar-=d;if(kroobDir(e,'dollar')==='دائن')balDollar+=dl;else balDollar-=dl;balDinar-=com;balDollar-=commD;});
-  return{dinar:balDinar,dollar:balDollar};
+  // يحترم الرصيد المرحّل المستورد لكل شهر (kroob_month_openings) مثل صفحة الكروب
+  const m=(date||'').slice(0,7),cf=getKroobCarryForward(m);
+  const inMonth=getKroobList().filter(e=>{const d=e.date||'';return d.slice(0,7)===m&&d<date;});
+  if(!inMonth.length)return{dinar:cf.dinar,dollar:cf.dollar};
+  const last=calcKroobBalanceFrom(inMonth,cf.dinar,cf.dollar).pop();
+  return{dinar:safeNum(last.bal_dinar),dollar:safeNum(last.bal_dollar)};
 }
 
 // مربع «💰 الرصيد النهائي» في قسمي الكروب ورافد بالموقف الإجمالي (نفس تصميم PDF اليوم)
@@ -7036,12 +7036,12 @@ function getRafidInRange(from,to){
     .sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
 }
 function getRafidBalanceBefore(date){
-  let list=DB.get('rafid_accounts',[]);
-  list.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||0)-(b.time||0));
-  const opening=DB.get('rafid_opening',{dinar:0,dollar:0});
-  let balDinar=parseFloat(opening.dinar||0),balDollar=parseFloat(opening.dollar||0);
-  list.forEach(e=>{if((e.date||'')>=date)return;const d=parseFloat(e.dinar||0),dl=parseFloat(e.dollar||0),tdD=(e.type_dinar||'مدين').trim(),tdDol=(e.type_dollar||'مدين').trim(),com=parseFloat(e.commission||0),commD=parseFloat(e.commission_dollar||0);if(tdD==='دائن')balDinar+=d;else balDinar-=d;if(tdDol==='دائن')balDollar+=dl;else balDollar-=dl;balDinar-=com;balDollar-=commD;});
-  return{dinar:balDinar,dollar:balDollar};
+  // يحترم الرصيد المرحّل المستورد لكل شهر (rafid_month_openings) مثل صفحة رافد
+  const m=(date||'').slice(0,7),cf=getRafidCarryForward(m);
+  const inMonth=getRafidList().filter(e=>{const d=e.date||'';return d.slice(0,7)===m&&d<date;});
+  if(!inMonth.length)return{dinar:cf.dinar,dollar:cf.dollar};
+  const last=calcRafidBalanceFrom(inMonth,cf.dinar,cf.dollar).pop();
+  return{dinar:safeNum(last.bal_dinar),dollar:safeNum(last.bal_dollar)};
 }
 
 function renderRafidDailySection(from,to){

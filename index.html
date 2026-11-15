@@ -3174,7 +3174,7 @@ function viewTable(){
         <button class="btn btn-gray no-print" style="font-size:11px;padding:7px 12px" onclick="clearScanSel('purchases')" title="إلغاء تحديد البوجرات">✕ إلغاء التحديد</button>
         <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="bulkScanOpen('purchases')" title="رفع ملف PDF يحوي عدة بوجرات وتوزيع كل صفحة على سجلها">📚 توزيع بوجرات من ملف</button>
         <button class="btn btn-red no-print" style="font-size:11px;padding:7px 12px" onclick="exportPurchaseScansPdf()" title="ملف PDF لبوجرات السجلات المعروضة بالفلتر الحالي (أو المحددة بالمربعات إن وُجدت) — كل بوجر بصفحة">📄 بوجرات PDF</button>
-        <button class="btn btn-green no-print" style="font-size:11px;padding:7px 12px" onclick="exportXLSX('purchases')">📊 Excel</button>
+        <button class="btn btn-green no-print" style="font-size:11px;padding:7px 12px" onclick="showXlsxFactoryModal('purchases')">📊 Excel</button>
         <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="window.print()">🖨️</button>
         <button class="btn btn-red no-print" style="font-size:11px;padding:7px 12px" onclick="generatePDF('purchases')">📄 PDF</button>
       </div>
@@ -3265,7 +3265,7 @@ function viewSaleTable(){
         <button class="btn btn-gray no-print" style="font-size:11px;padding:7px 12px" onclick="clearScanSel('sales')" title="إلغاء تحديد السجلات">✕ إلغاء التحديد</button>
         ${canEdit('sales')?`<button class="btn btn-red no-print" style="font-size:11px;padding:7px 12px" onclick="deleteSelectedSales()" title="حذف كل السجلات المحددة">🗑️ حذف المحدد (<span id="cnt_del_sales">${_scanSel.sales.size}</span>)</button>`:''}
         <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="bulkScanOpen('sales')" title="رفع ملف PDF يحوي عدة بوجرات وتوزيع كل صفحة على سجلها (تحميل/تفريغ)">📚 توزيع بوجرات من ملف</button>
-        <button class="btn btn-green no-print" style="font-size:11px;padding:7px 12px" onclick="exportXLSX('sales')">📊 Excel</button>
+        <button class="btn btn-green no-print" style="font-size:11px;padding:7px 12px" onclick="showXlsxFactoryModal('sales')">📊 Excel</button>
         <button class="btn btn-amber no-print" style="font-size:11px;padding:7px 12px" onclick="window.print()">🖨️</button>
         <button class="btn btn-red no-print" style="font-size:11px;padding:7px 12px" onclick="generatePDF('sales')">📄 PDF</button>
       </div>
@@ -3482,10 +3482,44 @@ function exportTitle(type){
   const sf=S.selectedFactory,one=sf&&sf!=='الكل';
   return {one:one,title:(type==='purchases'?'مشتريات ':'مبيعات ')+(one?sf:'جميع المعامل')};
 }
-function exportXLSX(type){
+// زر Excel في المشتريات/المبيعات: نافذة لاختيار معمل أو أكثر (المستخدم المقيَّد بمعمل يصدّر مباشرة)
+function showXlsxFactoryModal(type){
   if(typeof XLSX==='undefined'){showToast('مكتبة Excel غير محملة','error');return;}
-  let sheetName,fname,rows=[];
-  const list=exportList(type);
+  if(currentUser&&currentUser.factory&&currentUser.factory!=='الكل'){exportXLSX(type);return;}
+  const names=allFactoryNames(),sf=S.selectedFactory,one=sf&&sf!=='الكل';
+  const rowsHtml=names.map((f,i)=>`<label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:1px solid #e2e8f0;font-weight:700;font-size:13px;color:#1e293b;cursor:pointer"><input type="checkbox" class="xf-cb" value="${esc(f)}" ${!one||sameFactory(f,sf)?'checked':''}> ${esc(f)}</label>`).join('');
+  const m=document.createElement('div');
+  m.id='xlsx-fac-modal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  m.innerHTML=`<div class="card" style="max-width:420px;width:100%;max-height:88vh;display:flex;flex-direction:column;padding:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0;font-size:15px;font-weight:900;color:#1e293b">📊 تصدير ${type==='purchases'?'المشتريات':'المبيعات'} إلى Excel</h3><button onclick="document.getElementById('xlsx-fac-modal').remove()" aria-label="إغلاق" style="background:none;border:none;font-size:18px;cursor:pointer;font-weight:900;color:#64748b">✕</button></div>
+    <p style="font-size:11px;color:#64748b;margin:0 0 8px">اختر المعامل المطلوبة. تُطبَّق فلاتر الصفحة الأخرى (البحث، النوع، التاريخ) كما هي.</p>
+    <div style="display:flex;gap:8px;margin-bottom:8px"><button class="btn btn-gray" style="font-size:11px;padding:5px 10px" onclick="document.querySelectorAll('.xf-cb').forEach(c=>c.checked=true)">تحديد الكل</button><button class="btn btn-gray" style="font-size:11px;padding:5px 10px" onclick="document.querySelectorAll('.xf-cb').forEach(c=>c.checked=false)">إلغاء الكل</button></div>
+    <div style="overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;flex:1">${rowsHtml}</div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px"><button class="btn btn-gray" onclick="document.getElementById('xlsx-fac-modal').remove()">إلغاء</button><button class="btn btn-green" onclick="confirmXlsxFactories('${type}')">📊 تصدير</button></div></div>`;
+  document.body.appendChild(m);
+}
+function confirmXlsxFactories(type){
+  const m=document.getElementById('xlsx-fac-modal');if(!m)return;
+  const sel=[...m.querySelectorAll('.xf-cb:checked')].map(c=>c.value);
+  if(!sel.length){showToast('اختر معملاً واحداً على الأقل','warning');return;}
+  m.remove();
+  exportXLSX(type,sel.length===allFactoryNames().length?null:sel);
+}
+// factories: مصفوفة معامل مختارة من النافذة؛ بدونها يُصدَّر حسب المعمل المختار في الصفحة
+function exportXLSX(type,factories){
+  if(typeof XLSX==='undefined'){showToast('مكتبة Excel غير محملة','error');return;}
+  let sheetName,fname,rows=[],list,t;
+  if(factories!==undefined){
+    const prev=S.selectedFactory;S.selectedFactory='الكل';
+    try{list=exportList(type);}finally{S.selectedFactory=prev;}
+    const base=type==='purchases'?'مشتريات ':'مبيعات ';
+    if(factories&&factories.length){
+      list=list.filter(e=>factories.some(f=>sameFactory(e.factory,f)));
+      t=factories.length===1?{one:true,title:base+factories[0]}:{one:false,title:base+factories.join(' + ')};
+    }else t={one:false,title:base+'جميع المعامل'};
+  }else{list=exportList(type);t=exportTitle(type);}
+  if(!list.length){showToast('لا توجد بيانات للمعامل المختارة','warning');return;}
   if(type==='purchases'){
     sheetName='المشتريات';fname='مشتريات_'+today()+'.xlsx';
     rows.push(['ت','المعمل','رقم المستند','المصفى','التاريخ','النوع','السائق','السيارة','العائدية','كمية /طن','طبيعي /لتر','وزن /كغم','PO','السعر','نقل','الإجمالي']);
@@ -3497,7 +3531,7 @@ function exportXLSX(type){
     list.forEach((e,i)=>rows.push([i+1,e.driver_name,e.car_no,e.location,e.date,parseFloat(e.load_qty)||'',parseFloat(e.kaban)||'',e.unload_date||'',saleShortage(e)==null?'':saleShortage(e),e.market||'',e.product_type,e.factory,e.address||'',rt.fare,saleFare(e),rt.price,saleTotalOf(e),saleTip(e),e.car_source||'']));
   }
   // معمل واحد: اسمه في العنوان ولا حاجة لعمود المعمل؛ «الكل»: يبقى العمود للتمييز
-  const t=exportTitle(type),fcol=rows[0].indexOf('المعمل');
+  const fcol=rows[0].indexOf('المعمل');
   if(t.one&&fcol>=0)rows.forEach(r=>r.splice(fcol,1));
   const opt=type==='purchases'
     ?{title:t.title,cars:list.length,topSum:['كمية /طن'],sum:['كمية /طن','طبيعي /لتر','وزن /كغم'],num:['السعر','نقل','الإجمالي']}

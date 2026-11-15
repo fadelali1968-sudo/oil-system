@@ -2080,7 +2080,7 @@ function viewForm(){
     <datalist id="dlist">${dlist}</datalist>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
       ${sf==='الكل'?`<div style="grid-column:span 3;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px"><label class="lbl" for="f_factory">🏭 المعمل * <span style="color:#b45309;font-weight:700;font-size:10px">(مطلوب — المختار أعلى الصفحة «الكل» فلا يمكن معرفة المعمل تلقائياً)</span></label><select class="inp" id="f_factory"><option value="">اختر المعمل...</option>${allFactoryNames().filter(x=>!sameFactory(x,'الكل')).map(x=>`<option value="${esc(x)}" ${sameFactory(e.factory,x)?'selected':''}>${esc(x)}</option>`).join('')}</select></div>`:''}
-      <div><label class="lbl" for="f_voucher">رقم البوجر *</label><input class="inp" id="f_voucher" value="${e.voucher_no||''}"></div>
+      <div><label class="lbl" for="f_voucher">رقم المستند *</label><input class="inp" id="f_voucher" value="${e.voucher_no||''}"></div>
       <div><label class="lbl" for="f_date">التاريخ *</label><input class="inp" id="f_date" type="date" value="${e.date||today()}" onchange="refreshFormPricing()"></div>
       <div><label class="lbl" for="f_ref">المصفى *</label>
         <select class="inp" id="f_ref" onchange="updateProduct()">
@@ -2200,7 +2200,7 @@ async function saveEntry(){
   if(badAmt(tons,liters,kg)){warnBadAmt();return;}
   const allEntries=DB.get('entries',[]);
   const dupVoucher=allEntries.find(x=>x.voucher_no==v&&x.id!==(e.id||''));
-  if(dupVoucher){showToast('رقم البوجر '+v+' موجود مسبقاً!','error');return;}
+  if(dupVoucher){showToast('رقم المستند '+v+' موجود مسبقاً!','error');return;}
   if(!v||!date||!ref||!driver||!car||!loc||!po||!liters){showToast('يرجى ملء جميع الحقول (*)','error');return;}
   const not5=[['الطن',tons],['طبيعي / لتر',liters],['وزن كغم',kg]].filter(([,x])=>x&&Math.floor(Math.abs(x)).toString().length!==5).map(([n])=>n);
   if(not5.length){showToast('⚠️ الكمية يجب أن تكون 5 أرقام: '+not5.join('، ')+' — صحّحها ثم احفظ','error',7000);return;}
@@ -2228,7 +2228,7 @@ async function saveEntry(){
   if(!_cloudOkE)showToast('⚠️ حُفظ على هذا الجهاز فقط — لم يصل السحابة. اضغط الشارة أسفل اليسار عند عودة الاتصال.','warning',9000);
   let drivers=DB.get('drivers',{});drivers[driver]={name:driver,car_no:car,location:loc};DB.set('drivers',drivers);
   FDB.save('drivers',driver.replace(/\s+/g,'_'),drivers[driver]);
-  auditLog(e.id ? 'تعديل مشتريات' : 'إضافة مشتريات', `بوجر: ${entry.voucher_no} | سائق: ${entry.driver_name} | ${entry.factory}`);
+  auditLog(e.id ? 'تعديل مشتريات' : 'إضافة مشتريات', `رقم المستند: ${entry.voucher_no} | سائق: ${entry.driver_name} | ${entry.factory}`);
   S.editEntry=null;S.view='table';render();
 }
 
@@ -2468,7 +2468,7 @@ function renderPricingAdmin(){
     +'<div style="background:#fff;border-radius:8px;padding:8px;text-align:center"><div style="color:#64748b;font-weight:700">الفرق</div><div style="font-size:15px;font-weight:900;color:'+(pv.newSum-pv.oldSum>=0?'#059669':'#dc2626')+'">'+(pv.newSum-pv.oldSum>=0?'+':'−')+fmtM(Math.abs(pv.newSum-pv.oldSum))+'</div></div>'
     +'</div>'
     +(pv.imported?'<div style="margin-top:8px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:7px 9px;font-size:11px;font-weight:700;color:#92400e">⚠️ من ضمنها '+pv.imported+' سجل مستورد من Excel إجماليه لا يساوي (سعره × لتره) — سيُستبدل إجماليه بالمحتسب.</div>':'')
-    +(pv.sample?'<div style="margin-top:8px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th class="th" style="font-size:10px">البوجر</th><th class="th" style="font-size:10px">التاريخ</th><th class="th" style="font-size:10px">المعمل</th><th class="th" style="font-size:10px">لتر</th><th class="th" style="font-size:10px">سعر حالي</th><th class="th" style="font-size:10px">إجمالي حالي</th><th class="th" style="font-size:10px">إجمالي جديد</th></tr></thead><tbody>'+pv.sample+'</tbody></table>'+(pv.n>8?'<div style="font-size:10px;color:#64748b;margin-top:4px">تُعرض أول 8 سجلات من '+pv.n+'</div>':'')+'</div>':'')
+    +(pv.sample?'<div style="margin-top:8px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th class="th" style="font-size:10px">رقم المستند</th><th class="th" style="font-size:10px">التاريخ</th><th class="th" style="font-size:10px">المعمل</th><th class="th" style="font-size:10px">لتر</th><th class="th" style="font-size:10px">سعر حالي</th><th class="th" style="font-size:10px">إجمالي حالي</th><th class="th" style="font-size:10px">إجمالي جديد</th></tr></thead><tbody>'+pv.sample+'</tbody></table>'+(pv.n>8?'<div style="font-size:10px;color:#64748b;margin-top:4px">تُعرض أول 8 سجلات من '+pv.n+'</div>':'')+'</div>':'')
     +(pv.n?'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn btn-gray" style="font-size:12px;padding:7px 14px" onclick="cancelPriceApply()">إلغاء</button><button class="btn btn-red" style="font-size:12px;padding:7px 20px;font-weight:900" onclick="runPriceApply()">✅ تنفيذ التطبيق على '+pv.n+' سجل</button></div>':'<div style="margin-top:8px;font-size:11px;font-weight:700;color:#92400e">لا توجد سجلات ضمن هذا النطاق.</div>')
     +'<div id="pa-prog" style="margin-top:8px;font-size:11px;font-weight:900;color:#1e3a8a"></div>'
     +'</div>'):'';
@@ -3180,7 +3180,7 @@ function viewTable(){
       </div>
     </div>
     <div style="padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <input class="inp" id="p_search" placeholder="🔍 بحث: سائق، سيارة، بوجر، تاريخ..." value="${esc(S.pSearch||'')}" style="flex:1;min-width:200px;max-width:300px" oninput="setListSearch('pSearch','p_search',this.value,this.selectionStart)">
+      <input class="inp" id="p_search" placeholder="🔍 بحث: سائق، سيارة، رقم المستند، تاريخ..." value="${esc(S.pSearch||'')}" style="flex:1;min-width:200px;max-width:300px" oninput="setListSearch('pSearch','p_search',this.value,this.selectionStart)">
       <select class="inp" style="width:160px" onchange="S.pRefinery=this.value;renderContent()"><option value="" ${!S.pRefinery?'selected':''}>كل المصافي</option><option value="مصفى كربلاء" ${S.pRefinery==='مصفى كربلاء'?'selected':''}>مصفى كربلاء</option><option value="مصفى صلاح الدين" ${S.pRefinery==='مصفى صلاح الدين'?'selected':''}>مصفى صلاح الدين</option></select>
       <select class="inp" style="width:120px" onchange="S.pType=this.value;renderContent()"><option value="" ${!S.pType?'selected':''}>كل الأنواع</option><option value="HFO" ${S.pType==='HFO'?'selected':''}>HFO</option><option value="VR" ${S.pType==='VR'?'selected':''}>VR</option></select>
       <div style="display:flex;align-items:center;gap:4px">
@@ -3197,7 +3197,7 @@ function viewTable(){
       <table style="width:100%;border-collapse:collapse;min-width:1000px">
         <thead style="position:sticky;top:0;z-index:1"><tr>
           <th class="th no-print" style="padding:4px"><input type="checkbox" id="chk_all_purchases" onclick="toggleAllScanSel('purchases',this.checked)" title="تحديد كل البوجرات المعروضة" style="width:16px;height:16px;cursor:pointer"></th>
-          <th class="th">ت</th><th class="th">البوجر</th><th class="th">المصفى</th><th class="th">التاريخ</th><th class="th">النوع</th>
+          <th class="th">ت</th><th class="th">رقم المستند</th><th class="th">المصفى</th><th class="th">التاريخ</th><th class="th">النوع</th>
           <th class="th">السائق</th><th class="th">السيارة</th><th class="th">العائدية</th><th class="th">طن</th>
           <th class="th">لتر</th><th class="th">كغم</th><th class="th">PO</th><th class="th">السعر</th>
           <th class="th">نقل</th><th class="th">الإجمالي</th>${showActionCol?'<th class="th">الإجراء</th>':''}
@@ -3209,7 +3209,7 @@ function viewTable(){
 }
 
 function editEntry(id){const e=DB.get('entries',[]);S.editEntry=e.find(x=>x.id===id)||null;S.view='form';pendingScanFile=null;render();}
-function deleteEntry(id){if(!confirm('حذف هذا السجل؟'))return;const entry=DB.get('entries',[]).find(x=>x.id===id);auditLog('حذف مشتريات',`بوجر: ${entry?.voucher_no||id} | ${entry?.factory||''}`);let e=DB.get('entries',[]);DB.set('entries',e.filter(x=>x.id!==id));FDB.delete('entries',id);renderContent();}
+function deleteEntry(id){if(!confirm('حذف هذا السجل؟'))return;const entry=DB.get('entries',[]).find(x=>x.id===id);auditLog('حذف مشتريات',`رقم المستند: ${entry?.voucher_no||id} | ${entry?.factory||''}`);let e=DB.get('entries',[]);DB.set('entries',e.filter(x=>x.id!==id));FDB.delete('entries',id);renderContent();}
 
 // ===== سجل المبيعات =====
 // سجلات المبيعات كما تظهر بالجدول (المعمل + البحث + النوع + الفترة)
@@ -3488,7 +3488,7 @@ function exportXLSX(type){
   const list=exportList(type);
   if(type==='purchases'){
     sheetName='المشتريات';fname='مشتريات_'+today()+'.xlsx';
-    rows.push(['ت','المعمل','البوجر','المصفى','التاريخ','النوع','السائق','السيارة','العائدية','كمية /طن','طبيعي /لتر','وزن /كغم','PO','السعر','نقل','الإجمالي']);
+    rows.push(['ت','المعمل','رقم المستند','المصفى','التاريخ','النوع','السائق','السيارة','العائدية','كمية /طن','طبيعي /لتر','وزن /كغم','PO','السعر','نقل','الإجمالي']);
     list.forEach((e,i)=>rows.push([i+1,e.factory,e.voucher_no,e.refinery,e.date,e.product_type,e.driver_name,e.car_no,e.location,sc(e.qty_tons),sc(e.natural_liters),sc(e.weight_kg),e.po_no,e.price||pricingFor(e.date).price,transportRateFor(e.date,e.factory).rate,parseFloat(e.refinery_price)||0]));
   }else{
     sheetName='المبيعات';fname='مبيعات_'+today()+'.xlsx';
@@ -3512,7 +3512,7 @@ function generatePDF(type){
   const q=v=>{const n=parseFloat(v);return n?fmtKaban(n):'';};
   // كل عمود: [العنوان، القيمة، هل يُجمع]
   const cols=P?[
-    ['ت',(e,i)=>i+1],['المعمل',e=>esc(e.factory)],['البوجر',e=>esc(e.voucher_no)],['المصفى',e=>esc(e.refinery)],['التاريخ',e=>esc(e.date)],['النوع',e=>esc(e.product_type)],
+    ['ت',(e,i)=>i+1],['المعمل',e=>esc(e.factory)],['رقم المستند',e=>esc(e.voucher_no)],['المصفى',e=>esc(e.refinery)],['التاريخ',e=>esc(e.date)],['النوع',e=>esc(e.product_type)],
     ['السائق',e=>esc(e.driver_name)],['السيارة',e=>esc(e.car_no)],['العائدية',e=>esc(e.location)],
     ['كمية /طن',e=>sc(e.qty_tons),1],['طبيعي /لتر',e=>sc(e.natural_liters),1],['وزن /كغم',e=>sc(e.weight_kg),1],
     ['PO',e=>esc(e.po_no)],['الإجمالي',e=>fmtM(e.refinery_price)]
@@ -3577,7 +3577,7 @@ const COL_MAP_P={
   'سعر المصفى':'refinery_price','سعر المصفاة':'refinery_price','سعر المصفه':'refinery_price',
   'الاجمالي':'refinery_price','الإجمالي':'refinery_price','إجمالي':'refinery_price','اجمالي':'refinery_price',
   'المبلغ الاجمالي':'refinery_price','المبلغ الإجمالي':'refinery_price','المبلغ':'refinery_price',
-  'ت':'_num','رقم البوجر':'voucher_no','البوجر':'voucher_no','رقم الوثيقة':'voucher_no','وثيقة':'voucher_no'
+  'ت':'_num','رقم المستند':'voucher_no','المستند':'voucher_no','رقم البوجر':'voucher_no','البوجر':'voucher_no','رقم الوثيقة':'voucher_no','وثيقة':'voucher_no'
 };
 const COL_MAP_S={
   'اسم السائق':'driver_name','السائق':'driver_name',

@@ -2300,10 +2300,10 @@ function viewSaleForm(){
     </div>
     <datalist id="dlist2">${dlist}</datalist>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-      ${sf==='الكل'?`<div style="grid-column:span 3;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px"><label class="lbl" for="s_factory">🏭 المعمل * <span style="color:#b45309;font-weight:700;font-size:10px">(مطلوب — المختار أعلى الصفحة «الكل» فلا يمكن معرفة المعمل تلقائياً)</span></label><select class="inp" id="s_factory"><option value="">اختر المعمل...</option>${allFactoryNames().filter(x=>!sameFactory(x,'الكل')).map(x=>`<option value="${esc(x)}" ${sameFactory(e.factory,x)?'selected':''}>${esc(x)}</option>`).join('')}</select></div>`:''}
+      ${sf==='الكل'?`<div style="grid-column:span 3;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px"><label class="lbl" for="s_factory">🏭 المعمل * <span style="color:#b45309;font-weight:700;font-size:10px">(مطلوب — المختار أعلى الصفحة «الكل» فلا يمكن معرفة المعمل تلقائياً)</span></label><select class="inp" id="s_factory" onchange="updateSaleTotal()"><option value="">اختر المعمل...</option>${allFactoryNames().filter(x=>!sameFactory(x,'الكل')).map(x=>`<option value="${esc(x)}" ${sameFactory(e.factory,x)?'selected':''}>${esc(x)}</option>`).join('')}</select></div>`:''}
       <div style="grid-column:span 2"><label class="lbl" for="s_driver">اسم السائق *</label><input class="inp" id="s_driver" list="dlist2" value="${e.driver_name||''}" oninput="autoFillSaleDriver(this.value)" onfocus="showDriversList('s_driver','s_car','s_loc')" autocomplete="off" placeholder="اضغط لاختيار سائق..."></div>
       <div><label class="lbl" for="s_car">رقم السيارة *</label><input class="inp" id="s_car" value="${e.car_no||''}"></div>
-      <div><label class="lbl" for="s_date">تاريخ التحميل *</label><input class="inp" id="s_date" type="date" value="${e.date||today()}"></div>
+      <div><label class="lbl" for="s_date">تاريخ التحميل *</label><input class="inp" id="s_date" type="date" value="${e.date||today()}" onchange="updateSaleTotal()"></div>
       <div><label class="lbl" for="s_loc">العائدية *</label><input class="inp" id="s_loc" value="${e.location||''}"></div>
       <div><label class="lbl" for="s_addr">العنوان</label><select class="inp" id="s_addr">
           <option value="" ${e.id&&!isPortAddress(e.address)?'selected':''}>— بلا ميناء —</option>
@@ -2313,13 +2313,13 @@ function viewSaleForm(){
       <div><label class="lbl" for="s_type">النوع *</label><input class="inp" id="s_type" list="s_types" value="${e.product_type||'فلانكوت'}"><datalist id="s_types"><option value="فلانكوت"><option value="HFO"><option value="VR"><option value="زيت خام"></datalist></div>
       <div><label class="lbl" for="s_load">كمية التحميل</label><input class="inp" id="s_load" type="number" step="0.001" value="${e.load_qty||''}" oninput="validateQty(this)" placeholder="مثال: 36600"></div>
       <div><label class="lbl" for="s_kaban">كمية التفريغ (الكبان)</label><input class="inp" id="s_kaban" type="number" step="0.001" value="${e.kaban||''}" oninput="updateSaleTotal();validateQty(this)" placeholder="مثال: 36450"></div>
-      <div><label class="lbl" for="s_udate">تاريخ التفريغ</label><input class="inp" id="s_udate" type="date" value="${e.unload_date||''}"></div>
+      <div><label class="lbl" for="s_udate">تاريخ التفريغ</label><input class="inp" id="s_udate" type="date" value="${e.unload_date||''}" onchange="updateSaleTotal()"></div>
       <div><label class="lbl" for="s_market">جهة التسويق</label><input class="inp" id="s_market" value="${esc(e.market||'')}"></div>
       <div><label class="lbl" for="s_source">مصدر السيارة</label><input class="inp" id="s_source" value="${e.car_source||''}"></div>
       <div><label class="lbl" for="s_fare">إجمالي كراوي السائق</label><input class="inp" id="s_fare" value="${fmtM(saleFare(e))}" disabled style="background:#f8fafc;color:#1e3a8a;font-weight:900"></div>
       <div><label class="lbl" for="s_total">إجمالي البيع</label><input class="inp" id="s_total" value="${fmtM(saleTotalOf(e))}" disabled style="background:#f8fafc;color:#1e3a8a;font-weight:900"></div>
       <div><label class="lbl" for="s_tip">إكرامية السائق</label><input class="inp" id="s_tip" value="${fmtM(saleTip(e))}" disabled style="background:#f8fafc;color:#1e3a8a;font-weight:900"></div>
-      <div style="grid-column:span 3;font-size:11px;color:#64748b;font-weight:700">المبالغ محسوبة تلقائياً: أجرة النقل ${fmtM(saleRates().fare)}/طن — سعر البيع ${fmtM(saleRates().price)}/كغم — الإكرامية ${fmtM(saleRates().tip)} (تُعدَّل من ⚙️ إدارة النظام)</div>
+      <div id="s_rates_note" style="grid-column:span 3;font-size:11px;color:#64748b;font-weight:700">${saleRatesNote(Object.assign({},e,{factory:e.factory||(sf==='الكل'?'':sf),date:e.date||today()}))}</div>
       <div style="grid-column:span 3;border-top:1px dashed #e9d5ff;padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div>
           <label class="lbl" for="s_scan_load">📎 صورة/PDF بوجر التحميل (اختياري)</label>
@@ -2350,42 +2350,137 @@ const SALE_RATES_DEFAULT={fare:16000,price:350,tip:50000};
 function saleRates(){
   const r=DB.get('sale_rates',null)||{};
   const n=(v,d)=>{const x=parseFloat(v);return isNaN(x)?d:x;};
-  return {fare:n(r.fare,SALE_RATES_DEFAULT.fare),price:n(r.price,SALE_RATES_DEFAULT.price),tip:n(r.tip,SALE_RATES_DEFAULT.tip),usd:n(r.usd,0)};
+  return {fare:n(r.fare,SALE_RATES_DEFAULT.fare),price:n(r.price,SALE_RATES_DEFAULT.price),tip:n(r.tip,SALE_RATES_DEFAULT.tip),usd:n(r.usd,0),rules:Array.isArray(r.rules)?r.rules:[]};
+}
+// فترات خاصة بكل معمل: {factory, from, to, price, fare, tip} — to فارغ = مفتوحة حتى إشعار آخر.
+// تُختار الفترة حسب تاريخ التفريغ (وإن لم يوجد فتاريخ التحميل)، وما لا تغطيه فترة يبقى على المبالغ العامة.
+function saleRateRules(){
+  return saleRates().rules.filter(x=>x&&x.factory&&x.from).slice().sort((a,b)=>String(a.from).localeCompare(String(b.from)));
+}
+function saleRuleFor(e){
+  const d=String((e&&(e.unload_date||e.date))||''),f=e&&e.factory;
+  if(!d||!f) return null;
+  let hit=null;
+  saleRateRules().forEach(x=>{ if(sameFactory(x.factory,f)&&d>=String(x.from)&&(!x.to||d<=String(x.to))) hit=x; });
+  return hit;
+}
+function saleRatesFor(e){
+  const g=saleRates(),x=saleRuleFor(e);
+  if(!x) return g;
+  const n=(v,d)=>{const y=parseFloat(v);return isNaN(y)?d:y;};
+  return {fare:n(x.fare,g.fare),price:n(x.price,g.price),tip:n(x.tip,g.tip),usd:g.usd,rule:x};
 }
 function saleKg(e){return parseFloat(e&&e.kaban)||0;}
-function saleFare(e){return saleKg(e)/1000*saleRates().fare;}
-function saleTotalOf(e){return saleKg(e)*saleRates().price;}
-function saleTip(e){return saleKg(e)>0?saleRates().tip:0;}
+function saleFare(e){return saleKg(e)/1000*saleRatesFor(e).fare;}
+function saleTotalOf(e){return saleKg(e)*saleRatesFor(e).price;}
+function saleTip(e){return saleKg(e)>0?saleRatesFor(e).tip:0;}
+let _srFac='';
+function saveSaleRateRules(rules,logTitle,logText){
+  const r=Object.assign({},saleRates(),{rules:rules});
+  DB.set('sale_rates',r);
+  FDB.save('settings','sale_rates',{id:'sale_rates',map:r});
+  auditLog(logTitle,logText);
+}
+function addSaleRateRule(){
+  if(!isManager()){ showToast('غير مصرّح','error'); return; }
+  const fac=_srFac,from=gv('srr_from'),to=gv('srr_to');
+  const price=parseFloat(gv('srr_price')),fare=parseFloat(gv('srr_fare')),tip=parseFloat(gv('srr_tip'));
+  if(!fac){ showToast('اختر المعمل أولاً','warning'); return; }
+  if(!from){ showToast('حدّد تاريخ «من»','warning'); return; }
+  if(to&&to<from){ showToast('تاريخ «إلى» قبل تاريخ «من»','warning'); return; }
+  if([price,fare,tip].some(x=>isNaN(x)||x<0)){ showToast('أدخل مبالغ صحيحة','warning'); return; }
+  const END='9999-12-31',mine=saleRateRules().filter(x=>sameFactory(x.factory,fac));
+  const clash=mine.find(x=>from<=(x.to||END)&&(to||END)>=x.from);
+  if(clash){ showToast('⚠️ تتداخل مع فترة موجودة: من '+clash.from+' إلى '+(clash.to||'مفتوحة')+' — احذفها أو غيّر التواريخ','error',7000); return; }
+  const l=saleRates().rules.slice();
+  l.push({factory:fac,from:from,to:to||'',price:price,fare:fare,tip:tip,at:Date.now(),by:(currentUser&&currentUser.email)||''});
+  saveSaleRateRules(l,'مبالغ مبيعات معمل',fac+' | من '+from+' إلى '+(to||'مفتوحة')+' | سعر البيع '+fmtM(price)+' | أجرة النقل '+fmtM(fare)+' | الإكرامية '+fmtM(tip));
+  showToast('حُفظت فترة '+fac+' — طُبّقت على سجلاتها','success',5000);
+  renderContent();
+}
+function deleteSaleRateRule(fac,from){
+  if(!isManager()){ showToast('غير مصرّح','error'); return; }
+  if(!confirm('حذف فترة '+fac+' التي تبدأ '+from+'؟')) return;
+  const l=saleRates().rules.filter(x=>!(x&&sameFactory(x.factory,fac)&&x.from===from));
+  saveSaleRateRules(l,'حذف مبالغ مبيعات معمل',fac+' | من '+from);
+  showToast('حُذفت الفترة — سجلاتها رجعت للمبالغ العامة','info',5000);
+  renderContent();
+}
+function renderSaleRateRules(){
+  const g=saleRates(),facts=allFactoryNames().filter(x=>!sameFactory(x,'الكل'));
+  const allRules=saleRateRules();
+  const opt=facts.map(f=>{const c=allRules.filter(x=>sameFactory(x.factory,f)).length;return '<option value="'+esc(f)+'" '+(sameFactory(f,_srFac)?'selected':'')+'>'+esc(f)+(c?' ('+c+' فترة)':'')+'</option>';}).join('');
+  let body='';
+  if(_srFac){
+    const sales=DB.get('sales',[]).filter(e=>sameFactory(e.factory,_srFac)&&saleKg(e)>0);
+    const mine=allRules.filter(x=>sameFactory(x.factory,_srFac));
+    const rows=mine.map((x,i)=>{
+      const cnt=sales.filter(e=>{const h=saleRuleFor(e);return h&&h.from===x.from;}).length;
+      return '<tr><td class="td" style="color:#64748b">'+(i+1)+'</td>'
+        +'<td class="td" style="font-weight:900">'+esc(x.from)+'</td>'
+        +'<td class="td" style="font-weight:900">'+(x.to?esc(x.to):'<span style="color:#059669">مفتوحة</span>')+'</td>'
+        +'<td class="td" style="font-weight:900;color:#5b21b6">'+fmtM(x.price)+'</td>'
+        +'<td class="td" style="font-weight:900">'+fmtM(x.fare)+'</td>'
+        +'<td class="td" style="font-weight:900">'+fmtM(x.tip)+'</td>'
+        +'<td class="td" style="color:#64748b;font-size:11px">'+cnt+' سيارة</td>'
+        +'<td class="td"><button class="btn btn-red" style="padding:3px 10px;font-size:11px" onclick="deleteSaleRateRule(\''+escJs(x.factory)+'\',\''+escJs(x.from)+'\')">حذف</button></td></tr>';
+    }).join('');
+    const rest=sales.filter(e=>!saleRuleFor(e)).length;
+    body='<div style="overflow-x:auto;margin:10px 0"><table style="width:100%;border-collapse:collapse"><thead><tr><th class="th">ت</th><th class="th">من تاريخ</th><th class="th">إلى تاريخ</th><th class="th">سعر البيع (للكيلو)</th><th class="th">أجرة النقل (للطن)</th><th class="th">الإكرامية</th><th class="th">سيارات تتبعها</th><th class="th">حذف</th></tr></thead>'
+      +'<tbody>'+(rows||'<tr><td colspan="8" class="td" style="padding:14px;color:#64748b">لا توجد فترات لهذا المعمل — كل سجلاته على المبالغ العامة</td></tr>')+'</tbody></table></div>'
+      +'<p style="font-size:11px;color:#64748b;font-weight:700;margin:0 0 10px">سيارات المعمل المفرّغة خارج الفترات (على المبالغ العامة): <b>'+rest+'</b></p>'
+      +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:12px">'
+        +'<div><label class="lbl" for="srr_from">من تاريخ *</label><input class="inp" id="srr_from" type="date" style="width:160px"></div>'
+        +'<div><label class="lbl" for="srr_to">إلى تاريخ <span style="font-size:10px;color:#64748b">(فارغ = مفتوحة)</span></label><input class="inp" id="srr_to" type="date" style="width:160px"></div>'
+        +'<div><label class="lbl" for="srr_price">سعر البيع (للكيلو) *</label><input class="inp" id="srr_price" type="number" step="any" value="'+g.price+'" style="width:130px"></div>'
+        +'<div><label class="lbl" for="srr_fare">أجرة النقل (للطن) *</label><input class="inp" id="srr_fare" type="number" step="any" value="'+g.fare+'" style="width:130px"></div>'
+        +'<div><label class="lbl" for="srr_tip">الإكرامية *</label><input class="inp" id="srr_tip" type="number" step="any" value="'+g.tip+'" style="width:130px"></div>'
+        +'<button class="btn btn-purple" style="padding:9px 20px;font-weight:900" onclick="addSaleRateRule()">➕ إضافة الفترة</button>'
+      +'</div>';
+  }
+  return '<div style="border-top:1px dashed #c4b5fd;margin-top:14px;padding-top:12px">'
+    +'<h4 style="font-size:13px;font-weight:900;color:#5b21b6;margin:0 0 6px">🏭 مبالغ خاصة بكل معمل حسب الفترة</h4>'
+    +'<p style="font-size:11px;color:#64748b;font-weight:700;line-height:1.9;margin:0 0 10px">الفترة تُطابَق على <b>تاريخ التفريغ</b> للسيارة (وإن لم يُسجَّل فتاريخ التحميل). سيارات المعمل خارج كل الفترات تبقى على المبالغ العامة أعلاه. لا يُسمح بتداخل فترتين للمعمل نفسه.</p>'
+    +'<div><label class="lbl" for="srr_fac">المعمل</label><select class="inp" id="srr_fac" style="width:240px" onchange="_srFac=this.value;renderContent()"><option value="">اختر المعمل...</option>'+opt+'</select></div>'
+    +body+'</div>';
+}
 function renderSaleRatesAdmin(){
   if(!isManager()) return '';
   const r=saleRates();
   return `<div class="card" style="margin-bottom:14px;border:2px solid #7c3aed">
     <h3 style="font-size:14px;font-weight:900;margin-bottom:6px;color:#5b21b6">🚚 مبالغ المبيعات</h3>
-    <p style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:12px">تسري على كل سجلات المبيعات القديمة والجديدة لكل المعامل. كروة السائق = كمية التفريغ بالطن × أجرة النقل — إجمالي البيع = كمية التفريغ بالكيلو × سعر البيع — الإكرامية لكل سيارة فرّغت.</p>
+    <p style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:12px"><b>المبالغ العامة</b>: تسري على كل سجلات المبيعات (القديمة والجديدة) ما لم تقع ضمن فترة خاصة بمعملها (أسفل). كروة السائق = كمية التفريغ بالطن × أجرة النقل — إجمالي البيع = كمية التفريغ بالكيلو × سعر البيع — الإكرامية لكل سيارة فرّغت.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end">
       <div><label class="lbl" for="sr_fare">أجرة النقل (للطن)</label><input class="inp" id="sr_fare" type="number" step="any" value="${r.fare}"></div>
       <div><label class="lbl" for="sr_price">سعر البيع (للكيلو)</label><input class="inp" id="sr_price" type="number" step="any" value="${r.price}"></div>
       <div><label class="lbl" for="sr_tip">إكرامية السائق</label><input class="inp" id="sr_tip" type="number" step="any" value="${r.tip}"></div>
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-purple" onclick="saveSaleRates()">💾 حفظ مبالغ المبيعات</button></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-purple" onclick="saveSaleRates()">💾 حفظ المبالغ العامة</button></div>
+    ${renderSaleRateRules()}
   </div>`;
 }
 function saveSaleRates(){
   if(!isManager()){ showToast('غير مصرّح','error'); return; }
   const fare=parseFloat(gv('sr_fare')),price=parseFloat(gv('sr_price')),tip=parseFloat(gv('sr_tip'));
   if([fare,price,tip].some(x=>isNaN(x)||x<0)){ showToast('أدخل مبالغ صحيحة','warning'); return; }
-  const old=saleRates(),r={fare:fare,price:price,tip:tip,usd:old.usd};
+  const old=saleRates(),r={fare:fare,price:price,tip:tip,usd:old.usd,rules:old.rules};
   DB.set('sale_rates',r);
   FDB.save('settings','sale_rates',{id:'sale_rates',map:r});
   auditLog('مبالغ المبيعات',`أجرة النقل ${fmtM(old.fare)}←${fmtM(fare)} | سعر البيع ${fmtM(old.price)}←${fmtM(price)} | الإكرامية ${fmtM(old.tip)}←${fmtM(tip)}`);
-  showToast('حُفظت مبالغ المبيعات — طُبّقت على كل السجلات','success',4000);
+  showToast('حُفظت المبالغ العامة — طُبّقت على السجلات خارج فترات المعامل','success',4000);
   renderContent();
 }
 function updateSaleTotal(){
-  const x={kaban:amtVal0('s_kaban')};
+  const x={kaban:amtVal0('s_kaban'),unload_date:gv('s_udate'),date:gv('s_date'),factory:S.selectedFactory==='الكل'?gv('s_factory'):S.selectedFactory};
   const t=el('s_total');if(t)t.value=fmtM(saleTotalOf(x));
   const f=el('s_fare');if(f)f.value=fmtM(saleFare(x));
   const b=el('s_tip');if(b)b.value=fmtM(saleTip(x));
+  const nt=el('s_rates_note');if(nt)nt.innerHTML=saleRatesNote(x);
+}
+function saleRatesNote(e){
+  const r=saleRatesFor(e);
+  const src=r.rule?'فترة '+esc(r.rule.factory)+' من '+esc(r.rule.from)+' إلى '+(r.rule.to?esc(r.rule.to):'مفتوحة'):'المبالغ العامة';
+  return 'المبالغ محسوبة تلقائياً ('+src+'): أجرة النقل '+fmtM(r.fare)+'/طن — سعر البيع '+fmtM(r.price)+'/كغم — الإكرامية '+fmtM(r.tip)+' (تُعدَّل من ⚙️ إدارة النظام)';
 }
 let pendingLoadScanFile=null,pendingUnloadScanFile=null;
 function handleSaleScanSelect(inp,slot){
@@ -2402,7 +2497,7 @@ async function saveSale(){
   const unloadDate=gv('s_udate'),market=gv('s_market');
   const advance=parseFloat(e.advance)||0,received=parseFloat(e.received)||0;
   const source=gv('s_source');
-  const rt=saleRates(),salePrice=rt.price,driverBonus=kaban>0?rt.tip:0;
+  const rt=saleRatesFor({unload_date:kaban?unloadDate:'',date:date,factory:sf==='الكل'?gv('s_factory'):sf}),salePrice=rt.price,driverBonus=kaban>0?rt.tip:0;
   if(badAmt(kaban,liters,advance,received,salePrice,driverBonus,loadQty)){warnBadAmt();return;}
   const saleTotal=salePrice*kaban;
   if(!driver||!car||!date){showToast('يرجى ملء الحقول الإلزامية (*)','warning');return;}
@@ -3299,9 +3394,9 @@ function viewSaleTable(){
     <td class="td-p" style="font-weight:900;color:${sh==null?'#94a3b8':sh<0?'#dc2626':'#059669'}">${sh==null?'—':fmtKaban(sh)}</td>
     <td class="td-p" style="font-size:11px">${esc(e.market||'')}</td><td class="td-p" style="color:#7c3aed;font-weight:900">${esc(e.product_type)}</td>
     <td class="td-p" style="font-size:11px">${esc(e.address||'')}</td>
-    <td class="td-p">${fmtM(rt.fare)}</td>
+    <td class="td-p">${fmtM(saleRatesFor(e).fare)}</td>
     <td class="td-p" style="color:#1e3a8a;font-weight:900">${fmtM(saleFare(e))}</td>
-    <td class="td-p">${fmtM(rt.price)}</td>
+    <td class="td-p">${fmtM(saleRatesFor(e).price)}</td>
     <td class="td-p" style="color:#1e3a8a;font-weight:900">${fmtM(saleTotalOf(e))}</td>
     <td class="td-p">${fmtM(saleTip(e))}</td>
     <td class="td-p" style="font-size:11px">${esc(e.car_source||'')}</td>
@@ -3590,7 +3685,7 @@ function exportXLSX(type,factories){
     sheetName='المبيعات';fname='مبيعات_'+today()+'.xlsx';
     rows.push(['ت','اسم السائق','رقم المركبة','العائدية','تاريخ التحميل','كمية التحميل','كمية التفريغ','تاريخ التفريغ','النقص','جهة التسويق','نوع المنتوج','المعمل','العنوان','أجرة النقل','إجمالي كراوي السواق','سعر البيع','إجمالي البيع','إكرامية السائق','المصدر']);
     const rt=saleRates();
-    list.forEach((e,i)=>rows.push([i+1,e.driver_name,e.car_no,e.location,e.date,parseFloat(e.load_qty)||'',parseFloat(e.kaban)||'',e.unload_date||'',saleShortage(e)==null?'':saleShortage(e),e.market||'',e.product_type,e.factory,e.address||'',rt.fare,saleFare(e),rt.price,saleTotalOf(e),saleTip(e),e.car_source||'']));
+    list.forEach((e,i)=>rows.push([i+1,e.driver_name,e.car_no,e.location,e.date,parseFloat(e.load_qty)||'',parseFloat(e.kaban)||'',e.unload_date||'',saleShortage(e)==null?'':saleShortage(e),e.market||'',e.product_type,e.factory,e.address||'',saleRatesFor(e).fare,saleFare(e),saleRatesFor(e).price,saleTotalOf(e),saleTip(e),e.car_source||'']));
   }
   // معمل واحد: اسمه في العنوان ولا حاجة لعمود المعمل؛ «الكل»: يبقى العمود للتمييز
   const fcol=rows[0].indexOf('المعمل');

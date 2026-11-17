@@ -201,13 +201,78 @@
 <div id="app"></div>
 <div id="toast-container"></div>
 <script>
+// ===== تخزين IndexedDB =====
+// كانت كل البيانات في localStorage (حدّه 5–10 ميغابايت) فيمتلئ مع نمو السجلات.
+// الآن: تُحمَّل البيانات من IndexedDB إلى الذاكرة قبل تشغيل البرنامج، فتبقى DB.get فورية،
+// وكل DB.set يُكتب إلى IndexedDB بالخلفية. أول تشغيل ينقل بيانات localStorage (وتبقى نسختها هناك كما هي).
+// إن تعذّر IndexedDB يعمل البرنامج على localStorage كالسابق.
+window.__oilMode='ls'; window.__oilMem=new Map();
+(function(){
+  var IDB_NAME='oil_store', STORE='kv';
+  function openDb(){ return new Promise(function(res,rej){
+    if(!window.indexedDB){ rej(new Error('no indexedDB')); return; }
+    var r=indexedDB.open(IDB_NAME,1);
+    r.onupgradeneeded=function(){ r.result.createObjectStore(STORE); };
+    r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); }; r.onblocked=function(){ rej(new Error('blocked')); };
+  }); }
+  function loadAll(db){ return new Promise(function(res,rej){
+    var out=new Map(), tx=db.transaction(STORE,'readonly'), cur=tx.objectStore(STORE).openCursor();
+    cur.onsuccess=function(){ var c=cur.result; if(c){ out.set(c.key,c.value); c.continue(); } else res(out); };
+    cur.onerror=function(){ rej(cur.error); };
+  }); }
+  function putMany(db,entries){ return new Promise(function(res,rej){
+    var tx=db.transaction(STORE,'readwrite'), st=tx.objectStore(STORE);
+    entries.forEach(function(e){ st.put(e[1],e[0]); });
+    tx.oncomplete=function(){ res(); }; tx.onerror=tx.onabort=function(){ rej(tx.error); };
+  }); }
+  // كتابات مجمَّعة: آخر قيمة لكل مفتاح تُكتب بمعاملة واحدة
+  var pending=new Map(), timer=null;
+  window.__oilPut=function(key,str){
+    pending.set(key,str);
+    if(timer) return;
+    timer=setTimeout(function(){
+      timer=null; var batch=Array.from(pending.entries()); pending.clear();
+      putMany(window.__oilDb,batch).catch(function(err){ try{ _dbWriteFailed(batch.map(function(b){return b[0];}).join('،'),err); }catch(e){} });
+    },0);
+  };
+  function startApp(){
+    var src=document.getElementById('oil-main');
+    var sc=document.createElement('script'); sc.textContent=src.textContent; document.body.appendChild(sc);
+    // إن جهز Firebase قبل تشغيل البرنامج فاتت مستمعيه إشارة fb-ready — نعيد إطلاقها
+    if(window._fbReady) document.dispatchEvent(new Event('fb-ready'));
+  }
+  openDb().then(function(db){
+    window.__oilDb=db;
+    return loadAll(db).then(function(mem){
+      // أول تشغيل فقط: نقل بيانات localStorage. العلامة تمنع إعادة نقل نسخة localStorage القديمة لاحقاً
+      // (لو فُرّغ IndexedDB) — وإلا عاد طابور رفع قديم يكتب فوق بيانات أحدث في السحابة
+      if(mem.size===0&&!localStorage.getItem('oil___moved_to_idb')){
+        var mig=[];
+        for(var i=0;i<localStorage.length;i++){ var k=localStorage.key(i); if(k&&k.indexOf('oil_')===0){ var v=localStorage.getItem(k); if(v!=null){ mem.set(k.slice(4),v); mig.push([k.slice(4),v]); } } }
+        mem.set('__idb_migrated_at',JSON.stringify(Date.now())); mig.push(['__idb_migrated_at',JSON.stringify(Date.now())]);
+        return putMany(db,mig).then(function(){ try{ localStorage.setItem('oil___moved_to_idb','1'); }catch(e){} return mem; });
+      }
+      return mem;
+    });
+  }).then(function(mem){ window.__oilMem=mem; window.__oilMode='idb'; })
+    .catch(function(e){ console.warn('IndexedDB غير متاح — العمل على localStorage:',e); window.__oilMode='ls'; })
+    .then(startApp);
+})();
+</script>
+<script type="text/plain" id="oil-main">
 // ===== قاعدة البيانات =====
 const DB = {
-  get(key, def) { try { const v=localStorage.getItem('oil_'+key); return v?JSON.parse(v):(def!==undefined?def:[]); } catch { return (def!==undefined?def:[]); } },
+  get(key, def) { const d=(def!==undefined?def:[]); try { const v=window.__oilMode==='idb'?window.__oilMem.get(key):localStorage.getItem('oil_'+key); return v?JSON.parse(v):d; } catch { return d; } },
   // تُرجع true/false — كان `catch {}` يبتلع امتلاء مساحة المتصفح فيكمل النظام كأن الحفظ نجح
-  set(key, val) { try { localStorage.setItem('oil_'+key, JSON.stringify(val)); return true; } catch(err) { _dbWriteFailed(key,err); return false; } },
+  set(key, val) {
+    try {
+      const str=JSON.stringify(val);
+      if(window.__oilMode==='idb'){ window.__oilMem.set(key,str); window.__oilPut(key,str); return true; }
+      localStorage.setItem('oil_'+key, str); return true;
+    } catch(err) { _dbWriteFailed(key,err); return false; }
+  },
   // حجم البيانات المخزَّنة بالميغابايت (تقريبي)
-  usageMB() { try { let n=0; for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf('oil_')===0)n+=k.length+(localStorage.getItem(k)||'').length;} return n*2/1048576; } catch { return 0; } }
+  usageMB() { try { let n=0; if(window.__oilMode==='idb'){ window.__oilMem.forEach(function(v,k){ n+=k.length+(v||'').length; }); } else { for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf('oil_')===0)n+=k.length+(localStorage.getItem(k)||'').length;} } return n*2/1048576; } catch { return 0; } }
 };
 let _dbFailAt=0;
 function _dbWriteFailed(key,err){
@@ -9399,9 +9464,22 @@ async function forceFullResync(){
     const r=await flushFdbQueue(false);
     if(r.fail){ showToast('⛔ يوجد '+r.fail+' سجل لم يصل السحابة بعد — لا تُعِد المزامنة الآن وإلا ضاع نهائياً. أعد المحاولة بعد عودة الاتصال.','error',12000); return; }
   }
-  if(!confirm('سيتم مسح الذاكرة المؤقتة المحلية لهذا الجهاز فقط (لا يمس أي بيانات بالسحابة) وإعادة تسجيل الدخول من جديد. استخدمها إذا كانت البيانات هنا تبدو قديمة أو مختلفة عن جهاز آخر. متابعة؟'))return;
+  if(!confirm('إعادة مزامنة كاملة: تُمسح بيانات السحابة المحفوظة على هذا الجهاز وتُجلب من جديد، ويُطلب تسجيل الدخول مرة أخرى. البيانات المحلية فقط (أرصدة تسوية السلف، المحذوفات، سجل العمليات، إعدادات النسخ) تبقى كما هي. متابعة؟'))return;
+  // البيانات المحفوظة على هذا الجهاز فقط (ليست بالسحابة) تُحفظ قبل المسح وتُعاد بعده — كان المسح يُضيّع
+  // أرصدة افتتاح تسوية السلف وقوائم المحذوفات وسجل العمليات وإعدادات النسخ. يُمسح فقط ما يُجلب من السحابة.
+  const CLOUD_KEYS=['entries','sales','drivers','salaf','expenses','expense_entities','expense_entity_aliases','factories','factory_quotas',
+    'quota_history','pricing_rules','transport_rules','sale_rates','private_salaf','kroob','kroob_opening','kroob_month_openings','kroob_op_types',
+    'rafid_accounts','rafid_opening','rafid_month_openings','users','last_user','fdb_pending','offline_unlock','__idb_migrated_at'];
+  const keep=[];
+  try{
+    if(window.__oilMode==='idb') window.__oilMem.forEach(function(v,k){ if(CLOUD_KEYS.indexOf(k)<0) keep.push([k,v]); });
+    else for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.indexOf('oil_')===0&&k!=='oil___moved_to_idb'&&CLOUD_KEYS.indexOf(k.slice(4))<0) keep.push([k.slice(4),localStorage.getItem(k)]); }
+  }catch(e){}
   try{
     localStorage.clear();
+    // تُنقل إلى قاعدة IndexedDB الجديدة تلقائياً عند إعادة التحميل
+    keep.forEach(function(kv){ try{ localStorage.setItem('oil_'+kv[0],kv[1]); }catch(e){} });
+    try{ if(window.__oilDb) window.__oilDb.close(); }catch(e){}   // وإلا بقي حذف قاعدة oil_store معلَّقاً
     if(window.indexedDB && indexedDB.databases){
       const dbs=await indexedDB.databases();
       await Promise.all(dbs.map(function(d){return new Promise(function(res){if(!d.name){res();return;}const req=indexedDB.deleteDatabase(d.name);req.onsuccess=req.onerror=req.onblocked=res;});}));

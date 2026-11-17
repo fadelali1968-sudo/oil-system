@@ -947,10 +947,6 @@ async function hashPassword(password) {
   const hashBuffer=await crypto.subtle.digest('SHA-256',msgBuffer);
   return Array.from(new Uint8Array(hashBuffer)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-async function verifyPassword(password,hash) {
-  if(!hash||!hash.match(/^[0-9a-f]{64}$/)) return password===hash;
-  return (await hashPassword(password))===hash;
-}
 
 let FACTORIES = DB.get('factories',["الذهب الأسود","عطاء الذهب الأسود","معمل الفهد","معمل الوطنية","روعة المشرق"]);
 
@@ -991,16 +987,36 @@ let FACTORIES = DB.get('factories',["الذهب الأسود","عطاء الذه
 })();
 const ADMIN_UID = 'fadel_manger_gmail_com';
 
+// كلمات السر يتحقق منها Firebase Auth وحده — لا تُحفظ في سجلات المستخدمين (لا محلياً ولا في السحابة)
+// كانت تُحفظ بصمة SHA-256 بلا ملح يقرؤها أي مستخدم مسجّل، وكان كل جهاز يعيد رفع كل المستخدمين عند كل فتح
+function stripUserSecrets(){
+  const u=DB.get('users',{});let n=0;
+  Object.keys(u).forEach(k=>{ if(u[k]&&'password' in u[k]){ delete u[k].password; n++; } });
+  if(n)DB.set('users',u);
+  const lu=DB.get('last_user',null);
+  if(lu&&'password' in lu){ delete lu.password; DB.set('last_user',lu); }
+  return n;
+}
 (function initAdmin() {
   let u=DB.get('users',{});
-  if(!u[ADMIN_UID]){hashPassword('admin123').then(hash=>{u[ADMIN_UID]={email:'fadel.manger@gmail.com',password:hash,role:'manager',factory:'الكل'};DB.set('users',u);});}
+  if(!u[ADMIN_UID]){u[ADMIN_UID]={email:'fadel.manger@gmail.com',role:'manager',factory:'الكل'};DB.set('users',u);}
+  stripUserSecrets();
+  // تنظيف السحابة: المدير وحده، بعد تأكيد جلسة Firebase — يحذف حقل password من مستندات users
   document.addEventListener('fb-ready',function(){
-    const allUsers=DB.get('users',{});
-    const migrations=Object.entries(allUsers).map(async([k,v])=>{
-      if(v.password&&!v.password.match(/^[0-9a-f]{64}$/)){v.password=await hashPassword(v.password);allUsers[k]=v;}
-      FDB.save('users',k,v);
-    });
-    Promise.all(migrations).then(()=>{DB.set('users',allUsers);});
+    setTimeout(async function(){
+      try{
+        if(!isManager()||!window._auth||!window._auth.auth.currentUser)return;
+        // بمعرّف المستند الفعلي (لا uid(email)) — بعض المستندات القديمة معرّفها لا يطابق بريدها
+        const {db,collection,getDocs}=window._fb;
+        const snap=await getDocs(collection(db,'users'));
+        const items=[];
+        snap.docs.forEach(ds=>{const x=ds.data();if(x&&('password' in x)){const d={...x};delete d.password;delete d._updated;items.push({col:'users',id:ds.id,data:d});}});
+        if(!items.length)return;
+        const r=await fdbSaveBatched(items,null);
+        stripUserSecrets();
+        if(r.ok)auditLog('أمان',`حذف بصمات كلمات السر من ${r.ok} مستخدم في السحابة`);
+      }catch(e){ console.warn('strip passwords:',e); }
+    },8000);
   });
 })();
 
@@ -8411,17 +8427,12 @@ async function changeMyPassword(){
     if(window._auth){
       const {auth,reauthenticateWithCredential,EmailAuthProvider,updatePassword:fbUpdatePw}=window._auth;
       const fbUser=auth.currentUser;
-      if(fbUser){
-        const cred=EmailAuthProvider.credential(currentUser.email,oldPass);
-        await reauthenticateWithCredential(fbUser,cred);
-        await fbUpdatePw(fbUser,newPass);
-      }
-    }
-    // تحديث الهاش في localStorage وFirestore ليتزامنا مع Firebase Auth
-    const users=DB.get('users',{});
-    const k=uid(currentUser.email);
-    const newHash=await hashPassword(newPass);
-    if(users[k]){users[k].password=newHash;DB.set('users',users);await FDB.save('users',k,users[k]);}
+      // بلا جلسة Firebase لا تتغير كلمة السر فعلاً — كانت تظهر «تم» وتبقى القديمة
+      if(!fbUser){show('جلسة الدخول إلى السحابة منتهية — سجّل خروج ثم دخول وأعد المحاولة','red');return;}
+      const cred=EmailAuthProvider.credential(currentUser.email,oldPass);
+      await reauthenticateWithCredential(fbUser,cred);
+      await fbUpdatePw(fbUser,newPass);
+    } else { show('تحقق من الاتصال بالإنترنت','red'); return; }
     document.getElementById('chg_old').value='';
     document.getElementById('chg_new').value='';
     document.getElementById('chg_confirm').value='';
@@ -8446,9 +8457,8 @@ async function addUser(){
     }
     // حفظ بيانات المستخدم في Firestore
     const k=uid(email);
-    const hash=await hashPassword(pass);
     let users=DB.get('users',{});
-    users[k]={email,password:hash,role,factory,createdAt:Date.now()};
+    users[k]={email,role,factory,createdAt:Date.now()};
     DB.set('users',users);
     await FDB.save('users',k,users[k]);
     auditLog('إضافة مستخدم', `${email} | الدور: ${role} | المعمل: ${factory}`);
@@ -9212,7 +9222,7 @@ async function doLogin(){
       if(fbUsers){const found=fbUsers.find(u=>u.email===email);if(found){user=found;const obj={};fbUsers.forEach(u=>{if(u.email)obj[uid(u.email)]=u;});DB.set('users',obj);}}
     }
     if(!user){showToast('المستخدم غير موجود في النظام — راجع المدير','error');if(loginBtn){loginBtn.textContent='🚀 تسجيل الدخول';loginBtn.disabled=false;}return;}
-    currentUser=_userGuard.seal({...user,uid:k});
+    {const cu={...user,uid:k};delete cu.password;currentUser=_userGuard.seal(cu);}
     S.selectedFactory=user.factory==='الكل'?'الكل':(user.factory||'الكل');
     DB.set('last_user',currentUser);
     auditLog('تسجيل دخول', `${email}`);

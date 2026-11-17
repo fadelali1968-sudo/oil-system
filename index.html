@@ -228,6 +228,7 @@ async function flushFdbQueue(silent){
   if(!items.length){ if(!silent&&typeof showToast==='function')showToast('لا توجد سجلات معلَّقة — كل شيء مرفوع ☁️','success',3000); return {ok:0,fail:0}; }
   if(!window._fbReady){ if(!silent&&typeof showToast==='function')showToast('لم يتصل Firebase بعد — حاول بعد قليل','warning',4000); return {ok:0,fail:items.length}; }
   if(_fdbFlushing){ if(!silent&&typeof showToast==='function')showToast('⏳ الرفع جارٍ بالفعل...','info',3000); return {ok:0,fail:items.length}; }
+  if(window._auth&&window._authKnown&&!window._auth.auth.currentUser){ if(!silent)_sessionExpiredNotice(true); return {ok:0,fail:items.length}; }
   _fdbFlushing=true;
   let ok=0,fail=0;
   try{ const r=await fdbSaveBatched(items,silent?null:'رفع السجلات المعلَّقة'); ok=r.ok; fail=r.fail; }
@@ -306,7 +307,8 @@ function _fdbBadge(){
       b.onclick=function(){ flushFdbQueue(false); };
       document.body.appendChild(b);
     }
-    b.textContent='⚠️ '+n+' سجل لم يصل السحابة — اضغط للرفع';
+    const noSess=window._auth&&window._authKnown&&!window._auth.auth.currentUser;
+    b.textContent=noSess?('🔐 '+n+' سجل لم يصل السحابة — جلسة الدخول منتهية، اضغط هنا'):('⚠️ '+n+' سجل لم يصل السحابة — اضغط للرفع');
   }catch(e){}
 }
 const FDB = {
@@ -9208,6 +9210,8 @@ async function doLogin(){
     auditLog('تسجيل دخول', `${email}`);
     if(isManager())syncFromCloud().then(()=>render());
     else render();
+    // السجلات التي تكدّست أثناء انتهاء الجلسة تُرفع فور الدخول
+    setTimeout(function(){ if(fdbPendingCount())flushFdbQueue(false); },3000);
   } catch(err){
     let msg='خطأ في تسجيل الدخول';
     if(err.code==='auth/user-not-found'||err.code==='auth/invalid-credential')msg='البريد الإلكتروني أو كلمة السر غير صحيحة';
@@ -9329,6 +9333,26 @@ function logout(){
 
 // ===== رفع السجلات المعلَّقة تلقائياً =====
 // الطابور يمتلئ عند انقطاع الاتصال؛ هذه المشغّلات تُفرغه بلا تدخّل المستخدم
+// جلسة Firebase منتهية (تغيير/تعيين كلمة السر، حذف الحساب وإعادته...) بينما البرنامج ما زال يعرض المستخدم داخلاً:
+// السحابة ترفض كل كتابة (permission-denied) فتتكدّس السجلات بالطابور — ننبّه المستخدم لإعادة الدخول
+function _sessionExpiredNotice(force){
+  if(!currentUser)return;
+  if(!force&&document.getElementById('_sess_exp'))return;
+  const old=document.getElementById('_sess_exp'); if(old)old.remove();
+  const d=document.createElement('div'); d.id='_sess_exp';
+  d.style.cssText='position:fixed;top:0;left:0;right:0;z-index:100001;background:#b91c1c;color:#fff;font-family:Cairo,sans-serif;font-weight:900;font-size:13px;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;box-shadow:0 4px 16px rgba(0,0,0,.35)';
+  d.innerHTML='🔐 جلسة الدخول إلى السحابة منتهية — التعديلات تُحفظ على هذا الجهاز فقط ولا تصل للسحابة. سجّل الدخول من جديد وستُرفع السجلات المعلَّقة تلقائياً.'
+    +' <button class="btn" style="background:#fff;color:#b91c1c;padding:6px 14px;font-weight:900">إعادة تسجيل الدخول</button>';
+  d.querySelector('button').onclick=function(){ d.remove(); logout(); };
+  document.body.appendChild(d);
+}
+document.addEventListener('fb-ready', function(){
+  try{ window._auth.onAuthStateChanged(window._auth.auth,function(u){
+    window._authKnown=true; _fdbBadge();
+    if(u){ const e=document.getElementById('_sess_exp'); if(e)e.remove(); return; }
+    if(currentUser&&navigator.onLine!==false) _sessionExpiredNotice(false);
+  }); }catch(e){}
+});
 document.addEventListener('fb-ready', function(){ setTimeout(function(){ _fdbBadge(); flushFdbQueue(true); }, 2500); setTimeout(pruneCloudAuditLog, 20000); });
 window.addEventListener('online', function(){ setTimeout(function(){ flushFdbQueue(true); }, 1500); });
 setInterval(function(){ if(fdbPendingCount()&&navigator.onLine) flushFdbQueue(true); }, 120000);

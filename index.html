@@ -1513,7 +1513,7 @@ function viewDashboard() {
   const totalTons=facts.reduce((s,f)=>s+anOf(analysis,f).total.tons,0);
   const totalKg=facts.reduce((s,f)=>s+anOf(analysis,f).total.kg,0);
 
-  const totalSaleMoney=facts.reduce((s,f)=>s+anOf(saleAn,f).total.money,0);
+  const totalSaleMoney=facts.reduce((s,f)=>s+(anOf(saleAn,f).total.sale||0),0);
   const kpi=(g,glow,ic,title,val,unit,foot)=>`<div class="kpi" style="background:linear-gradient(135deg,${g});--kg:${glow}">
       <span class="kpi-ic">${ic}</span>
       <div class="kpi-t">${ic} ${title}</div>
@@ -1567,7 +1567,7 @@ function viewDashboard() {
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div style="background:linear-gradient(160deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;border-radius:10px;padding:10px"><p style="font-size:10px;color:#1d4ed8;font-weight:900;text-align:center;margin-bottom:6px">${dCut&&q?'مشتريات القطع الحالي':'إجمالي المشتريات'}</p>${sr('السيارات',d.total.cars)}${sr('طن',fmt(d.total.tons),'#059669')}${sr('المبلغ',fmtM(d.total.money),'#1e3a8a')}</div>
-      <div style="background:linear-gradient(160deg,#f5f3ff,#ede9fe);border:1px solid #ddd6fe;border-radius:10px;padding:10px"><p style="font-size:10px;color:#6d28d9;font-weight:900;text-align:center;margin-bottom:6px">إجمالي المبيعات</p>${sr('سيارات التحميل',sd.total.loadCars)}${sr('كمية التحميل',fmtKaban(sd.total.loadQty),'#7c3aed')}${sr('سيارات التفريغ',sd.total.cars)}${sr('كمية التفريغ',fmtKaban(sd.total.kaban),'#7c3aed')}${sr('المبلغ',fmtM(sd.total.money),'#1e3a8a')}</div>
+      <div style="background:linear-gradient(160deg,#f5f3ff,#ede9fe);border:1px solid #ddd6fe;border-radius:10px;padding:10px"><p style="font-size:10px;color:#6d28d9;font-weight:900;text-align:center;margin-bottom:6px">إجمالي المبيعات</p>${sr('سيارات التحميل',sd.total.loadCars)}${sr('كمية التحميل',fmtKaban(sd.total.loadQty),'#7c3aed')}${sr('سيارات التفريغ',sd.total.cars)}${sr('كمية التفريغ',fmtKaban(sd.total.kaban),'#7c3aed')}${sr('المبلغ',fmtM(sd.total.sale||0),'#1e3a8a')}</div>
     </div>${qb}</div>`;}).join('')}
   </div>`;
 

@@ -1148,7 +1148,7 @@ function el(id){ return document.getElementById(id); }
 function gv(id){ return el(id)?.value?.trim()||''; }
 function isManager(){ return currentUser?.role==='manager'; }
 function hasPerm(perm){ if(!_checkIntegrity())return false; if(isManager())return true; const perms=currentUser?.permissions; if(!perms)return false; return perms.includes(perm); }
-function canEdit(section){ if(!_checkIntegrity())return false; if(isManager())return true; if(currentUser?.email==='mohammed.ridha@gmail.com')return true; if(section==='purchases'&&hasPerm('table'))return true; if(section==='sales'&&hasPerm('sale_table'))return true; if(section==='salaf'&&hasPerm('salaf'))return true; if(section==='private_salaf'&&hasPerm('private_salaf'))return true; if(section==='expenses'&&hasPerm('expenses'))return true; return false; }
+function canEdit(section){ if(!_checkIntegrity())return false; if(isManager())return true; if(section==='purchases'&&hasPerm('table'))return true; if(section==='sales'&&hasPerm('sale_table'))return true; if(section==='salaf'&&hasPerm('salaf'))return true; if(section==='private_salaf'&&hasPerm('private_salaf'))return true; if(section==='expenses'&&hasPerm('expenses'))return true; return false; }
 
 // ===== سجل النشاط (Audit Log) =====
 function auditLog(action, details){

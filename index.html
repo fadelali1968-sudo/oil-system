@@ -1430,21 +1430,8 @@ function render() {
   setInterval(()=>{const c=el('clock');if(c){const n=new Date();c.textContent=[n.getHours(),n.getMinutes(),n.getSeconds()].map(v=>String(v).padStart(2,'0')).join(':');}},1000);
   // نسخة احتياطية يومية تلقائية — بعد اكتمال المزامنة الأولى، وتحرس نفسها بتاريخ آخر نسخة
   setTimeout(function(){ try{ autoBackupCheck(); }catch(e){ console.warn('autoBackup:',e); } },9000);
-  setInterval(async()=>{
-    if(!window._fbReady)return;
-    const snap={
-      exp:DB.get('expenses',[]).length,
-      ent:DB.get('entries',[]).length,
-      sal:DB.get('sales',[]).length,
-      kr:DB.get('kroob',[]).length,
-      rf:DB.get('rafid_accounts',[]).length,
-      slf:DB.get('salaf',[]).length,
-      psl:DB.get('private_salaf',[]).length
-    };
-    await syncFromCloud(true);
-    const changed=DB.get('expenses',[]).length!==snap.exp||DB.get('entries',[]).length!==snap.ent||DB.get('sales',[]).length!==snap.sal||DB.get('kroob',[]).length!==snap.kr||DB.get('rafid_accounts',[]).length!==snap.rf||DB.get('salaf',[]).length!==snap.slf||DB.get('private_salaf',[]).length!==snap.psl;
-    if(changed){showToast('📥 تم استلام بيانات جديدة','info',4000);renderContent();}
-  },90000);
+  // لا مزامنة دورية: البرنامج يُستخدم من جهاز واحد، والقراءة الكاملة كل 90 ثانية كانت تستهلك حصة Firebase المجانية
+  // (50 ألف قراءة/يوم) بلا فائدة. المزامنة تتم عند فتح البرنامج وبزر 🔄 فقط.
   renderContent();
 }
 

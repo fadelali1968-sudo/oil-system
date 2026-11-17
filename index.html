@@ -2468,11 +2468,12 @@ function saveSaleRateRules(rules,logTitle,logText){
 function addSaleRateRule(){
   if(!isManager()){ showToast('غير مصرّح','error'); return; }
   const fac=_srFac,from=gv('srr_from'),to=gv('srr_to');
-  const price=parseFloat(gv('srr_price')),fare=parseFloat(gv('srr_fare')),tip=parseFloat(gv('srr_tip')),priceUsd=gv('srr_price_usd')===''?0:parseFloat(gv('srr_price_usd'));
+  const price=gv('srr_price')===''?0:parseFloat(gv('srr_price')),fare=parseFloat(gv('srr_fare')),tip=parseFloat(gv('srr_tip')),priceUsd=gv('srr_price_usd')===''?0:parseFloat(gv('srr_price_usd'));
   if(!fac){ showToast('اختر المعمل أولاً','warning'); return; }
   if(!from){ showToast('حدّد تاريخ «من»','warning'); return; }
   if(to&&to<from){ showToast('تاريخ «إلى» قبل تاريخ «من»','warning'); return; }
-  if([price,fare,tip,priceUsd].some(x=>isNaN(x)||x<0)){ showToast('أدخل مبالغ صحيحة','warning'); return; }
+  if([price,fare,tip,priceUsd].some(x=>isNaN(x)||x<0)){ showToast('أدخل مبالغ صحيحة (أرقام فقط) — الأجرة والإكرامية مطلوبة','warning'); return; }
+  if(!price&&!priceUsd){ showToast('اكتب سعر البيع بالدينار أو بالدولار (أو كليهما)','warning'); return; }
   const END='9999-12-31',mine=saleRateRules().filter(x=>sameFactory(x.factory,fac));
   const clash=mine.find(x=>from<=(x.to||END)&&(to||END)>=x.from);
   if(clash){ showToast('⚠️ تتداخل مع فترة موجودة: من '+clash.from+' إلى '+(clash.to||'مفتوحة')+' — احذفها أو غيّر التواريخ','error',7000); return; }
@@ -2517,7 +2518,7 @@ function renderSaleRateRules(){
       +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:12px">'
         +'<div><label class="lbl" for="srr_from">من تاريخ *</label><input class="inp" id="srr_from" type="date" style="width:160px"></div>'
         +'<div><label class="lbl" for="srr_to">إلى تاريخ <span style="font-size:10px;color:#64748b">(فارغ = مفتوحة)</span></label><input class="inp" id="srr_to" type="date" style="width:160px"></div>'
-        +'<div><label class="lbl" for="srr_price">سعر البيع د.ع (للكيلو) *</label><input class="inp" id="srr_price" type="number" step="any" value="'+g.price+'" style="width:130px"></div>'
+        +'<div><label class="lbl" for="srr_price">سعر البيع د.ع (للكيلو)</label><input class="inp" id="srr_price" type="number" step="any" value="'+g.price+'" style="width:130px"></div>'
         +'<div><label class="lbl" for="srr_price_usd">سعر البيع $ (للكيلو)</label><input class="inp" id="srr_price_usd" type="number" step="any" value="'+(g.priceUsd||'')+'" placeholder="0" style="width:130px"></div>'
         +'<div><label class="lbl" for="srr_fare">أجرة النقل (للطن) *</label><input class="inp" id="srr_fare" type="number" step="any" value="'+g.fare+'" style="width:130px"></div>'
         +'<div><label class="lbl" for="srr_tip">الإكرامية *</label><input class="inp" id="srr_tip" type="number" step="any" value="'+g.tip+'" style="width:130px"></div>'
@@ -2548,8 +2549,9 @@ function renderSaleRatesAdmin(){
 }
 function saveSaleRates(){
   if(!isManager()){ showToast('غير مصرّح','error'); return; }
-  const fare=parseFloat(gv('sr_fare')),price=parseFloat(gv('sr_price')),tip=parseFloat(gv('sr_tip')),priceUsd=gv('sr_price_usd')===''?0:parseFloat(gv('sr_price_usd'));
-  if([fare,price,tip,priceUsd].some(x=>isNaN(x)||x<0)){ showToast('أدخل مبالغ صحيحة','warning'); return; }
+  const fare=parseFloat(gv('sr_fare')),price=gv('sr_price')===''?0:parseFloat(gv('sr_price')),tip=parseFloat(gv('sr_tip')),priceUsd=gv('sr_price_usd')===''?0:parseFloat(gv('sr_price_usd'));
+  if([fare,price,tip,priceUsd].some(x=>isNaN(x)||x<0)){ showToast('أدخل مبالغ صحيحة (أرقام فقط) — الأجرة والإكرامية مطلوبة','warning'); return; }
+  if(!price&&!priceUsd){ showToast('اكتب سعر البيع بالدينار أو بالدولار (أو كليهما)','warning'); return; }
   const old=saleRates(),r={fare:fare,price:price,priceUsd:priceUsd,tip:tip,usd:old.usd,rules:old.rules};
   DB.set('sale_rates',r);
   FDB.save('settings','sale_rates',{id:'sale_rates',map:r});
@@ -4201,6 +4203,25 @@ function viewImport(presetType){
   </div>`;
 }
 
+let importNoDate=false,importDateNote='';
+function looksLikeDate(v){
+  if(v==null||typeof v==='number')return false;
+  const d=String(v).trim();
+  return /^\d{4}[.\/-]\d{1,2}[.\/-]\d{1,2}$/.test(d)||/^\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4}$/.test(d);
+}
+// يُرجع رقم العمود الذي أغلب قيمه (60%+ وقيمتان على الأقل) شكلها تاريخ، من الأعمدة غير المعرَّفة؛ وإلا -1
+function detectDateCol(raw,hrow,colMap){
+  const rows=raw.slice(hrow+1).filter(r=>r&&(r[1]||r[2]));
+  const width=Math.max(0,...rows.map(r=>r.length));
+  let best=-1,bestN=0;
+  for(let c=0;c<width;c++){
+    if(colMap[c])continue;
+    let n=0,filled=0;
+    rows.forEach(r=>{const v=r[c];if(v!==''&&v!=null){filled++;if(looksLikeDate(v))n++;}});
+    if(n>=2&&n>=filled*0.6&&n>bestN){best=c;bestN=n;}
+  }
+  return best;
+}
 function previewExcel(file){
   if(!file)return;
   const hrowSel=gv('imp_hrow')||'auto',sheetIdx=parseInt(gv('imp_sheet')||'0');
@@ -4217,6 +4238,14 @@ function previewExcel(file){
       const headers=raw[hrow]||[];
       const colMap={};
       headers.forEach((h,i)=>{const m=normalizeCol(h,map);if(m)colMap[i]=m;});
+      // عنوان عمود التاريخ ممسوح أو مكتوب فوقه (رقم مثلاً) — كانت السجلات تُستورد بلا تاريخ بصمت.
+      // نبحث عن عمود قيمه شكلها تاريخ (2026.11.15 / 15/11/2026 / 2026-11-15)
+      importDateNote='';
+      if(Object.values(colMap).indexOf('date')<0){
+        const di=detectDateCol(raw,hrow,colMap);
+        if(di>=0){colMap[di]='date';importDateNote='🔎 عمود التاريخ تعرّفت عليه من محتواه: العمود <b>'+XLSX.utils.encode_col(di)+'</b> (عنوانه بالملف: «'+esc(String(headers[di]==null?'':headers[di]).trim()||'فارغ')+'») — صحّح العنوان إلى «التاريخ» في الملف';}
+      }
+      importNoDate=Object.values(colMap).indexOf('date')<0;
       importHasVoucherCol=Object.values(colMap).indexOf('voucher_no')>=0;
       importedRows=[];
       for(let r=hrow+1;r<raw.length;r++){
@@ -4233,7 +4262,8 @@ function previewExcel(file){
       const info=el('imp-info');
       const cols=Object.values(colMap).filter(f=>f[0]!=='_');
       const miss=iType==='sales'&&cols.indexOf('kaban')<0&&cols.indexOf('load_qty')<0?'<br><span style="color:#b91c1c">⚠️ لم يُعثر على عمود كمية التحميل ولا الكبان/كمية التفريغ — تحقق من صف الرأس</span>':'';
-      if(info)info.innerHTML=`✅ الملف: <b>${esc(file.name)}</b> | صف الرأس: <b>${hrow+1}</b> | عدد السجلات: <b>${importedRows.length}</b><br>الأعمدة: <b>${cols.join('، ')}</b>${miss}`+importQtyHtml(importQtyIssues(importedRows,iType));
+      const dateWarn=importNoDate?'<div style="margin-top:10px;background:#fef2f2;border:2px solid #dc2626;border-radius:8px;padding:10px;color:#991b1b">⚠️ لم يُعثر على عمود التاريخ — ستُستورد السجلات <b>بلا تاريخ</b>. اكتب «التاريخ» في عنوان عمود التاريخ (صف الرأس '+(hrow+1)+') ثم أعد اختيار الملف</div>':(importDateNote?'<div style="margin-top:10px;background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:10px;color:#92400e">'+importDateNote+'</div>':'');
+      if(info)info.innerHTML=`✅ الملف: <b>${esc(file.name)}</b> | صف الرأس: <b>${hrow+1}</b> | عدد السجلات: <b>${importedRows.length}</b><br>الأعمدة: <b>${cols.join('، ')}</b>${miss}`+dateWarn+importQtyHtml(importQtyIssues(importedRows,iType));
       const prev=el('imp-preview');if(prev)prev.style.display='block';
     }catch(err){showToast('خطأ: '+err.message,'error');}
   };
@@ -4266,6 +4296,7 @@ async function doImport(){
   window._importing=true;
   if(!importedRows.length){window._importing=false;return;}
   const factory=gv('imp_factory'),iType=gv('imp_type')||'purchases';
+  if(importNoDate&&!confirm('⚠️ لم يُعثر على عمود التاريخ في الملف — ستُستورد السجلات بلا تاريخ.\n\nالأفضل إلغاء الاستيراد وكتابة «التاريخ» في عنوان العمود. هل تريد الاستيراد بلا تاريخ رغم ذلك؟')){window._importing=false;return;}
   const qi=importQtyIssues(importedRows,iType);
   if(qi.length&&!confirm('⚠️ يوجد خطأ في الكميات — '+qi.length+' قيمة:\n\n'+qi.slice(0,10).map(importQtyLine).join('\n')+(qi.length>10?'\n… و'+(qi.length-10)+' أخرى':'')+'\n\nالأفضل تصحيح ملف Excel أولاً. هل تريد الاستيراد رغم ذلك؟')){window._importing=false;return;}
   let drivers=DB.get('drivers',{}),added=0,skippedDup=0;

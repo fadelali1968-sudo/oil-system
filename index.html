@@ -15,7 +15,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, writeBatch, onSnapshot, query, orderBy, where, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, deleteUser as fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, deleteUser as fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   const firebaseConfig = {
     apiKey: "AIzaSyAEQ4T5W2sddGkrVkbq2KroZPmFy6BPPgU",
     authDomain: "oil-system-df212.firebaseapp.com",
@@ -31,7 +31,7 @@
   catch (e) { console.warn('Firestore persistence unavailable:', e); db = getFirestore(app); }
   const auth = getAuth(app);
   window._fb = { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, writeBatch, onSnapshot, query, orderBy, where, limit };
-  window._auth = { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider };
+  window._auth = { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail };
   window._fbReady = true;
   document.dispatchEvent(new Event('fb-ready'));
 </script>
@@ -3410,7 +3410,7 @@ function viewSaleTable(){
       <button class="btn btn-amber" style="font-size:12px;padding:8px 16px;white-space:nowrap" onclick="moveAddressToMarket()">↪️ نقل إلى جهة التسويق (${addrMkt})</button>
     </div>`:''}<div class="card" style="overflow:hidden;padding:0">
     <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;background:#faf5ff;border-bottom:1px solid #e9d5ff">
-      <span style="font-weight:900;font-size:14px;color:#6d28d9">سجل بيانات المبيعات — ${sf} <span class="badge" style="background:#f5f3ff;color:#7c3aed">${list.length} سجل</span> <span class="badge" style="background:#f5f3ff;color:#7c3aed">التحميل: ${fmtKaban(totLoad)}</span> <span class="badge" style="background:#f5f3ff;color:#7c3aed">التفريغ (الكبان): ${fmtKaban(totKaban)}</span> <span class="badge" style="background:${totShort<0?'#fef2f2;color:#dc2626':'#ecfdf5;color:#059669'}">النقص: ${fmtKaban(totShort)}</span> <span class="badge" style="background:#eff6ff;color:#1e3a8a">كراوي السواق: ${fmtM(list.reduce((s,e)=>s+saleFare(e),0))}</span>${pendingCnt?` <span class="badge" style="background:#fffbeb;color:#b45309">⏳ بانتظار التفريغ: ${pendingCnt}</span>`:''}</span>
+      <span style="font-weight:900;font-size:14px;color:#6d28d9">سجل بيانات المبيعات — ${sf} <span class="badge" style="background:#f5f3ff;color:#7c3aed">${list.length} سجل</span> <span class="badge" style="background:#f5f3ff;color:#7c3aed">التحميل: ${fmtKaban(totLoad)}</span> <span class="badge" style="background:#f5f3ff;color:#7c3aed">التفريغ (الكبان): ${fmtKaban(totKaban)}</span> <span class="badge" style="background:${totShort<0?'#fef2f2;color:#dc2626':'#ecfdf5;color:#059669'}">النقص: ${fmtKaban(totShort)}</span> <span class="badge" style="background:#ecfdf5;color:#047857">إجمالي البيع: ${fmtM(list.reduce((s,e)=>s+saleTotalOf(e),0))}</span>${pendingCnt?` <span class="badge" style="background:#fffbeb;color:#b45309">⏳ بانتظار التفريغ: ${pendingCnt}</span>`:''}</span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-blue no-print" style="font-size:11px;padding:7px 12px" onclick="printSelectedScans('sales')" title="طباعة بوجرات التحميل والتفريغ للسجلات المحددة — كل بوجر بصفحة">🖨️ طباعة البوجرات (<span id="cnt_scans_sales">${_scanSel.sales.size}</span>)</button>
         <button class="btn btn-red no-print" style="font-size:11px;padding:7px 12px" onclick="askExportSaleScansPdf()" title="ملف PDF لبوجرات السجلات المعروضة بالفلتر الحالي (أو المحددة بالمربعات إن وُجدت) — كل بوجر بصفحة">📄 بوجرات PDF</button>
@@ -9174,6 +9174,7 @@ function renderLogin(){
       <div style="margin-bottom:14px"><label class="lbl">📧 البريد الإلكتروني</label><input class="inp" id="login_email" type="email" placeholder="user@example.com" style="font-size:14px"></div>
       <div style="margin-bottom:20px"><label class="lbl">🔐 كلمة السر</label><input class="inp" id="login_pass" type="password" placeholder="••••••••" style="font-size:14px" onkeydown="if(event.key==='Enter')doLogin()"></div>
       <button class="btn btn-blue" style="width:100%;padding:12px;font-size:15px" onclick="doLogin()">🚀 تسجيل الدخول</button>
+      <div style="text-align:center;margin-top:10px"><a href="#" onclick="forgotPassword();return false" style="font-size:12px;color:#2563eb;font-weight:700;text-decoration:none">🔑 نسيت كلمة السر؟</a></div>
       <div style="margin-top:10px;background:#eff6ff;border-radius:8px;padding:8px 12px;font-size:10px;color:#1e40af;font-weight:700;text-align:center">🔐 مؤمّن بـ Firebase Authentication</div>
     </div>
   </div>`;
@@ -9215,6 +9216,26 @@ async function doLogin(){
     else if(err.code==='auth/network-request-failed')msg='تحقق من الاتصال بالإنترنت';
     showToast(msg,'error');
     if(loginBtn){loginBtn.textContent='🚀 تسجيل الدخول';loginBtn.disabled=false;}
+  }
+}
+
+// نسيت كلمة السر: يرسل Firebase رابط تعيين كلمة سر جديدة إلى البريد المكتوب
+async function forgotPassword(){
+  const email=(gv('login_email')||'').trim();
+  if(!email){showToast('اكتب بريدك الإلكتروني أولاً ثم اضغط «نسيت كلمة السر؟»','error');document.getElementById('login_email')?.focus();return;}
+  if(!window._auth||!window._auth.sendPasswordResetEmail){showToast('تحقق من الاتصال بالإنترنت','error');return;}
+  try{
+    const {auth,sendPasswordResetEmail:spr}=window._auth;
+    auth.languageCode='ar';
+    await spr(auth,email);
+    showToast('📧 أُرسل رابط تعيين كلمة السر إلى '+email+' — افحص البريد (وكذلك مجلد Spam)','success',7000);
+  }catch(err){
+    let msg='تعذّر إرسال الرابط';
+    if(err.code==='auth/invalid-email')msg='البريد الإلكتروني غير صحيح';
+    else if(err.code==='auth/user-not-found')msg='هذا البريد غير مسجّل في النظام';
+    else if(err.code==='auth/too-many-requests')msg='محاولات كثيرة — حاول لاحقاً';
+    else if(err.code==='auth/network-request-failed')msg='تحقق من الاتصال بالإنترنت';
+    showToast(msg,'error');
   }
 }
 

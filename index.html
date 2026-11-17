@@ -13,7 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, writeBatch, onSnapshot, query, orderBy, where, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, deleteUser as fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   const firebaseConfig = {
@@ -31,7 +31,15 @@
   catch (e) { console.warn('Firestore persistence unavailable:', e); db = getFirestore(app); }
   const auth = getAuth(app);
   window._fb = { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, writeBatch, onSnapshot, query, orderBy, where, limit };
-  window._auth = { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail };
+  // إنشاء حساب مستخدم جديد من نسخة Firebase ثانوية: createUserWithEmailAndPassword يُدخل الحساب الجديد
+  // تلقائياً في النسخة التي أنشأته — فلو أُنشئ من النسخة الرئيسية لخرج المدير وحلّ محله المستخدم الجديد
+  async function createUserIsolated(email, pass) {
+    const sec = initializeApp(firebaseConfig, 'create-user-' + Date.now());
+    const secAuth = getAuth(sec);
+    try { const cred = await createUserWithEmailAndPassword(secAuth, email, pass); try { await signOut(secAuth); } catch (e) {} return cred; }
+    finally { try { await deleteApp(sec); } catch (e) {} }
+  }
+  window._auth = { auth, createUserIsolated, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, fbDeleteUser, updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail };
   window._fbReady = true;
   document.dispatchEvent(new Event('fb-ready'));
 </script>
@@ -8433,8 +8441,8 @@ async function addUser(){
   try{
     // إنشاء حساب Firebase Auth
     if(window._auth){
-      const {auth,createUserWithEmailAndPassword:cup}=window._auth;
-      await cup(auth,email,pass);
+      // من نسخة ثانوية — جلسة المدير تبقى كما هي
+      await window._auth.createUserIsolated(email,pass);
     }
     // حفظ بيانات المستخدم في Firestore
     const k=uid(email);

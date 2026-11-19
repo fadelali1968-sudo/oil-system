@@ -9478,7 +9478,12 @@ document.addEventListener('fb-ready', function(){
     const users=DB.get('users',{});const k=uid(lastUser.email);const fresh=users[k];
     const sealed=_userGuard.seal(fresh?{...lastUser,role:fresh.role,permissions:fresh.permissions,factory:fresh.factory}:lastUser);
     currentUser=sealed;
-    if(isManager())syncFromCloud().then(()=>{seedPricingRule();render();});else render();
+    // عرض فوري من البيانات المحلية ثم المزامنة بالخلفية — كان العرض ينتظر تنزيل كل السحابة (صفحة بيضاء 5-15 ثانية)
+    render();
+    if(isManager())syncFromCloud().then(()=>{seedPricingRule();
+      const a=document.activeElement; const typing=a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+      try{ if(!typing&&typeof renderContent==='function') renderContent(); }catch(e){}
+    });
   }
   else renderLogin();
   // مزامنة المعامل من Firebase
